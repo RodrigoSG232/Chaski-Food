@@ -1,0 +1,197 @@
+PLANIFICACIÓN DEL PROYECTO - CHASKI FOOD,,,,,,,,
+NOMBRE DEL PROYECTO,,,Chaski Food,,,,,
+DESCRIPCIÓN,,,"Aplicación móvil de delivery para descubrir locales y productos, realizar pedidos, gestionar su preparación y dar seguimiento a la entrega mediante integración con Chaski Rider.",,,,,
+RESPONSABLES DEL PROYECTO,,,Dante Quispe | Rodrigo Sanchez | Jan Max Sicha,,,,,
+HORIZONTE DE DESARROLLO,,,Semana 2 a Semana 14,,,,,
+Sprint,Épica,HU,Descripción,Criterios de aceptación,Correspondencia con criterios de evaluación,Inicio y fin,Encargado,Estado
+1,EP01 - Base técnica y experiencia visual,EN01 - Base arquitectónica Android,Enabler técnico para establecer la arquitectura base de Chaski Food y dejar preparado el proyecto para el desarrollo incremental.,El proyecto compila y ejecuta correctamente en emulador o dispositivo.,"CE05 – Arquitectura MVVM y Clean Code
+CE06 – Corrutinas + Retrofit
+CE08 – SQLite mediante Room",SEM 2 - SEM 3,Dante Quispe,Por iniciar
+,,,,"La solución separa responsabilidades en Presentation, Domain y Data.",,,,
+,,,,Hilt queda configurado para inyección de dependencias.,,,,
+,,,,Retrofit/OkHttp y Room quedan configurados como bases de acceso remoto y local.,,,,
+,,,,Navigation Compose y el patrón de estados Loading/Error/Content quedan disponibles para las features.,,,,
+,,EN02 - Design System Chaski,Enabler técnico para definir una identidad visual consistente y componentes reutilizables basados en Material Design 3.,Existe un ChaskiTheme basado en Material 3.,CE04 – Material Design y paleta de colores,SEM 2 - SEM 3,Rodrigo Sanchez,Por iniciar
+,,,,"Se encuentran definidas paleta, tipografía, formas y espaciados principales.",,,,
+,,,,"Los componentes comunes (botones, cards, diálogos y estados) son reutilizables.",,,,
+,,,,Las pantallas pueden previsualizarse manteniendo consistencia visual.,,,,
+,"EP02 - Identidad, acceso y perfil",HU01 - Registrar una cuenta,"Como nuevo usuario, quiero crear una cuenta en Chaski Food para poder utilizar las funcionalidades de la plataforma.","Dado un usuario no registrado, cuando ingrese datos válidos y confirme, entonces se creará su identidad y usuario interno.","CE01 – Autenticación
+CE03 – Firebase Authentication",SEM 2 - SEM 3,Rodrigo Sanchez,Por iniciar
+,,,,Un correo ya registrado no podrá utilizarse para crear una cuenta duplicada.,,,,
+,,,,Los campos obligatorios inválidos o vacíos deberán mostrar su validación.,,,,
+,,,,"Tras un registro exitoso, el usuario quedará autenticado o habilitado para iniciar sesión.",,,,
+,,HU02 - Acceder y recuperar la cuenta,"Como usuario registrado, quiero iniciar y cerrar sesión y recuperar mi acceso cuando olvide mis credenciales para utilizar mi cuenta de manera segura.","Con credenciales válidas, el usuario podrá iniciar sesión.","CE01 – Autenticación
+CE03 – Firebase Authentication",SEM 2 - SEM 3,Jan Max Sicha,Por iniciar
+,,,,"Con credenciales incorrectas, el acceso será rechazado sin revelar información sensible.",,,,
+,,,,"Al cerrar sesión, la sesión local deberá invalidarse.",,,,
+,,,,El usuario podrá solicitar recuperación mediante un correo registrado.,,,,
+,,,,La sesión podrá persistir entre reinicios mientras continúe siendo válida.,,,,
+,,HU03 - Gestionar perfil,"Como usuario autenticado, quiero consultar y actualizar mis datos personales para mantener vigente la información asociada a mi cuenta.",El usuario autenticado podrá consultar sus datos actuales.,CE01 – Autenticación y gestión de cuenta,SEM 3,Rodrigo Sanchez,Por iniciar
+,,,,Los cambios válidos en campos editables deberán persistirse.,,,,
+,,,,Un usuario no podrá modificar datos pertenecientes a otra cuenta.,,,,
+,,,,Los campos deberán respetar formatos y validaciones definidos.,,,,
+,,HU04 - Gestionar direcciones de entrega,"Como cliente, quiero registrar y administrar mis direcciones de entrega para seleccionar fácilmente dónde deseo recibir mis pedidos.","El cliente podrá registrar una dirección con ubicación, referencia e instrucciones.",CE10 – Recurso móvil 1/3: ubicación/GPS,SEM 3,Jan Max Sicha,Por iniciar
+,,,,Podrá utilizar su ubicación actual previa autorización del permiso correspondiente.,,,,
+,,,,"Podrá consultar, editar y eliminar únicamente sus propias direcciones.",,,,
+,,,,Podrá seleccionar una dirección como predeterminada.,,,,
+,,,,Editar una dirección guardada no modificará el snapshot histórico de pedidos anteriores.,,,,
+2,EP03 - Incorporación y habilitación de negocios,HU05 - Registrar negocio y solicitar habilitación,"Como administrador de negocio, quiero registrar la información de mi negocio y solicitar su habilitación para poder ofrecer mis productos mediante Chaski Food.",Un usuario autorizado podrá registrar la información requerida del negocio.,CE02 – PN01 Incorporación y habilitación de negocios,SEM 4 - SEM 5,Dante Quispe,Por iniciar
+,,,,La solicitud solo podrá enviarse cuando los datos obligatorios estén completos.,,,,
+,,,,"Al enviarse, la solicitud quedará en estado PENDING_REVIEW.",,,,
+,,,,El administrador podrá consultar el estado de su solicitud.,,,,
+,,,,Una solicitud OBSERVED mostrará observaciones y permitirá corregir y reenviar.,,,,
+,,,,Un negocio no aprobado no podrá recibir pedidos.,,,,
+,,HU06 - Evaluar solicitud de negocio,"Como Administrador Chaski, quiero revisar las solicitudes de incorporación de negocios para aprobarlas, observarlas o rechazarlas.",El Administrador Chaski podrá consultar solicitudes pendientes.,CE02 – PN01 Incorporación y habilitación de negocios,SEM 4 - SEM 5,Rodrigo Sanchez,Por iniciar
+,,,,Una solicitud válida podrá aprobarse y quedará APPROVED.,,,,
+,,,,Una solicitud podrá observarse indicando obligatoriamente la observación y quedará OBSERVED.,,,,
+,,,,Una solicitud podrá rechazarse indicando el motivo y quedará REJECTED.,,,,
+,,,,Cada decisión registrará responsable y fecha/hora.,,,,
+,,HU07 - Supervisar habilitación de negocios y locales,"Como Administrador Chaski, quiero suspender o reactivar negocios y locales cuando corresponda para controlar quién puede operar dentro de la plataforma.",Solo un usuario con permisos administrativos podrá suspender o reactivar.,CE02 – PN01 Incorporación y habilitación de negocios,SEM 5,Jan Max Sicha,Por iniciar
+,,,,Un negocio o local suspendido no podrá recibir nuevos pedidos.,,,,
+,,,,La suspensión no eliminará información histórica.,,,,
+,,,,Toda modificación administrativa deberá quedar registrada.,,,,
+,EP04 - Gestión de locales y operación,HU08 - Gestionar locales y responsables,"Como administrador de negocio, quiero registrar y administrar los locales de mi negocio y asignar sus responsables para organizar la operación de cada establecimiento.",Un negocio aprobado podrá registrar uno o varios locales.,CE02 – PN02 Gestión de oferta y operación de locales,SEM 4 - SEM 5,Rodrigo Sanchez,Por iniciar
+,,,,Cada local mantendrá dirección y coordenadas propias.,,,,
+,,,,El administrador podrá editar la información de sus locales.,,,,
+,,,,Se podrán asociar responsables autorizados a uno o más locales.,,,,
+,,,,Un responsable solo podrá operar los locales a los que haya sido asignado.,,,,
+,,HU09 - Gestionar horarios y disponibilidad operativa,"Como responsable autorizado, quiero administrar los horarios y el estado operativo del local para controlar cuándo puede recibir pedidos.",Se podrán definir horarios de atención por día.,CE02 – PN02 Gestión de oferta y operación de locales,SEM 5,Jan Max Sicha,Por iniciar
+,,,,El local distinguirá estado administrativo y estado operativo.,,,,
+,,,,Un local PAUSED no recibirá nuevos pedidos.,,,,
+,,,,Fuera del horario definido no podrán generarse nuevos pedidos.,,,,
+,,,,"Los pedidos ya aceptados se conservarán aunque el local sea posteriormente pausado, salvo incidencia.",,,,
+,EP05 - Gestión del catálogo gastronómico,HU10 - Gestionar categorías y productos,"Como administrador de negocio, quiero registrar y administrar categorías y productos para definir la oferta gastronómica de mi negocio.","Se podrán crear, consultar, editar y desactivar categorías.","CE02 – PN02 Gestión del catálogo gastronómico
+CE03 – Firebase Storage
+CE10 – Recurso móvil 2/3: cámara",SEM 4 - SEM 5,Jan Max Sicha,Por iniciar
+,,,,"Se podrán crear productos con nombre, descripción, categoría e información comercial requerida.",,,,
+,,,,El administrador podrá asociar una fotografía obtenida mediante cámara o galería.,,,,
+,,,,Se podrá indicar una estimación de preparación.,,,,
+,,,,Un producto desactivado no aparecerá disponible para nuevas compras.,,,,
+,,HU11 - Configurar productos por local,"Como administrador de negocio o responsable autorizado, quiero configurar precio y disponibilidad de los productos por local para representar correctamente la oferta de cada establecimiento.",Un producto podrá estar disponible en algunos locales y no disponible en otros.,CE02 – PN02 Gestión del catálogo gastronómico,SEM 5,Dante Quispe,Por iniciar
+,,,,El precio podrá configurarse por local.,,,,
+,,,,Un producto OUT_OF_STOCK no podrá agregarse válidamente a una nueva compra en ese local.,,,,
+,,,,Las modificaciones solo afectarán al local autorizado.,,,,
+3,EP06 - Descubrimiento de establecimientos y productos,HU12 - Descubrir locales disponibles,"Como cliente, quiero visualizar los locales que pueden atender mi dirección seleccionada para elegir dónde realizar mi pedido.",Chaski considerará la dirección seleccionada del cliente.,"CE02 – PN03 Gestión de compra
+CE06 – Corrutinas + Retrofit con API externa geográfica
+CE10 – Uso de ubicación/GPS",SEM 6 - SEM 7,Dante Quispe,Por iniciar
+,,,,"Solo se mostrarán como comprables locales habilitados, dentro de horario, operativos y con cobertura.",,,,
+,,,,Los locales mostrarán información suficiente para distinguirlos.,,,,
+,,,,"Si no existen opciones disponibles, se mostrará un estado vacío comprensible.",,,,
+,,HU13 - Buscar y explorar la oferta,"Como cliente, quiero buscar y filtrar establecimientos y productos y consultar sus detalles para encontrar una opción adecuada para comprar.",El cliente podrá buscar establecimientos o productos por texto.,CE02 – PN03 Gestión de compra,SEM 6 - SEM 7,Dante Quispe,Por iniciar
+,,,,Podrá explorar categorías y productos del local.,,,,
+,,,,"El detalle mostrará nombre, precio, imagen y descripción disponibles.",,,,
+,,,,Los resultados respetarán la disponibilidad del local correspondiente.,,,,
+,"EP07 - Carrito, checkout y compra",HU14 - Gestionar carrito de compra,"Como cliente, quiero agregar, modificar y eliminar productos de mi carrito para organizar los artículos que deseo solicitar.",Solo podrá agregarse un producto disponible.,CE02 – PN03 Gestión de compra,SEM 6 - SEM 7,Rodrigo Sanchez,Por iniciar
+,,,,Un carrito solo contendrá productos de un mismo local.,,,,
+,,,,Al intentar agregar un producto de otro local se solicitará confirmación antes de vaciar el carrito.,,,,
+,,,,El cliente podrá modificar cantidades válidas y eliminar productos.,,,,
+,,,,El subtotal provisional se actualizará con los cambios.,,,,
+,,,,Agregar al carrito no reservará disponibilidad ni congelará definitivamente el precio.,,,,
+,,HU15 - Realizar checkout y revalidar la compra,"Como cliente, quiero revisar y validar los productos, dirección, costos y modalidad de pago antes de confirmar mi compra para conocer exactamente qué estoy solicitando y cuánto pagaré.","Antes de continuar se revalidarán local, horario, cobertura, productos, cantidades y precios.",CE02 – PN03 Gestión de compra,SEM 6 - SEM 7,Jan Max Sicha,Por iniciar
+,,,,"Si un producto se agotó, se informará antes de confirmar.",,,,
+,,,,"Si un precio cambió, se mostrará el nuevo valor.",,,,
+,,,,"Se mostrarán por separado subtotal, costo de reparto y total.",,,,
+,,,,El cliente deberá seleccionar una dirección y modalidad de pago válidas.,,,,
+,,HU16 - Confirmar pedido,"Como cliente, quiero confirmar una compra validada para generar formalmente mi pedido y enviarlo al establecimiento correspondiente.",El backend realizará una última revalidación antes de crear el pedido.,CE02 – PN03 Gestión de compra,SEM 7,Jan Max Sicha,Por iniciar
+,,,,El backend recalculará los importes y no confiará en el total enviado por Android.,,,,
+,,,,El pedido creado quedará PENDING_CONFIRMATION.,,,,
+,,,,"Los OrderItem conservarán nombre, cantidad y precio históricos.",,,,
+,,,,La dirección se guardará como snapshot independiente de la dirección editable del cliente.,,,,
+,,,,El local será notificado del nuevo pedido.,,,,
+,EP08 - Gestión del pedido del cliente,HU17 - Consultar pedidos activos e históricos,"Como cliente, quiero consultar mis pedidos actuales y anteriores para conocer su estado y revisar mis compras realizadas.",Solo se mostrarán pedidos pertenecientes al cliente autenticado.,CE02 – PN03/PN06 Consulta e historial de pedidos,SEM 7,Rodrigo Sanchez,Por iniciar
+,,,,Se distinguirán pedidos activos e históricos.,,,,
+,,,,El detalle conservará la información histórica del pedido.,,,,
+,,,,"Se mostrará el estado actual y, cuando corresponda, el historial de estados.",,,,
+4,EP08 - Gestión del pedido del cliente,HU18 - Cancelar pedido,"Como cliente, quiero solicitar la cancelación de un pedido cuando su estado lo permita para poder desistir de una compra antes de que resulte inviable cancelarla.",En PENDING_CONFIRMATION el cliente podrá cancelar directamente.,"CE02 – PN06 Cancelaciones, incidencias y postventa",SEM 8,Dante Quispe,Por iniciar
+,,,,En PREPARING la cancelación se evaluará según las reglas vigentes.,,,,
+,,,,Después de PICKED_UP no se permitirá una cancelación ordinaria.,,,,
+,,,,Toda cancelación quedará registrada en el historial.,,,,
+,,,,"Si existe Delivery, la cancelación logística se comunicará cuando corresponda.",,,,
+,EP09 - Atención y preparación del pedido,HU19 - Recibir y responder pedidos,"Como responsable de local, quiero consultar los pedidos recibidos y aceptarlos o rechazarlos justificadamente para gestionar la demanda de mi establecimiento.",El responsable solo accederá a pedidos de sus locales autorizados.,CE02 – PN04 Atención y preparación del pedido,SEM 8 - SEM 9,Jan Max Sicha,Por iniciar
+,,,,Solo los pedidos PENDING_CONFIRMATION podrán aceptarse o rechazarse normalmente.,,,,
+,,,,"Al aceptar, el pedido pasará a PREPARING.",,,,
+,,,,Al rechazar deberá seleccionarse un motivo.,,,,
+,,,,"Si se selecciona “Otro”, la explicación será obligatoria.",,,,
+,,,,La decisión será notificada al cliente.,,,,
+,,HU20 - Gestionar tiempo de preparación,"Como responsable de local, quiero indicar y actualizar el tiempo estimado de preparación para informar correctamente al cliente y coordinar la llegada del repartidor.",La aceptación del pedido incluirá una estimación válida.,CE02 – PN04 Atención y preparación del pedido,SEM 8 - SEM 9,Dante Quispe,Por iniciar
+,,,,El sistema calculará estimatedReadyAt.,,,,
+,,,,"Mientras el pedido permanezca PREPARING, el responsable podrá actualizar la estimación.",,,,
+,,,,Los cambios se reflejarán al cliente.,,,,
+,,,,"Si existe solicitud logística, el nuevo estimatedReadyAt se comunicará a Rider.",,,,
+,,HU21 - Finalizar preparación y validar recojo,"Como responsable de local, quiero marcar el pedido como listo y validar su recojo para asegurar que sea entregado al repartidor correspondiente.",Un pedido en preparación podrá pasar a READY_FOR_PICKUP.,"CE02 – PN04/PN05 Preparación, recojo y logística",SEM 9,Jan Max Sicha,Por iniciar
+,,,,Rider será informado de que el pedido está listo.,,,,
+,,,,El recojo utilizará el mecanismo de validación definido.,,,,
+,,,,Una validación incorrecta no permitirá entregar el pedido.,,,,
+,,,,Food solo pasará a IN_DELIVERY al recibir un evento PICKED_UP válido desde Rider.,,,,
+,EP10 - Integración logística y seguimiento,HU22 - Solicitar servicio de reparto,"Como plataforma Chaski Food, quiero solicitar a Chaski Rider una entrega asociada al pedido para coordinar anticipadamente el traslado desde el local hasta el cliente.",La solicitud se generará después de aceptar el pedido y conocer estimatedReadyAt.,CE02 – PN05 Gestión logística e integración con Chaski Rider,SEM 8 - SEM 9,Rodrigo Sanchez,Por iniciar
+,,,,"La solicitud contendrá orderId, origen, destino, estimación de preparación y tarifa logística.",,,,
+,,,,Rider retornará un deliveryId relacionado con orderId.,,,,
+,,,,Reintentar la misma deliveryRequestId no creará entregas duplicadas.,,,,
+,,,,Una actualización del tiempo de preparación podrá comunicarse a Rider.,,,,
+,,,,"La asignación del repartidor seguirá siendo responsabilidad de Rider, no de Food.",,,,
+5,EP10 - Integración logística y seguimiento,HU23 - Consultar seguimiento de la entrega,"Como cliente, quiero visualizar el avance, ETA y ubicación disponible de mi entrega para conocer cuándo llegará mi pedido.",Sin Rider asignado se mostrará el estado sin mapa de tracking activo.,CE02 – PN05 Gestión logística y seguimiento,SEM 10 - SEM 11,Jan Max Sicha,Por iniciar
+,,,,"Cuando exista Rider, Food procesará los eventos logísticos correspondientes.",,,,
+,,,,Después de PICKED_UP podrá mostrarse ubicación permitida y ETA.,,,,
+,,,,El cliente solo podrá consultar tracking de sus propios pedidos.,,,,
+,,,,"Al recibir DELIVERED, Food completará el pedido si la transición es válida.",,,,
+,,,,La pérdida temporal de ubicación no eliminará el último estado conocido.,,,,
+,,HU24 - Recibir notificaciones del pedido,"Como cliente o responsable de local, quiero recibir notificaciones sobre cambios relevantes del pedido para mantenerme informado sin consultar constantemente la aplicación.",El local podrá recibir aviso de un nuevo pedido.,CE03 – Firebase Cloud Messaging,SEM 10,Dante Quispe,Por iniciar
+,,,,"El cliente podrá recibir avisos de aceptación, rechazo, pedido listo, Rider asignado, recojo y entrega.",,,,
+,,,,La notificación no será la fuente de verdad del estado.,,,,
+,,,,"Al abrir una notificación, la aplicación obtendrá la información vigente del backend.",,,,
+,"EP11 - Comunicación, incidencias y postventa",HU25 - Comunicarse durante una entrega activa,"Como cliente, quiero comunicarme con el repartidor durante una entrega activa para proporcionar información necesaria para completar correctamente el reparto.",Solo se habilitará una conversación asociada a un pedido y entrega autorizados.,CE03 – Cloud Firestore para chat contextual,SEM 10 - SEM 11,Dante Quispe,Por iniciar
+,,,,Cliente y Rider visualizarán los mensajes de esa conversación.,,,,
+,,,,Un usuario ajeno no podrá acceder al chat.,,,,
+,,,,La comunicación estará vinculada al contexto de la entrega y no funcionará como mensajería general.,,,,
+,,HU26 - Reportar y gestionar incidencias,"Como participante de un pedido, quiero reportar una incidencia indicando su contexto para que la plataforma pueda registrar y gestionar situaciones excepcionales.",Toda incidencia deberá estar asociada a un pedido.,"CE02 – PN06 Incidencias y postventa
+CE03 – Firebase Storage para evidencias",SEM 10 - SEM 11,Rodrigo Sanchez,Por iniciar
+,,,,Las categorías disponibles podrán variar según el estado del proceso.,,,,
+,,,,"Se conservarán reportante/origen, fecha, categoría, descripción y contexto operacional.",,,,
+,,,,"Después de PICKED_UP, una cancelación ordinaria se derivará al flujo de incidencia cuando corresponda.",,,,
+,,,,Las incidencias que requieran intervención podrán escalarse al Administrador Chaski.,,,,
+,EP12 - Dashboard y analítica comercial,HU28 - Consultar dashboard comercial,"Como administrador de negocio o responsable autorizado, quiero consultar indicadores de desempeño para analizar la operación del negocio y sus locales.",El administrador solo consultará información de su negocio.,"CE02 – PN07 Gestión del desempeño comercial
+CE09 – Dashboard",SEM 11,Rodrigo Sanchez,Por iniciar
+,,,,El responsable de local solo accederá a métricas de locales autorizados.,,,,
+,,,,"El dashboard incluirá al menos pedidos, ventas y un indicador operativo.",,,,
+,,,,Los indicadores se calcularán con datos registrados y no se ingresarán manualmente.,,,,
+,,,,Existirán filtros temporales y/o por local según el indicador.,,,,
+6,"EP11 - Comunicación, incidencias y postventa",HU27 - Valorar la experiencia,"Como cliente, quiero valorar el establecimiento y el servicio de entrega después de completar mi pedido para registrar mi experiencia.",Solo podrá valorarse un pedido COMPLETED.,CE02 – PN06 Postventa y valoración,SEM 12,Dante Quispe,Por iniciar
+,,,,La valoración estará asociada al pedido de origen.,,,,
+,,,,El cliente no podrá valorar pedidos ajenos.,,,,
+,,,,La valoración del establecimiento permanecerá en Food y la del reparto podrá enviarse al dominio Rider.,,,,
+,EP13 - Inteligencia y experiencia avanzada,HU29 - Obtener recomendaciones y búsqueda inteligente,"Como cliente, quiero recibir recomendaciones y realizar búsquedas basadas en mis preferencias, presupuesto y contexto para encontrar alimentos adecuados con mayor facilidad.",El cliente podrá expresar una intención de búsqueda en lenguaje natural o mediante filtros inteligentes.,"CE06 – Corrutinas + Retrofit con servicio/API externa de IA
+CE10 – Recurso móvil 3/3: micrófono/audio
+CE11 – IA 1/3: recomendaciones y búsqueda inteligente",SEM 12 - SEM 13,Dante Quispe,Por iniciar
+,,,,"El cliente podrá ingresar su intención de búsqueda mediante voz usando el micrófono del dispositivo, previa autorización del permiso correspondiente.",,,,
+,,,,Las recomendaciones se limitarán a productos y locales realmente disponibles.,,,,
+,,,,"Las restricciones explícitas, como presupuesto, se respetarán cuando puedan interpretarse.",,,,
+,,,,"La IA no podrá confirmar pedidos, alterar precios ni modificar estados críticos.",,,,
+,,,,"Si el servicio inteligente no está disponible, la búsqueda convencional seguirá funcionando.",,,,
+,,HU32 - Asistente inteligente Chaski,"Como cliente, quiero conversar con un asistente inteligente que me ayude a descubrir opciones, comparar alternativas y resolver consultas relacionadas con mi experiencia de compra en Chaski Food.","El cliente podrá formular consultas en lenguaje natural relacionadas con productos, locales, presupuesto y opciones disponibles.","CE06 – Corrutinas + Retrofit con servicio/API externa LLM
+CE11 – IA 2/3: asistente inteligente Chaski",SEM 13 - SEM 14,Rodrigo Sanchez,Por iniciar
+,,,,El asistente utilizará información vigente del catálogo y del contexto permitido para construir sus respuestas.,,,,
+,,,,El asistente no deberá presentar como disponible un producto o local que el sistema determine como no disponible.,,,,
+,,,,"El asistente no podrá confirmar pedidos, modificar precios ni ejecutar transiciones críticas fuera de los flujos normales de Chaski.",,,,
+,,,,"Si el servicio de IA no está disponible, la aplicación informará la indisponibilidad sin impedir el uso de la búsqueda y navegación convencional.",,,,
+,,HU33 - Estimar inteligentemente el tiempo de preparación,"Como responsable de local, quiero recibir una estimación inteligente del tiempo de preparación de un pedido para establecer tiempos más realistas y mejorar la coordinación con Chaski Rider.",El sistema podrá generar una estimación sugerida considerando información disponible del pedido y contexto operativo definido.,"CE02 – PN04 Atención y preparación
+CE11 – IA 3/3: predicción del tiempo de preparación",SEM 14,Dante Quispe,Por iniciar
+,,,,El responsable del local podrá aceptar o modificar la estimación sugerida antes de confirmar el tiempo de preparación.,,,,
+,,,,La estimación finalmente confirmada se utilizará para calcular o actualizar estimatedReadyAt.,,,,
+,,,,"Cuando exista una solicitud logística, los cambios en estimatedReadyAt deberán comunicarse a Chaski Rider según el contrato de integración.",,,,
+,,,,"Si la funcionalidad inteligente no está disponible, el responsable podrá continuar ingresando manualmente el tiempo de preparación.",,,,
+,"EP14 - Persistencia, sincronización, calidad y publicación",HU30 - Mantener información útil sin conexión,"Como usuario, quiero conservar información relevante disponible localmente para continuar utilizando partes de Chaski cuando exista una pérdida temporal de conectividad.",El carrito sobrevivirá al cierre y reapertura de la aplicación.,CE08 – SQLite mediante Room,SEM 12 - SEM 13,Jan Max Sicha,Por iniciar
+,,,,Podrán mostrarse datos previamente cacheados cuando no exista conexión.,,,,
+,,,,La UI distinguirá razonablemente información cacheada de datos que requieran actualización.,,,,
+,,,,La ausencia de Internet no permitirá crear como definitivo un pedido que el backend no confirmó.,,,,
+,,HU31 - Sincronizar operaciones pendientes,"Como usuario, quiero que determinadas acciones realizadas durante una pérdida temporal de conexión se sincronicen cuando Internet vuelva a estar disponible para evitar perder mi información.",Las operaciones permitidas para trabajo diferido se almacenarán como pendientes.,"CE06 – Corrutinas + Retrofit para sincronización
+CE07 – WorkManager
+CE08 – SQLite mediante Room",SEM 13 - SEM 14,Rodrigo Sanchez,Por iniciar
+,,,,"Al recuperar conectividad, WorkManager intentará sincronizarlas.",,,,
+,,,,Una operación reintentada no deberá duplicar efectos en el servidor.,,,,
+,,,,La operación solo se marcará sincronizada tras confirmación del backend.,,,,
+,,,,Los errores permanentes se distinguirán de los errores temporales.,,,,
+,,EN04 - Preparación y publicación en Play Store,"Enabler técnico para preparar el build de release, validar requisitos de publicación y desplegar Chaski Food en Google Play.",La aplicación genera un build de release firmado sin errores.,CE12 – Despliegue en Google Play Store,SEM 14,Jan Max Sicha,Por iniciar
+,,,,"El applicationId, versionado, iconos y configuración de release están definidos.",,,,
+,,,,Se genera un Android App Bundle (AAB) apto para distribución.,,,,
+,,,,La información de privacidad y permisos queda revisada para la publicación.,,,,
+,,,,La aplicación se carga y valida al menos en un track de pruebas de Google Play.,,,,

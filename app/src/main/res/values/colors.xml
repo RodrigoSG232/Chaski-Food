@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="chaski_primary">#D42323</color>
+    <color name="chaski_secondary">#0C9F3E</color>
+    <color name="chaski_black">#0B0B0B</color>
+    <color name="chaski_white">#FFFFFF</color>
+    <color name="chaski_background">#FBFBFB</color>
+    <color name="black">#FF000000</color>
+    <color name="white">#FFFFFFFF</color>
+</resources>
