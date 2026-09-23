@@ -1,7 +1,6 @@
 package com.chaskifood.app.feature.main.presentation
 
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -11,6 +10,7 @@ import androidx.navigation.compose.rememberNavController
 import com.chaskifood.app.core.navigation.ChaskiTab
 import com.chaskifood.app.feature.home.presentation.HomeScreen
 import com.chaskifood.app.ui.components.ChaskiBottomNav
+import com.chaskifood.app.ui.theme.ChaskiSurface
 
 @Composable
 fun MainScreen(modifier: Modifier = Modifier) {
@@ -18,7 +18,7 @@ fun MainScreen(modifier: Modifier = Modifier) {
 
     Scaffold(
         modifier = modifier,
-        containerColor = MaterialTheme.colorScheme.background,
+        containerColor = ChaskiSurface,
         bottomBar = { ChaskiBottomNav(navController = navController) },
     ) { innerPadding ->
         NavHost(
