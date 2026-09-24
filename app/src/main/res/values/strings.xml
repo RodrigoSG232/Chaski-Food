@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">Chaski Food</string>
+    <string name="default_web_client_id" translatable="false">220568639274-3ocaifmrb36mllq82k4t6lahop6omu16.apps.googleusercontent.com</string>
 </resources>

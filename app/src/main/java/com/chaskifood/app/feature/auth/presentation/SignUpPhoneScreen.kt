@@ -1,5 +1,6 @@
 package com.chaskifood.app.feature.auth.presentation
 
+import android.app.Activity
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -14,15 +15,20 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Phone
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
+import com.chaskifood.app.core.common.UiState
 import com.chaskifood.app.ui.theme.ChaskiBackground
 
 @Composable
@@ -30,8 +36,12 @@ fun SignUpPhoneScreen(
     modifier: Modifier = Modifier,
     onGetCode: () -> Unit = {},
     onBack: () -> Unit = {},
+    viewModel: PhoneAuthViewModel = hiltViewModel(),
 ) {
-    var phone by rememberSaveable { mutableStateOf("") }
+    val context = LocalContext.current
+    val activity = context as? Activity
+    val phone by viewModel.phoneNumber.collectAsState()
+    val uiState by viewModel.uiState.collectAsState()
 
     Column(
         modifier = modifier
@@ -57,7 +67,7 @@ fun SignUpPhoneScreen(
         ) {
             AuthTextField(
                 value = phone,
-                onValueChange = { phone = it },
+                onValueChange = { viewModel.phoneNumber.value = it },
                 label = "Número de teléfono",
                 placeholder = "+51 999 999 999",
                 leadingIcon = Icons.Filled.Phone,
@@ -69,7 +79,30 @@ fun SignUpPhoneScreen(
 
             Spacer(Modifier.height(30.dp))
 
-            AuthSubmitButton(text = "ENVIAR CÓDIGO", onClick = onGetCode)
+            if (uiState is UiState.Error) {
+                Text(
+                    text = (uiState as UiState.Error).message ?: "Error al enviar el código",
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.padding(bottom = 8.dp),
+                )
+            }
+
+            if (uiState is UiState.Loading) {
+                CircularProgressIndicator(
+                    modifier = Modifier.align(Alignment.CenterHorizontally),
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            } else {
+                AuthSubmitButton(
+                    text = "ENVIAR CÓDIGO",
+                    onClick = {
+                        if (activity != null) {
+                            viewModel.sendCode(activity, onSuccess = onGetCode)
+                        }
+                    },
+                )
+            }
 
             Spacer(Modifier.height(32.dp))
         }

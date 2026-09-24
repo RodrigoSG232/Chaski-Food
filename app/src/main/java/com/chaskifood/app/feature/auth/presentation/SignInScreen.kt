@@ -18,10 +18,13 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Mail
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -29,6 +32,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -37,6 +41,8 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.hilt.navigation.compose.hiltViewModel
+import com.chaskifood.app.core.common.UiState
 
 @Composable
 fun SignInScreen(
@@ -46,9 +52,12 @@ fun SignInScreen(
     onGoSignUp: () -> Unit = {},
     onGoogle: () -> Unit = {},
     onFacebook: () -> Unit = {},
+    viewModel: LoginViewModel = hiltViewModel(),
 ) {
-    var email by rememberSaveable { mutableStateOf("") }
-    var password by rememberSaveable { mutableStateOf("") }
+    val context = LocalContext.current
+    val email by viewModel.email.collectAsState()
+    val password by viewModel.password.collectAsState()
+    val uiState by viewModel.uiState.collectAsState()
     var showPassword by rememberSaveable { mutableStateOf(false) }
 
     Column(
@@ -78,7 +87,7 @@ fun SignInScreen(
         ) {
             AuthTextField(
                 value = email,
-                onValueChange = { email = it },
+                onValueChange = { viewModel.email.value = it },
                 label = "Correo",
                 placeholder = "laura@correo.com",
                 trailingIcon = {
@@ -99,7 +108,7 @@ fun SignInScreen(
 
             AuthTextField(
                 value = password,
-                onValueChange = { password = it },
+                onValueChange = { viewModel.password.value = it },
                 label = "Contraseña",
                 keyboardOptions = KeyboardOptions(
                     keyboardType = KeyboardType.Password,
@@ -134,7 +143,26 @@ fun SignInScreen(
 
             Spacer(Modifier.height(8.dp))
 
-            AuthSubmitButton(text = "INICIAR SESIÓN", onClick = onSignIn)
+            if (uiState is UiState.Error) {
+                Text(
+                    text = (uiState as UiState.Error).message ?: "Error al iniciar sesión",
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.padding(bottom = 8.dp),
+                )
+            }
+
+            if (uiState is UiState.Loading) {
+                CircularProgressIndicator(
+                    modifier = Modifier.align(Alignment.CenterHorizontally),
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            } else {
+                AuthSubmitButton(
+                    text = "INICIAR SESIÓN",
+                    onClick = { viewModel.login(onSuccess = onSignIn) },
+                )
+            }
 
             Spacer(Modifier.height(32.dp))
 
@@ -150,7 +178,12 @@ fun SignInScreen(
 
             Spacer(Modifier.height(24.dp))
 
-            SocialAuthRow(onGoogle = onGoogle, onFacebook = onFacebook)
+            SocialAuthRow(
+                onGoogle = {
+                    viewModel.signInWithGoogle(context, onSuccess = onSignIn)
+                },
+                onFacebook = onFacebook,
+            )
 
             Spacer(Modifier.height(32.dp))
         }
