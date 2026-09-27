@@ -8,6 +8,7 @@ import com.chaskifood.app.feature.auth.domain.AuthUser
 import com.google.firebase.FirebaseException
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseAuthInvalidCredentialsException
+import com.google.firebase.auth.FirebaseAuthInvalidUserException
 import com.google.firebase.auth.FirebaseAuthUserCollisionException
 import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.auth.GoogleAuthProvider
@@ -146,6 +147,17 @@ class FirebaseAuthRepository @Inject constructor(
             ApiResult.Success(Unit)
         } catch (e: Exception) {
             ApiResult.Failure(e.localizedMessage ?: "Código SMS incorrecto.", e)
+        }
+    }
+
+    override suspend fun sendPasswordResetEmail(email: String): ApiResult<Unit> {
+        return try {
+            firebaseAuth.sendPasswordResetEmail(email).await()
+            ApiResult.Success(Unit)
+        } catch (e: FirebaseAuthInvalidUserException) {
+            ApiResult.Failure("No existe ninguna cuenta registrada con este correo electrónico.")
+        } catch (e: Exception) {
+            ApiResult.Failure(e.localizedMessage ?: "Error al enviar el correo de recuperación.", e)
         }
     }
 

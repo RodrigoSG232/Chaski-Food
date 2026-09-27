@@ -11,5 +11,6 @@ interface AuthRepository {
     suspend fun signInWithGoogle(idToken: String): ApiResult<AuthUser>
     suspend fun sendPhoneVerificationCode(activity: Activity, phoneNumber: String): ApiResult<String>
     suspend fun verifyPhoneCode(verificationId: String, code: String): ApiResult<Unit>
+    suspend fun sendPasswordResetEmail(email: String): ApiResult<Unit>
     suspend fun signOut()
 }

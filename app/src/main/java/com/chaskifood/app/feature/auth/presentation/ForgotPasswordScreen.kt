@@ -15,27 +15,33 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Mail
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
+import com.chaskifood.app.core.common.UiState
 import com.chaskifood.app.ui.theme.ChaskiBackground
 import com.chaskifood.app.ui.theme.ChaskiTextPrimary
 
 @Composable
 fun ForgotPasswordScreen(
     modifier: Modifier = Modifier,
-    onReset: () -> Unit = {},
+    onResetSent: (email: String) -> Unit = {},
     onBack: () -> Unit = {},
+    viewModel: ForgotPasswordViewModel = hiltViewModel(),
 ) {
-    var email by rememberSaveable { mutableStateOf("") }
+    val email by viewModel.email.collectAsState()
+    val uiState by viewModel.uiState.collectAsState()
 
     Column(
         modifier = modifier
@@ -61,7 +67,7 @@ fun ForgotPasswordScreen(
         ) {
             AuthTextField(
                 value = email,
-                onValueChange = { email = it },
+                onValueChange = { viewModel.email.value = it },
                 label = "Correo",
                 placeholder = "laura@correo.com",
                 trailingIcon = {
@@ -78,13 +84,35 @@ fun ForgotPasswordScreen(
                 ),
             )
 
-            Spacer(Modifier.height(30.dp))
+            Spacer(Modifier.height(20.dp))
 
-            AuthSubmitButton(
-                text = "RESTABLECER CONTRASEÑA",
-                onClick = onReset,
-                containerColor = ChaskiTextPrimary,
-            )
+            if (uiState is UiState.Error) {
+                Text(
+                    text = (uiState as UiState.Error).message ?: "Error al enviar el correo",
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.padding(bottom = 12.dp),
+                )
+            }
+
+            if (uiState is UiState.Loading) {
+                CircularProgressIndicator(
+                    modifier = Modifier
+                        .align(Alignment.CenterHorizontally)
+                        .padding(vertical = 12.dp),
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            } else {
+                AuthSubmitButton(
+                    text = "RESTABLECER CONTRASEÑA",
+                    onClick = {
+                        viewModel.sendPasswordResetEmail { sentEmail ->
+                            onResetSent(sentEmail)
+                        }
+                    },
+                    containerColor = ChaskiTextPrimary,
+                )
+            }
 
             Spacer(Modifier.height(32.dp))
         }

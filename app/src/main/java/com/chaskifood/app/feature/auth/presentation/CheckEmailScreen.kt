@@ -11,23 +11,30 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import androidx.hilt.navigation.compose.hiltViewModel
+import com.chaskifood.app.core.common.UiState
 import com.chaskifood.app.ui.theme.ChaskiBackground
 import com.chaskifood.app.ui.theme.ChaskiTextPrimary
 
 @Composable
 fun CheckEmailScreen(
+    email: String,
     modifier: Modifier = Modifier,
     onResend: () -> Unit = {},
     onBack: () -> Unit = {},
+    viewModel: ForgotPasswordViewModel = hiltViewModel(),
 ) {
+    val uiState by viewModel.uiState.collectAsState()
+
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -40,7 +47,7 @@ fun CheckEmailScreen(
 
         AuthTitleBanner(
             title = "Revisa tu correo",
-            text = "Hemos enviado un correo con instrucciones a gladys@domain.com.",
+            text = "Hemos enviado un correo con instrucciones a $email.",
             linkText = "¿Tienes algún problema?",
         )
 
@@ -51,23 +58,38 @@ fun CheckEmailScreen(
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp),
         ) {
-            AuthSubmitButton(
-                text = "REENVIAR ENLACE",
-                onClick = onResend,
-                containerColor = ChaskiTextPrimary,
-            )
+            if (uiState is UiState.Error) {
+                Text(
+                    text = (uiState as UiState.Error).message ?: "Error al reenviar el correo",
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.padding(bottom = 12.dp),
+                )
+            }
 
-            Spacer(Modifier.height(32.dp))
-
-            Text(
-                text = "Reenviar en: 34s",
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Medium,
-                letterSpacing = 0.5.sp,
-                color = Color(0xFF212121),
-                modifier = Modifier.fillMaxWidth(),
-                textAlign = TextAlign.Center,
-            )
+            if (uiState is UiState.Loading) {
+                CircularProgressIndicator(
+                    modifier = Modifier
+                        .align(Alignment.CenterHorizontally)
+                        .padding(vertical = 12.dp),
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            } else {
+                AuthSubmitButton(
+                    text = "REENVIAR ENLACE",
+                    onClick = {
+                        if (email.isNotBlank()) {
+                            viewModel.email.value = email
+                            viewModel.sendPasswordResetEmail {
+                                onResend()
+                            }
+                        } else {
+                            onResend()
+                        }
+                    },
+                    containerColor = ChaskiTextPrimary,
+                )
+            }
 
             Spacer(Modifier.height(32.dp))
         }

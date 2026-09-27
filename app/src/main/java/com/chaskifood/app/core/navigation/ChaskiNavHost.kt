@@ -141,21 +141,25 @@ fun ChaskiNavHost() {
         }
         composable(ChaskiDestinations.FORGOT_PASSWORD) {
             ForgotPasswordScreen(
-                onReset = {
-                    navController.navigate(ChaskiDestinations.CHECK_EMAIL)
+                onResetSent = { email ->
+                    val encodedEmail = Uri.encode(email)
+                    navController.navigate("check_email/$encodedEmail") {
+                        popUpTo(ChaskiDestinations.FORGOT_PASSWORD) { inclusive = true }
+                    }
                 },
                 onBack = {
                     navController.popBackStack()
                 },
             )
         }
-        composable(ChaskiDestinations.CHECK_EMAIL) {
+        composable(
+            route = ChaskiDestinations.CHECK_EMAIL,
+            arguments = listOf(navArgument("email") { type = NavType.StringType }),
+        ) { backStackEntry ->
+            val email = backStackEntry.arguments?.getString("email") ?: ""
             CheckEmailScreen(
-                onResend = {
-                    navController.navigate(ChaskiDestinations.CHECK_EMAIL) {
-                        popUpTo(ChaskiDestinations.CHECK_EMAIL) { inclusive = true }
-                    }
-                },
+                email = email,
+                onResend = { },
                 onBack = {
                     navController.popBackStack()
                 },

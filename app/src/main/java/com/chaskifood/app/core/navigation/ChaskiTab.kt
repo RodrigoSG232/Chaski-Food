@@ -17,7 +17,7 @@ object ChaskiDestinations {
     const val SIGN_UP_PHONE = "sign_up_phone"
     const val VERIFY_PHONE = "verify_phone/{verificationId}"
     const val FORGOT_PASSWORD = "forgot_password"
-    const val CHECK_EMAIL = "check_email"
+    const val CHECK_EMAIL = "check_email/{email}"
     const val LOCATION = "location"
     const val LOCATION_SEARCH = "location_search"
     const val MAIN = "main"
