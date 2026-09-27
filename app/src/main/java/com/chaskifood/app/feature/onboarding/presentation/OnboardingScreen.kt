@@ -59,18 +59,18 @@ private val ChaskiHeroBackground = Color(0xFFD9D9D9)
 private val slides = listOf(
     OnboardingSlide(
         imageRes = R.drawable.onboarding_1,
-        title = "Satisfy your cravings with ease",
-        subtitle = "Get fresh & healthy meals whenever and wherever",
+        title = "Satisface tus antojos sin esfuerzo",
+        subtitle = "Comidas frescas y saludables dondequiera que estés",
     ),
     OnboardingSlide(
         imageRes = R.drawable.onboarding_2,
-        title = "Discover restaurants with just a tap",
-        subtitle = "Get fresh & healthy meals whenever and wherever",
+        title = "Descubre restaurantes con un solo toque",
+        subtitle = "Comidas frescas y saludables dondequiera que estés",
     ),
     OnboardingSlide(
         imageRes = R.drawable.onboarding_3,
-        title = "Get meals delivered to your doorstep",
-        subtitle = "Get fresh & healthy meals whenever and wherever",
+        title = "Recibe tus comidas en tu puerta",
+        subtitle = "Comidas frescas y saludables dondequiera que estés",
     ),
 )
 
@@ -133,7 +133,7 @@ fun OnboardingScreen(
             ) {
                 if (isLastPage) {
                     Text(
-                        text = "GET STARTED",
+                        text = "EMPEZAR",
                         fontSize = 14.sp,
                         fontWeight = FontWeight.SemiBold,
                         letterSpacing = 0.8.sp,

@@ -302,7 +302,7 @@ fun AuthSubmitButton(
     }
 }
 
-/** Fila con los botones de "Or connect with..." Google / Facebook. */
+/** Fila con los botones de "o conéctate con..." Google / Facebook. */
 @Composable
 fun SocialAuthRow(
     onGoogle: () -> Unit,
@@ -364,7 +364,7 @@ private fun SocialAuthButton(
     }
 }
 
-/** Enlace discreto (p. ej. "Forgot password?"): 14sp fw500 #0D0D0D. */
+/** Enlace discreto (p. ej. "¿Olvidaste tu contraseña?"): 14sp fw500 #0D0D0D. */
 @Composable
 fun AuthTextLink(
     text: String,

@@ -3,6 +3,7 @@
 package com.chaskifood.app.feature.home.presentation
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -81,9 +82,9 @@ private data class PopularCard(
 )
 
 private val featuredCards = listOf(
-    FeaturedCard("67 Athi hotel", "Summer house, Athi river", "4.2", "32 min", "Envío gratis", R.drawable.home_featured),
-    FeaturedCard("The white resort", "Sumbulah road", "4.0", "20 min", "$3", R.drawable.home_featured),
-    FeaturedCard("The white resort", "Sumbulah road", "4.0", "20 min", "$3", null),
+    FeaturedCard("Hotel Athi 67", "Casa de verano, Miraflores", "4.2", "32 min", "Envío gratis", R.drawable.home_featured),
+    FeaturedCard("The white resort", "Av. Sumbulah", "4.0", "20 min", "$3", R.drawable.home_featured),
+    FeaturedCard("The white resort", "Av. Sumbulah", "4.0", "20 min", "$3", null),
 )
 
 private val categories = listOf(
@@ -97,18 +98,23 @@ private val categories = listOf(
 private val popularCards = listOf(
     PopularCard("Silver Inn", listOf("Comida tailandesa"), "4.2", "32 min", "Gratis"),
     PopularCard("Hillside Retreat", listOf("Comida tailandesa", "Americana", "Italiana"), "4.2", "22 min", "$5"),
-    PopularCard("Luxe Residences", listOf("Comida francesa", "Vegetariana", "India"), "4.2", "22 min", "$5"),
+    PopularCard("Luxe Residences", listOf("Comida francesa", "Vegetariana", "Comida india"), "4.2", "22 min", "$5"),
 )
 
 @Composable
-fun HomeScreen(modifier: Modifier = Modifier) {
+fun HomeScreen(
+    modifier: Modifier = Modifier,
+    onSeeAll: () -> Unit = {},
+    onRestaurantClick: (String) -> Unit = {},
+    onOpenLocations: () -> Unit = {},
+) {
     LazyColumn(
         modifier = modifier
             .fillMaxSize()
             .background(ChaskiBackground),
         contentPadding = PaddingValues(bottom = ChaskiDimens.SpacingXxl),
     ) {
-        item(key = "appbar") { HomeAppBar() }
+        item(key = "appbar") { HomeAppBar(onLocationClick = onOpenLocations) }
 
         item(key = "offer") {
             OfferCard(
@@ -119,7 +125,7 @@ fun HomeScreen(modifier: Modifier = Modifier) {
         }
 
         item(key = "featured-title") {
-            SectionTitle(title = "Restaurantes destacados")
+            SectionTitle(title = "Restaurantes destacados", onSeeAllClick = onSeeAll)
         }
         item(key = "featured") {
             LazyRow(
@@ -130,7 +136,10 @@ fun HomeScreen(modifier: Modifier = Modifier) {
                 horizontalArrangement = Arrangement.spacedBy(ChaskiDimens.SpacingXl),
             ) {
                 items(featuredCards, key = { it.name + it.time }) { card ->
-                    FeaturedRestaurantCard(card = card)
+                    FeaturedRestaurantCard(
+                        card = card,
+                        onClick = { onRestaurantClick(card.name) },
+                    )
                 }
             }
         }
@@ -158,6 +167,7 @@ fun HomeScreen(modifier: Modifier = Modifier) {
         items(popularCards, key = { it.name }) { card ->
             BigRestaurantCard(
                 card = card,
+                onClick = { onRestaurantClick(card.name) },
                 modifier = Modifier.padding(
                     start = ChaskiDimens.ScreenPadding,
                     end = ChaskiDimens.ScreenPadding,
@@ -169,7 +179,10 @@ fun HomeScreen(modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun HomeAppBar(modifier: Modifier = Modifier) {
+private fun HomeAppBar(
+    modifier: Modifier = Modifier,
+    onLocationClick: () -> Unit = {},
+) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = modifier
@@ -178,7 +191,10 @@ private fun HomeAppBar(modifier: Modifier = Modifier) {
             .height(72.dp)
             .padding(horizontal = ChaskiDimens.ScreenPadding),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.clickable(onClick = onLocationClick),
+        ) {
             Icon(
                 imageVector = HomeIcons.MapPin,
                 contentDescription = null,
@@ -187,7 +203,7 @@ private fun HomeAppBar(modifier: Modifier = Modifier) {
             )
             Spacer(Modifier.width(ChaskiDimens.SpacingSm))
             Text(
-                text = "Athi river",
+                text = "Miraflores",
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Bold,
                 letterSpacing = 0.5.sp,
@@ -276,7 +292,10 @@ private fun OfferCard(modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun SectionTitle(title: String) {
+private fun SectionTitle(
+    title: String,
+    onSeeAllClick: (() -> Unit)? = null,
+) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
@@ -302,6 +321,9 @@ private fun SectionTitle(title: String) {
             fontWeight = FontWeight.Medium,
             letterSpacing = 0.25.sp,
             color = ChaskiTextMuted.copy(alpha = 0.84f),
+            modifier = Modifier
+                .clickable(enabled = onSeeAllClick != null) { onSeeAllClick?.invoke() }
+                .padding(vertical = ChaskiDimens.SpacingXs),
         )
     }
 }
@@ -310,8 +332,13 @@ private fun SectionTitle(title: String) {
 private fun FeaturedRestaurantCard(
     card: FeaturedCard,
     modifier: Modifier = Modifier,
+    onClick: () -> Unit = {},
 ) {
-    Column(modifier = modifier.width(225.dp)) {
+    Column(
+        modifier = modifier
+            .width(225.dp)
+            .clickable(onClick = onClick),
+    ) {
         HomeImage(
             imageRes = card.imageRes,
             bg = HomeImgGray,
@@ -384,8 +411,13 @@ private fun FoodCategoryCard(
 private fun BigRestaurantCard(
     card: PopularCard,
     modifier: Modifier = Modifier,
+    onClick: () -> Unit = {},
 ) {
-    Column(modifier = modifier.fillMaxWidth()) {
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
+    ) {
         HomeImage(
             imageRes = null,
             bg = HomeBigImgBg,

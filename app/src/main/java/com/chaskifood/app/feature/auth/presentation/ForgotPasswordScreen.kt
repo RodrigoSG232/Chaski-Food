@@ -81,7 +81,7 @@ fun ForgotPasswordScreen(
             Spacer(Modifier.height(30.dp))
 
             AuthSubmitButton(
-                text = "RESTABLECER",
+                text = "RESTABLECER CONTRASEÑA",
                 onClick = onReset,
                 containerColor = ChaskiTextPrimary,
             )

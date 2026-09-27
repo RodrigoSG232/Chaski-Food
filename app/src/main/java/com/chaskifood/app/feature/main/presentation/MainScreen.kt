@@ -9,11 +9,26 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.chaskifood.app.core.navigation.ChaskiTab
 import com.chaskifood.app.feature.home.presentation.HomeScreen
+import com.chaskifood.app.feature.orders.presentation.OrdersScreen
+import com.chaskifood.app.feature.profile.presentation.ProfileSettingsScreen
+import com.chaskifood.app.feature.search.presentation.SearchFoodScreen
 import com.chaskifood.app.ui.components.ChaskiBottomNav
 import com.chaskifood.app.ui.theme.ChaskiSurface
 
 @Composable
-fun MainScreen(modifier: Modifier = Modifier) {
+fun MainScreen(
+    modifier: Modifier = Modifier,
+    onSeeAllRestaurants: () -> Unit = {},
+    onOpenYourOrder: () -> Unit = {},
+    onRestaurantClick: (String) -> Unit = {},
+    onOpenCategories: () -> Unit = {},
+    onOpenFood: (String) -> Unit = {},
+    onTrack: (String) -> Unit = {},
+    onDelivered: (String) -> Unit = {},
+    onOpenPaymentMethods: () -> Unit = {},
+    onOpenLocations: () -> Unit = {},
+    onOpenReferral: () -> Unit = {},
+) {
     val navController = rememberNavController()
 
     Scaffold(
@@ -27,16 +42,30 @@ fun MainScreen(modifier: Modifier = Modifier) {
             modifier = Modifier.padding(innerPadding),
         ) {
             composable(ChaskiTab.HOME.route) {
-                HomeScreen()
+                HomeScreen(
+                    onSeeAll = onSeeAllRestaurants,
+                    onRestaurantClick = onRestaurantClick,
+                    onOpenLocations = onOpenLocations,
+                )
             }
             composable(ChaskiTab.SEARCH.route) {
-                PlaceholderScreen(title = "Buscar", message = "Busca restaurantes y platillos")
+                SearchFoodScreen(
+                    onOpenCategories = onOpenCategories,
+                    onRestaurantClick = onRestaurantClick,
+                    onFoodClick = onOpenFood,
+                )
             }
             composable(ChaskiTab.ORDERS.route) {
-                PlaceholderScreen(title = "Pedidos", message = "Aún no tienes pedidos")
+                OrdersScreen(
+                    onTrack = onTrack,
+                    onDelivered = onDelivered,
+                )
             }
             composable(ChaskiTab.ACCOUNT.route) {
-                PlaceholderScreen(title = "Cuenta", message = "Inicia sesión para ver tu cuenta")
+                ProfileSettingsScreen(
+                    onSave = onOpenPaymentMethods,
+                    onMore = onOpenReferral,
+                )
             }
         }
     }

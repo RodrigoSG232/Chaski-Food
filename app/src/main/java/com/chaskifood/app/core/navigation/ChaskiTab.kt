@@ -21,6 +21,28 @@ object ChaskiDestinations {
     const val LOCATION = "location"
     const val LOCATION_SEARCH = "location_search"
     const val MAIN = "main"
+
+    const val RESTAURANTS = "restaurants"
+    const val RESTAURANT_DETAIL = "restaurant_detail"
+    const val MENU_TOPPING = "menu_topping"
+    const val YOUR_ORDER = "your_order"
+    const val CHECKOUT = "checkout"
+    const val PAYMENT = "payment"
+    const val ADD_CARD = "add_card"
+    const val ORDER_PLACED = "order_placed"
+    const val ORDER_TRACKING = "order_tracking"
+    const val ORDER_PROGRESS = "order_progress"
+    const val ORDER_DELIVERED = "order_delivered"
+    const val ORDER_RATING = "order_rating"
+    const val PROFILE_PAYMENTS = "profile_payments"
+    const val REFER_FRIEND = "refer_friend"
+    const val SOCIAL_ACCOUNTS = "social_accounts"
+    const val ADD_LOCATION = "add_location"
+    const val LOCATIONS = "locations"
+
+    const val FOODS_PER_CATEGORY = "foods/{category}"
+    const val FILTER = "filter"
+    const val SEARCH_CATEGORIES = "search_categories"
 }
 
 enum class ChaskiTab(
