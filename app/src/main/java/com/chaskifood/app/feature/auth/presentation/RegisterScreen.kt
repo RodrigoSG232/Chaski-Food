@@ -32,7 +32,7 @@ import com.chaskifood.app.ui.theme.ChaskiTextMuted
 
 @Composable
 fun RegisterScreen(
-    onRegisterSuccess: () -> Unit,
+    onRegisterSuccess: (hasPhone: Boolean) -> Unit,
     onBackClick: () -> Unit,
     modifier: Modifier = Modifier,
     viewModel: RegisterViewModel = hiltViewModel(),

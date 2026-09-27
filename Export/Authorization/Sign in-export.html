@@ -1,0 +1,1586 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script>
+      tailwind = { config: { corePlugins: { preflight: false } } };
+    </script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Red+Hat+Text%3Awght%40300..700&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      *, ::before, ::after {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+      }
+    </style>
+
+    <style>
+      body {
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="relative w-[3264px] h-[800px]">
+      <div
+        data-pencil-name="Sign in"
+        class="box-border w-[360px] h-[800px] absolute left-0 top-0 bg-[#ffffffff] overflow-hidden"
+      >
+        <div
+          data-pencil-name="system bar"
+          class="box-border w-[360px] h-[24px] absolute left-0 top-0 bg-[#ffffffff] overflow-hidden [z-index:0]"
+        ></div>
+        <div
+          data-pencil-name="input"
+          class="box-border w-[328px] h-fit absolute left-[16px] top-[295px] flex flex-col gap-[12px] justify-start items-start [z-index:1]"
+        >
+          <div
+            data-pencil-name="Phone number"
+            class="text-[16px]/[normal] box-border text-[#424242ff] font-['Red_Hat_Text',system-ui,sans-serif] font-medium tracking-[0.5px] text-left [white-space:nowrap]"
+          >
+            Email
+          </div>
+          <div
+            data-pencil-name="input field"
+            class="box-border w-full h-fit shrink-0 flex flex-row gap-[8px] p-[14px_16px] justify-start items-center bg-[#eeeeeeff] rounded-[8px]"
+          >
+            <div
+              data-pencil-name="placeholder"
+              class="text-[16px]/[normal] box-border text-[#616161ff] font-['Red_Hat_Text',system-ui,sans-serif] font-medium tracking-[0.5px] text-left [white-space:nowrap]"
+            >
+              gladys@domain.com
+            </div>
+            <div
+              data-pencil-name="spacer"
+              class="box-border [flex:1_1_0] h-[2px] opacity-[0] bg-[#d9d9d900]"
+            ></div>
+            <div
+              data-pencil-name="mail"
+              class="box-border w-[20px] shrink-0 h-[20px] overflow-hidden relative"
+            >
+              <svg
+                data-pencil-name="Vector"
+                viewBox="0 0 8 8"
+                preserveAspectRatio="none"
+                xmlns="http://www.w3.org/2000/svg"
+                class="box-border w-[6.667px] h-[6.667px] absolute left-[6.667px] top-[6.667px] overflow-visible [z-index:0]"
+              >
+                <path
+                  d="M8 4c0 2.20914-1.79086 4-4 4-2.20914 0-4-1.79086-4-4 0-2.20914 1.79086-4 4-4 2.20914 0 4 1.79086 4 4z"
+                  fill="none"
+                  stroke="#9e9e9eff"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  vector-effect="non-scaling-stroke"
+                ></path>
+              </svg>
+              <svg
+                data-pencil-name="Vector"
+                viewBox="-0.0000019073486328125 0.0000030100345611572266 20.000011444091797 20.000002712011337"
+                preserveAspectRatio="none"
+                xmlns="http://www.w3.org/2000/svg"
+                class="box-border w-[16.667px] h-[16.667px] absolute left-[1.667px] top-[1.667px] overflow-visible [z-index:1]"
+              >
+                <path
+                  d="M14.00001 6.00001l0 5c0 0.79565 0.31607 1.55871 0.87868 2.12132 0.56261 0.56261 1.32567 0.87868 2.12132 0.87868 0.79565 0 1.55871-0.31607 2.12132-0.87868 0.56261-0.56261 0.87868-1.32567 0.87868-2.12132l0-1c0-2.2527-0.76061-4.4394-2.15859-6.20583-1.39798-1.76643-3.35144-3.00909-5.54388-3.52666-2.19243-0.51756-4.4954-0.2797-6.53576 0.67504-2.04037 0.95474-3.6986 2.57044-4.70604 4.58531-1.00744 2.01487-1.30505 4.31088-0.84463 6.51602 0.46042 2.20514 1.65191 4.19023 3.38143 5.63363 1.72951 1.44341 3.89572 2.26058 6.14765 2.31911 2.25194 0.05853 4.45767-0.64501 6.25982-1.99662"
+                  fill="none"
+                  stroke="#9e9e9eff"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  vector-effect="non-scaling-stroke"
+                ></path>
+              </svg>
+            </div>
+          </div>
+        </div>
+        <div
+          data-pencil-name="input"
+          class="box-border w-[328px] h-fit absolute left-[16px] top-[401px] flex flex-col gap-[12px] justify-start items-start [z-index:2]"
+        >
+          <div
+            data-pencil-name="Phone number"
+            class="text-[16px]/[normal] box-border text-[#424242ff] font-['Red_Hat_Text',system-ui,sans-serif] font-medium tracking-[0.5px] text-left [white-space:nowrap]"
+          >
+            Password
+          </div>
+          <div
+            data-pencil-name="input field"
+            class="box-border w-full h-fit shrink-0 flex flex-row gap-[8px] p-[14px_16px] justify-start items-center bg-[#eeeeeeff] rounded-[8px]"
+          >
+            <div
+              data-pencil-name="placeholder"
+              class="text-[16px]/[normal] box-border text-[#616161ff] font-['Red_Hat_Text',system-ui,sans-serif] font-medium tracking-[0.5px] text-left [white-space:nowrap]"
+            >
+              ************
+            </div>
+            <div
+              data-pencil-name="spacer"
+              class="box-border [flex:1_1_0] h-[2px] opacity-[0] bg-[#d9d9d900]"
+            ></div>
+            <div
+              data-pencil-name="mail"
+              class="box-border w-[20px] shrink-0 h-[20px] overflow-hidden relative"
+            >
+              <svg
+                data-pencil-name="Vector"
+                viewBox="0 0 18 11"
+                preserveAspectRatio="none"
+                xmlns="http://www.w3.org/2000/svg"
+                class="box-border w-[15px] h-[9.167px] absolute left-[2.5px] top-[9.167px] overflow-visible [z-index:0]"
+              >
+                <path
+                  d="M2 0l14 0c1.10457 0 2 0.89543 2 2l0 7c0 1.10457-0.89543 2-2 2l-14 0c-1.10457 0-2-0.89543-2-2l0-7c0-1.10457 0.89543-2 2-2z"
+                  fill="none"
+                  stroke="#9e9e9eff"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  vector-effect="non-scaling-stroke"
+                ></path>
+              </svg>
+              <svg
+                data-pencil-name="Vector"
+                viewBox="0 -1.1920928955078125e-7 10 9.00000011920929"
+                preserveAspectRatio="none"
+                xmlns="http://www.w3.org/2000/svg"
+                class="box-border w-[8.333px] h-[7.5px] absolute left-[5.833px] top-[1.667px] overflow-visible [z-index:1]"
+              >
+                <path
+                  d="M0 9l0-4c0-1.32608 0.52678-2.59785 1.46447-3.53553 0.93768-0.93768 2.20945-1.46447 3.53553-1.46447 1.32608 0 2.59785 0.52678 3.53553 1.46447 0.93768 0.93768 1.46447 2.20945 1.46447 3.53553l0 4"
+                  fill="none"
+                  stroke="#9e9e9eff"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  vector-effect="non-scaling-stroke"
+                ></path>
+              </svg>
+            </div>
+          </div>
+        </div>
+        <div
+          data-pencil-name="text link"
+          class="box-border w-fit h-fit absolute left-[220px] top-[507px] flex flex-row gap-[8px] justify-end items-center bg-[#ffffffff] [z-index:3]"
+        >
+          <div
+            data-pencil-name="Forgot password?"
+            class="text-[14px]/[normal] box-border text-[#0d0d0dff] font-['Red_Hat_Text',system-ui,sans-serif] font-medium tracking-[0.5px] text-left [white-space:nowrap]"
+          >
+            Forgot password?
+          </div>
+        </div>
+        <div
+          data-pencil-name="button"
+          class="box-border w-[328px] h-fit absolute left-[16px] top-[550px] flex flex-row gap-[8px] p-[16px_48px] justify-center items-center bg-[#d42323ff] rounded-[8px] [z-index:4]"
+        >
+          <div
+            data-pencil-name="NEXT"
+            class="text-[14px]/[normal] box-border text-[#ffffffff] font-['Red_Hat_Text',system-ui,sans-serif] font-semibold tracking-[0.84px] text-center [white-space:nowrap]"
+          >
+            SIGN IN
+          </div>
+        </div>
+        <div
+          data-pencil-name="Frame 1585"
+          class="box-border w-[328px] h-fit absolute left-[16px] top-[668px] flex flex-row gap-[16px] justify-start items-start [z-index:5]"
+        >
+          <div
+            data-pencil-name="button"
+            class="box-border [flex:1_1_0] h-fit flex flex-row gap-[8px] p-[14px_16px] justify-center items-center [border:2.5px_solid_#e0e0e0ff] rounded-[8px]"
+          >
+            <div
+              data-pencil-name="NEXT"
+              class="text-[14px]/[normal] box-border text-[#424242ff] font-['Red_Hat_Text',system-ui,sans-serif] font-semibold tracking-[0.84px] text-center [white-space:nowrap]"
+            >
+              Google
+            </div>
+            <div
+              data-pencil-name="chevron-right"
+              class="box-border w-[20px] shrink-0 h-[20px] overflow-hidden relative"
+            >
+              <div
+                data-pencil-name="Group"
+                class="box-border w-[15.517px] h-[15.833px] absolute left-[2.242px] top-[2.083px] [z-index:0]"
+              >
+                <svg
+                  data-pencil-name="Path"
+                  viewBox="0 1.1920928955078125e-7 9.477479934692383 4.866809725761414"
+                  preserveAspectRatio="none"
+                  xmlns="http://www.w3.org/2000/svg"
+                  class="box-border w-[12.368px] h-[6.351px] absolute left-[0.845px] top-0 overflow-visible [z-index:0]"
+                >
+                  <path
+                    d="M5.41952 2.34576c1.13919 0 1.90762 0.4921 2.34581 0.90329l1.71215-1.67172c-1.05157-0.97743-2.41996-1.57733-4.05796-1.57733-2.37271 0-4.4219 1.36162-5.41952 3.34337l1.96152 1.52344c0.4921-1.46277 1.85372-2.52105 3.458-2.52105z"
+                    fill="#ea4335ff"
+                  ></path>
+                </svg>
+                <svg
+                  data-pencil-name="Path"
+                  viewBox="0 0 5.823999881744385 5.702670097351074"
+                  preserveAspectRatio="none"
+                  xmlns="http://www.w3.org/2000/svg"
+                  class="box-border w-[7.6px] h-[7.442px] absolute left-[7.917px] top-[6.474px] overflow-visible [z-index:1]"
+                >
+                  <path
+                    d="M5.824 1.24028c0-0.49881-0.04042-0.86281-0.1281-1.24028l-5.6959 0 0 2.25137 3.34343 0c-0.06743 0.55947-0.43143 1.4021-1.24034 1.96829l1.91439 1.48301c1.14596-1.05834 1.80652-2.61543 1.80652-4.46239z"
+                    fill="#4285f4ff"
+                  ></path>
+                </svg>
+                <svg
+                  data-pencil-name="Path"
+                  viewBox="1.7881393432617188e-7 0 2.615430176258087 5.446529865264893"
+                  preserveAspectRatio="none"
+                  xmlns="http://www.w3.org/2000/svg"
+                  class="box-border w-[3.413px] h-[7.107px] absolute left-0 top-[4.363px] overflow-visible [z-index:2]"
+                >
+                  <path
+                    d="M2.61543 3.92315c-0.1281-0.37748-0.20224-0.78196-0.20224-1.19986 0-0.41796 0.07414-0.82238 0.19548-1.19986l-1.96158-1.52343c-0.41113 0.82238-0.64709 1.74586-0.64709 2.72329 0 0.97738 0.23596 1.90091 0.64709 2.72324l1.96834-1.52338z"
+                    fill="#fbbc05ff"
+                  ></path>
+                </svg>
+                <svg
+                  data-pencil-name="Path"
+                  viewBox="-7.152557373046875e-7 0 9.430280447006226 4.866809844970703"
+                  preserveAspectRatio="none"
+                  xmlns="http://www.w3.org/2000/svg"
+                  class="box-border w-[12.306px] h-[6.351px] absolute left-[0.853px] top-[9.482px] overflow-visible [z-index:3]"
+                >
+                  <path
+                    d="M5.41281 4.86681c1.638 0 3.01309-0.53923 4.01747-1.46948l-1.91438-1.48295c-0.51228 0.35723-1.19986 0.60667-2.10309 0.60667-1.60428 0-2.9659-1.05834-3.45124-2.52105l-1.96157 1.52337c0.99762 1.98182 3.04004 3.34343 5.41281 3.34344z"
+                    fill="#34a853ff"
+                  ></path>
+                </svg>
+              </div>
+            </div>
+          </div>
+          <div
+            data-pencil-name="button"
+            class="box-border [flex:1_1_0] h-fit flex flex-row gap-[8px] p-[14px_16px] justify-center items-center [border:2.5px_solid_#e0e0e0ff] rounded-[8px]"
+          >
+            <div
+              data-pencil-name="NEXT"
+              class="text-[14px]/[normal] box-border text-[#424242ff] font-['Red_Hat_Text',system-ui,sans-serif] font-semibold tracking-[0.84px] text-center [white-space:nowrap]"
+            >
+              Facebook
+            </div>
+            <div
+              data-pencil-name="chevron-right"
+              class="box-border w-[20px] shrink-0 h-[20px] overflow-hidden relative"
+            >
+              <svg
+                data-pencil-name="Vector"
+                viewBox="0 0 20 19.94999885559082"
+                preserveAspectRatio="none"
+                xmlns="http://www.w3.org/2000/svg"
+                class="box-border w-[16.667px] h-[16.625px] absolute left-[1.667px] top-[1.667px] overflow-visible [z-index:0]"
+              >
+                <path
+                  d="M20 10c0-5.52-4.48-10-10-10-5.52 0-10 4.48-10 10 0 4.84 3.44 8.87 8 9.8l0-6.8-2 0 0-3 2 0 0-2.5c0-1.93 1.57-3.5 3.5-3.5l2.5 0 0 3-2 0c-0.55 0-1 0.45-1 1l0 2 3 0 0 3-3 0 0 6.95c5.05-0.5 9-4.76 9-9.95z"
+                  fill="#395998ff"
+                ></path>
+              </svg>
+            </div>
+          </div>
+        </div>
+        <div
+          data-pencil-name="Or connect with..."
+          class="text-[14px]/[normal] box-border absolute left-[120px] top-[625px] text-[#424242ff] font-['Red_Hat_Text',system-ui,sans-serif] font-medium tracking-[0.5px] text-center [white-space:nowrap] [z-index:6]"
+        >
+          Or connect with...
+        </div>
+        <div
+          data-pencil-name="app bar"
+          class="box-border w-[360px] h-[80px] absolute left-0 top-[24px] bg-[#ffffffff] [z-index:7]"
+        >
+          <div
+            data-pencil-name="logo"
+            class="box-border w-[32px] h-[32px] absolute left-[164px] top-[24px] [z-index:0]"
+          >
+            <svg
+              data-pencil-name="logo/no inner shape"
+              viewBox="0 0 40 40"
+              preserveAspectRatio="none"
+              xmlns="http://www.w3.org/2000/svg"
+              class="box-border w-[32px] h-[32px] absolute left-0 top-0 overflow-visible [z-index:0]"
+            >
+              <path
+                d="M28 0l-16 0c-6.6 0-12 5.4-12 12l0 16c0 6.6 5.4 12 12 12l28 0 0-28c0-6.6-5.4-12-12-12z m0 28l-10 0c-3.3 0-6-2.7-6-6l0-4c0-3.3 2.7-6 6-6l4 0c3.3 0 6 2.7 6 6l0 10z"
+                fill="#d42323ff"
+              ></path>
+            </svg>
+          </div>
+        </div>
+        <div
+          data-pencil-name="title banner"
+          class="box-border w-[360px] h-fit absolute left-0 top-[104px] flex flex-col gap-[16px] p-[16px] justify-start items-center bg-[#ffffffff] [z-index:8]"
+        >
+          <div
+            data-pencil-name="Sign in, we’ll do the cooking..."
+            class="text-[28px]/[36px] box-border w-full text-[#212121ff] font-['Product_Sans_Medium',system-ui,sans-serif] font-normal tracking-[0.28px] text-center"
+          >
+            Sign in, we’ll do the cooking...
+          </div>
+          <div
+            data-pencil-name="column"
+            class="box-border w-[328px] h-fit shrink-0 flex flex-col gap-[12px] justify-center items-center"
+          >
+            <div
+              data-pencil-name="Don’t have an account?"
+              class="text-[16px]/[24px] box-border w-full text-[#616161ff] font-['Red_Hat_Text',system-ui,sans-serif] font-medium tracking-[0.5px] text-center"
+            >
+              Don’t have an account?
+            </div>
+            <div
+              data-pencil-name="Sign up"
+              class="text-[16px]/[normal] box-border text-[#d42323ff] font-['Red_Hat_Text',system-ui,sans-serif] font-medium tracking-[0.5px] text-left [white-space:nowrap]"
+            >
+              Sign up
+            </div>
+          </div>
+        </div>
+      </div>
+      <div
+        data-pencil-name="Sign up"
+        class="box-border w-[360px] h-[800px] absolute left-[1245px] top-0 bg-[#fbfbfbff] overflow-hidden"
+      >
+        <div
+          data-pencil-name="system bar"
+          class="box-border w-[360px] h-[24px] absolute left-0 top-0 bg-[#ffffffff] overflow-hidden [z-index:0]"
+        ></div>
+        <div
+          data-pencil-name="title banner"
+          class="box-border w-[360px] h-fit absolute left-0 top-[40px] flex flex-col gap-[16px] p-[16px] justify-start items-center bg-[#ffffffff] [z-index:1]"
+        >
+          <div
+            data-pencil-name="Sign in, we’ll do the cooking..."
+            class="text-[28px]/[36px] box-border w-full text-[#212121ff] font-['Red_Hat_Text',system-ui,sans-serif] font-bold tracking-[0.28px] text-center"
+          >
+            Sign up, Your meal awaits
+          </div>
+          <div
+            data-pencil-name="column"
+            class="box-border w-[328px] h-fit shrink-0 flex flex-col gap-[12px] justify-center items-center"
+          >
+            <div
+              data-pencil-name="Don’t have an account?"
+              class="text-[16px]/[24px] box-border w-full text-[#616161ff] font-['Red_Hat_Text',system-ui,sans-serif] font-medium tracking-[0.5px] text-center"
+            >
+              Have an account?
+            </div>
+            <div
+              data-pencil-name="Sign up"
+              class="text-[16px]/[normal] box-border text-[#d42323ff] font-['Red_Hat_Text',system-ui,sans-serif] font-medium tracking-[0.5px] text-left [white-space:nowrap]"
+            >
+              Sign in
+            </div>
+          </div>
+        </div>
+        <div
+          data-pencil-name="input"
+          class="box-border w-[328px] h-fit absolute left-[16px] top-[231px] flex flex-col gap-[12px] justify-start items-start [z-index:2]"
+        >
+          <div
+            data-pencil-name="Phone number"
+            class="text-[16px]/[normal] box-border text-[#424242ff] font-['Red_Hat_Text',system-ui,sans-serif] font-medium tracking-[0.5px] text-left [white-space:nowrap]"
+          >
+            Username
+          </div>
+          <div
+            data-pencil-name="input field"
+            class="box-border w-full h-fit shrink-0 flex flex-row gap-[8px] p-[14px_16px] justify-start items-center bg-[#eeeeeeff] rounded-[8px]"
+          >
+            <div
+              data-pencil-name="placeholder"
+              class="text-[16px]/[normal] box-border text-[#616161ff] font-['Red_Hat_Text',system-ui,sans-serif] font-medium tracking-[0.5px] text-left [white-space:nowrap]"
+            >
+              Gladys
+            </div>
+            <div
+              data-pencil-name="spacer"
+              class="box-border [flex:1_1_0] h-[2px] opacity-[0] bg-[#d9d9d900]"
+            ></div>
+            <div
+              data-pencil-name="mail"
+              class="box-border w-[20px] shrink-0 h-[20px] overflow-hidden relative"
+            >
+              <svg
+                data-pencil-name="Vector"
+                viewBox="0 0 8 8"
+                preserveAspectRatio="none"
+                xmlns="http://www.w3.org/2000/svg"
+                class="box-border w-[6.667px] h-[6.667px] absolute left-[6.667px] top-[6.667px] overflow-visible [z-index:0]"
+              >
+                <path
+                  d="M8 4c0 2.20914-1.79086 4-4 4-2.20914 0-4-1.79086-4-4 0-2.20914 1.79086-4 4-4 2.20914 0 4 1.79086 4 4z"
+                  fill="none"
+                  stroke="#9e9e9eff"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  vector-effect="non-scaling-stroke"
+                ></path>
+              </svg>
+              <svg
+                data-pencil-name="Vector"
+                viewBox="-0.0000019073486328125 0.0000030100345611572266 20.000011444091797 20.000002712011337"
+                preserveAspectRatio="none"
+                xmlns="http://www.w3.org/2000/svg"
+                class="box-border w-[16.667px] h-[16.667px] absolute left-[1.667px] top-[1.667px] overflow-visible [z-index:1]"
+              >
+                <path
+                  d="M14.00001 6.00001l0 5c0 0.79565 0.31607 1.55871 0.87868 2.12132 0.56261 0.56261 1.32567 0.87868 2.12132 0.87868 0.79565 0 1.55871-0.31607 2.12132-0.87868 0.56261-0.56261 0.87868-1.32567 0.87868-2.12132l0-1c0-2.2527-0.76061-4.4394-2.15859-6.20583-1.39798-1.76643-3.35144-3.00909-5.54388-3.52666-2.19243-0.51756-4.4954-0.2797-6.53576 0.67504-2.04037 0.95474-3.6986 2.57044-4.70604 4.58531-1.00744 2.01487-1.30505 4.31088-0.84463 6.51602 0.46042 2.20514 1.65191 4.19023 3.38143 5.63363 1.72951 1.44341 3.89572 2.26058 6.14765 2.31911 2.25194 0.05853 4.45767-0.64501 6.25982-1.99662"
+                  fill="none"
+                  stroke="#9e9e9eff"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  vector-effect="non-scaling-stroke"
+                ></path>
+              </svg>
+            </div>
+          </div>
+        </div>
+        <div
+          data-pencil-name="input"
+          class="box-border w-[328px] h-fit absolute left-[16px] top-[334px] flex flex-col gap-[12px] justify-start items-start [z-index:3]"
+        >
+          <div
+            data-pencil-name="Phone number"
+            class="text-[16px]/[normal] box-border text-[#424242ff] font-['Red_Hat_Text',system-ui,sans-serif] font-medium tracking-[0.5px] text-left [white-space:nowrap]"
+          >
+            Email address
+          </div>
+          <div
+            data-pencil-name="input field"
+            class="box-border w-full h-fit shrink-0 flex flex-row gap-[8px] p-[14px_16px] justify-start items-center bg-[#eeeeeeff] rounded-[8px]"
+          >
+            <div
+              data-pencil-name="placeholder"
+              class="text-[16px]/[normal] box-border text-[#616161ff] font-['Red_Hat_Text',system-ui,sans-serif] font-medium tracking-[0.5px] text-left [white-space:nowrap]"
+            >
+              gladys@domain.com
+            </div>
+            <div
+              data-pencil-name="spacer"
+              class="box-border [flex:1_1_0] h-[2px] opacity-[0] bg-[#d9d9d900]"
+            ></div>
+            <div
+              data-pencil-name="mail"
+              class="box-border w-[20px] shrink-0 h-[20px] overflow-hidden relative"
+            >
+              <svg
+                data-pencil-name="Vector"
+                viewBox="1.1920928955078125e-7 0.000004857778549194336 19.9982088804245 13.999996095895767"
+                preserveAspectRatio="none"
+                xmlns="http://www.w3.org/2000/svg"
+                class="box-border w-[16.665px] h-[11.667px] absolute left-[1.668px] top-[4.167px] overflow-visible [z-index:0]"
+              >
+                <path
+                  d="M15.49821 14l-8.5 0c-1.29814-0.00033-2.57061-0.36163-3.67523-1.04353-1.10462-0.6819-1.99786-1.65752-2.5799-2.81786-0.58205-1.16033-0.82998-2.45966-0.71608-3.75279 0.1139-1.29313 0.58514-2.52912 1.36105-3.56984 0.77592-1.04072 1.82595-1.84519 3.03276-2.32349 1.20681-0.47831 2.52284-0.61161 3.80105-0.38502 1.27821 0.22659 2.46823 0.80415 3.43708 1.66814 0.96885 0.86399 1.67837 1.98037 2.04927 3.22439l1.79 0c1.19347 0 2.33807 0.47411 3.18198 1.31802 0.84391 0.84391 1.31802 1.98851 1.31802 3.18198 0 1.19347-0.47411 2.33807-1.31802 3.18198-0.84391 0.84391-1.98851 1.31802-3.18198 1.31802z"
+                  fill="none"
+                  stroke="#9e9e9eff"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  vector-effect="non-scaling-stroke"
+                ></path>
+              </svg>
+            </div>
+          </div>
+        </div>
+        <div
+          data-pencil-name="input"
+          class="box-border w-[328px] h-fit absolute left-[16px] top-[437px] flex flex-col gap-[12px] justify-start items-start [z-index:4]"
+        >
+          <div
+            data-pencil-name="Phone number"
+            class="text-[16px]/[normal] box-border text-[#424242ff] font-['Red_Hat_Text',system-ui,sans-serif] font-medium tracking-[0.5px] text-left [white-space:nowrap]"
+          >
+            Password
+          </div>
+          <div
+            data-pencil-name="input field"
+            class="box-border w-full h-fit shrink-0 flex flex-row gap-[8px] p-[14px_16px] justify-start items-center bg-[#eeeeeeff] rounded-[8px]"
+          >
+            <div
+              data-pencil-name="placeholder"
+              class="text-[16px]/[normal] box-border text-[#616161ff] font-['Red_Hat_Text',system-ui,sans-serif] font-medium tracking-[0.5px] text-left [white-space:nowrap]"
+            >
+              placeholder
+            </div>
+            <div
+              data-pencil-name="spacer"
+              class="box-border [flex:1_1_0] h-[2px] opacity-[0] bg-[#d9d9d900]"
+            ></div>
+            <div
+              data-pencil-name="mail"
+              class="box-border w-[20px] shrink-0 h-[20px] overflow-hidden relative"
+            >
+              <svg
+                data-pencil-name="Vector"
+                viewBox="0 0 8 8"
+                preserveAspectRatio="none"
+                xmlns="http://www.w3.org/2000/svg"
+                class="box-border w-[6.667px] h-[6.667px] absolute left-[6.667px] top-[6.667px] overflow-visible [z-index:0]"
+              >
+                <path
+                  d="M8 4c0 2.20914-1.79086 4-4 4-2.20914 0-4-1.79086-4-4 0-2.20914 1.79086-4 4-4 2.20914 0 4 1.79086 4 4z"
+                  fill="none"
+                  stroke="#9e9e9eff"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  vector-effect="non-scaling-stroke"
+                ></path>
+              </svg>
+              <svg
+                data-pencil-name="Vector"
+                viewBox="-0.0000019073486328125 0.0000030100345611572266 20.000011444091797 20.000002712011337"
+                preserveAspectRatio="none"
+                xmlns="http://www.w3.org/2000/svg"
+                class="box-border w-[16.667px] h-[16.667px] absolute left-[1.667px] top-[1.667px] overflow-visible [z-index:1]"
+              >
+                <path
+                  d="M14.00001 6.00001l0 5c0 0.79565 0.31607 1.55871 0.87868 2.12132 0.56261 0.56261 1.32567 0.87868 2.12132 0.87868 0.79565 0 1.55871-0.31607 2.12132-0.87868 0.56261-0.56261 0.87868-1.32567 0.87868-2.12132l0-1c0-2.2527-0.76061-4.4394-2.15859-6.20583-1.39798-1.76643-3.35144-3.00909-5.54388-3.52666-2.19243-0.51756-4.4954-0.2797-6.53576 0.67504-2.04037 0.95474-3.6986 2.57044-4.70604 4.58531-1.00744 2.01487-1.30505 4.31088-0.84463 6.51602 0.46042 2.20514 1.65191 4.19023 3.38143 5.63363 1.72951 1.44341 3.89572 2.26058 6.14765 2.31911 2.25194 0.05853 4.45767-0.64501 6.25982-1.99662"
+                  fill="none"
+                  stroke="#9e9e9eff"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  vector-effect="non-scaling-stroke"
+                ></path>
+              </svg>
+            </div>
+          </div>
+        </div>
+        <div
+          data-pencil-name="button"
+          class="box-border w-[328px] h-fit absolute left-[16px] top-[540px] flex flex-row gap-[8px] p-[16px_48px] justify-center items-center bg-[#d42323ff] rounded-[8px] [z-index:5]"
+        >
+          <div
+            data-pencil-name="NEXT"
+            class="text-[14px]/[normal] box-border text-[#ffffffff] font-['Red_Hat_Text',system-ui,sans-serif] font-semibold tracking-[0.84px] text-center [white-space:nowrap]"
+          >
+            SIGN UP
+          </div>
+        </div>
+        <div
+          data-pencil-name="Frame 1585"
+          class="box-border w-[328px] h-fit absolute left-[16px] top-[654px] flex flex-row gap-[16px] justify-start items-start [z-index:6]"
+        >
+          <div
+            data-pencil-name="button"
+            class="box-border [flex:1_1_0] h-fit flex flex-row gap-[8px] p-[14px_16px] justify-center items-center [border:2.5px_solid_#e0e0e0ff] rounded-[8px]"
+          >
+            <div
+              data-pencil-name="NEXT"
+              class="text-[14px]/[normal] box-border text-[#424242ff] font-['Red_Hat_Text',system-ui,sans-serif] font-semibold tracking-[0.84px] text-center [white-space:nowrap]"
+            >
+              Google
+            </div>
+            <div
+              data-pencil-name="chevron-right"
+              class="box-border w-[20px] shrink-0 h-[20px] overflow-hidden relative"
+            >
+              <div
+                data-pencil-name="Group"
+                class="box-border w-[15.517px] h-[15.833px] absolute left-[2.242px] top-[2.083px] [z-index:0]"
+              >
+                <svg
+                  data-pencil-name="Path"
+                  viewBox="0 1.1920928955078125e-7 9.477479934692383 4.866809725761414"
+                  preserveAspectRatio="none"
+                  xmlns="http://www.w3.org/2000/svg"
+                  class="box-border w-[12.368px] h-[6.351px] absolute left-[0.845px] top-0 overflow-visible [z-index:0]"
+                >
+                  <path
+                    d="M5.41952 2.34576c1.13919 0 1.90762 0.4921 2.34581 0.90329l1.71215-1.67172c-1.05157-0.97743-2.41996-1.57733-4.05796-1.57733-2.37271 0-4.4219 1.36162-5.41952 3.34337l1.96152 1.52344c0.4921-1.46277 1.85372-2.52105 3.458-2.52105z"
+                    fill="#ea4335ff"
+                  ></path>
+                </svg>
+                <svg
+                  data-pencil-name="Path"
+                  viewBox="0 0 5.823999881744385 5.702670097351074"
+                  preserveAspectRatio="none"
+                  xmlns="http://www.w3.org/2000/svg"
+                  class="box-border w-[7.6px] h-[7.442px] absolute left-[7.917px] top-[6.474px] overflow-visible [z-index:1]"
+                >
+                  <path
+                    d="M5.824 1.24028c0-0.49881-0.04042-0.86281-0.1281-1.24028l-5.6959 0 0 2.25137 3.34343 0c-0.06743 0.55947-0.43143 1.4021-1.24034 1.96829l1.91439 1.48301c1.14596-1.05834 1.80652-2.61543 1.80652-4.46239z"
+                    fill="#4285f4ff"
+                  ></path>
+                </svg>
+                <svg
+                  data-pencil-name="Path"
+                  viewBox="1.7881393432617188e-7 0 2.615430176258087 5.446529865264893"
+                  preserveAspectRatio="none"
+                  xmlns="http://www.w3.org/2000/svg"
+                  class="box-border w-[3.413px] h-[7.107px] absolute left-0 top-[4.363px] overflow-visible [z-index:2]"
+                >
+                  <path
+                    d="M2.61543 3.92315c-0.1281-0.37748-0.20224-0.78196-0.20224-1.19986 0-0.41796 0.07414-0.82238 0.19548-1.19986l-1.96158-1.52343c-0.41113 0.82238-0.64709 1.74586-0.64709 2.72329 0 0.97738 0.23596 1.90091 0.64709 2.72324l1.96834-1.52338z"
+                    fill="#fbbc05ff"
+                  ></path>
+                </svg>
+                <svg
+                  data-pencil-name="Path"
+                  viewBox="-7.152557373046875e-7 0 9.430280447006226 4.866809844970703"
+                  preserveAspectRatio="none"
+                  xmlns="http://www.w3.org/2000/svg"
+                  class="box-border w-[12.306px] h-[6.351px] absolute left-[0.853px] top-[9.482px] overflow-visible [z-index:3]"
+                >
+                  <path
+                    d="M5.41281 4.86681c1.638 0 3.01309-0.53923 4.01747-1.46948l-1.91438-1.48295c-0.51228 0.35723-1.19986 0.60667-2.10309 0.60667-1.60428 0-2.9659-1.05834-3.45124-2.52105l-1.96157 1.52337c0.99762 1.98182 3.04004 3.34343 5.41281 3.34344z"
+                    fill="#34a853ff"
+                  ></path>
+                </svg>
+              </div>
+            </div>
+          </div>
+          <div
+            data-pencil-name="button"
+            class="box-border [flex:1_1_0] h-fit flex flex-row gap-[8px] p-[14px_16px] justify-center items-center [border:2.5px_solid_#e0e0e0ff] rounded-[8px]"
+          >
+            <div
+              data-pencil-name="NEXT"
+              class="text-[14px]/[normal] box-border text-[#424242ff] font-['Red_Hat_Text',system-ui,sans-serif] font-semibold tracking-[0.84px] text-center [white-space:nowrap]"
+            >
+              Facebook
+            </div>
+            <div
+              data-pencil-name="chevron-right"
+              class="box-border w-[20px] shrink-0 h-[20px] overflow-hidden relative"
+            >
+              <svg
+                data-pencil-name="Vector"
+                viewBox="0 0 20 19.94999885559082"
+                preserveAspectRatio="none"
+                xmlns="http://www.w3.org/2000/svg"
+                class="box-border w-[16.667px] h-[16.625px] absolute left-[1.667px] top-[1.667px] overflow-visible [z-index:0]"
+              >
+                <path
+                  d="M20 10c0-5.52-4.48-10-10-10-5.52 0-10 4.48-10 10 0 4.84 3.44 8.87 8 9.8l0-6.8-2 0 0-3 2 0 0-2.5c0-1.93 1.57-3.5 3.5-3.5l2.5 0 0 3-2 0c-0.55 0-1 0.45-1 1l0 2 3 0 0 3-3 0 0 6.95c5.05-0.5 9-4.76 9-9.95z"
+                  fill="#395998ff"
+                ></path>
+              </svg>
+            </div>
+          </div>
+        </div>
+        <div
+          data-pencil-name="Or connect with..."
+          class="text-[14px]/[normal] box-border absolute left-[120px] top-[613px] text-[#424242ff] font-['Product_Sans_Medium',system-ui,sans-serif] font-normal tracking-[0.5px] text-left [white-space:nowrap] [z-index:7]"
+        >
+          Or connect with...
+        </div>
+        <div
+          data-pencil-name="By signing up, you have agreed to our Terms &amp; Privacy policy"
+          class="text-[14px]/[22px] box-border w-[311px] absolute left-[25px] top-[720px] text-[#757575ff] font-['Product_Sans',system-ui,sans-serif] font-normal text-center [z-index:8]"
+        >
+          By signing up, you have agreed to our
+          <br />
+          Terms &amp; Privacy policy
+        </div>
+      </div>
+      <div
+        data-pencil-name="Sign up"
+        class="box-border w-[360px] h-[800px] absolute left-[1660px] top-0 bg-[#fbfbfbff] overflow-hidden"
+      >
+        <div
+          data-pencil-name="system bar"
+          class="box-border w-[360px] h-[24px] absolute left-0 top-0 bg-[#ffffffff] overflow-hidden [z-index:0]"
+        ></div>
+        <div
+          data-pencil-name="title banner"
+          class="box-border w-[360px] h-fit absolute left-0 top-[104px] flex flex-col gap-[16px] p-[16px] justify-start items-center bg-[#ffffffff] [z-index:1]"
+        >
+          <div
+            data-pencil-name="Sign in, we’ll do the cooking..."
+            class="text-[28px]/[36px] box-border w-full text-[#212121ff] font-['Red_Hat_Text',system-ui,sans-serif] font-bold tracking-[0.28px] text-center"
+          >
+            Get started with phone number
+          </div>
+          <div
+            data-pencil-name="column"
+            class="box-border w-[328px] h-fit shrink-0 flex flex-col gap-[12px] justify-center items-center"
+          >
+            <div
+              data-pencil-name="Enter your phone number to use Chaski Food and enjoy your food."
+              class="text-[16px]/[24px] box-border w-full text-[#616161ff] font-['Red_Hat_Text',system-ui,sans-serif] font-medium tracking-[0.5px] text-center"
+            >
+              Enter your phone number to use Chaski Food and enjoy your food.
+            </div>
+          </div>
+        </div>
+        <div
+          data-pencil-name="input"
+          class="box-border w-[328px] h-fit absolute left-[16px] top-[288px] flex flex-col gap-[12px] justify-start items-start [z-index:2]"
+        >
+          <div
+            data-pencil-name="Phone number"
+            class="text-[16px]/[normal] box-border text-[#424242ff] font-['Red_Hat_Text',system-ui,sans-serif] font-medium tracking-[0.5px] text-left [white-space:nowrap]"
+          >
+            Phone number
+          </div>
+          <div
+            data-pencil-name="input field"
+            class="box-border w-full h-fit shrink-0 flex flex-row gap-[8px] p-[14px_16px] justify-start items-center bg-[#eeeeeeff] rounded-[8px]"
+          >
+            <div
+              data-pencil-name="mail"
+              class="box-border w-[20px] shrink-0 h-[20px] overflow-hidden relative"
+            >
+              <svg
+                data-pencil-name="Vector"
+                viewBox="0 0 20 16"
+                preserveAspectRatio="none"
+                xmlns="http://www.w3.org/2000/svg"
+                class="box-border w-[16.667px] h-[13.333px] absolute left-[1.667px] top-[3.333px] overflow-visible [z-index:0]"
+              >
+                <path
+                  d="M2 0l16 0c1.10457 0 2 0.89543 2 2l0 12c0 1.10457-0.89543 2-2 2l-16 0c-1.10457 0-2-0.89543-2-2l0-12c0-1.10457 0.89543-2 2-2z"
+                  fill="none"
+                  stroke="#9e9e9eff"
+                  stroke-width="1.667"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  vector-effect="non-scaling-stroke"
+                ></path>
+              </svg>
+              <svg
+                data-pencil-name="Vector"
+                viewBox="0 0 20 5.996009826660156"
+                preserveAspectRatio="none"
+                xmlns="http://www.w3.org/2000/svg"
+                class="box-border w-[16.667px] h-[4.997px] absolute left-[1.667px] top-[5.833px] overflow-visible [z-index:1]"
+              >
+                <path
+                  d="M20 0l-8.97 5.7c-0.30873 0.19343-0.66568 0.29601-1.03 0.29601-0.36432 0-0.72127-0.10258-1.03-0.29601l-8.97-5.7"
+                  fill="none"
+                  stroke="#9e9e9eff"
+                  stroke-width="1.667"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  vector-effect="non-scaling-stroke"
+                ></path>
+              </svg>
+            </div>
+            <div
+              data-pencil-name="placeholder"
+              class="text-[16px]/[normal] box-border text-[#616161ff] font-['Red_Hat_Text',system-ui,sans-serif] font-medium tracking-[0.5px] text-left [white-space:nowrap]"
+            >
+              +1234567890
+            </div>
+            <div
+              data-pencil-name="spacer"
+              class="box-border [flex:1_1_0] h-[2px] opacity-[0] bg-[#d9d9d900]"
+            ></div>
+            <div
+              data-pencil-name="mail"
+              class="box-border w-[20px] shrink-0 h-[20px] overflow-hidden relative"
+            >
+              <svg
+                data-pencil-name="Vector"
+                viewBox="0 0 8 8"
+                preserveAspectRatio="none"
+                xmlns="http://www.w3.org/2000/svg"
+                class="box-border w-[6.667px] h-[6.667px] absolute left-[6.667px] top-[6.667px] overflow-visible [z-index:0]"
+              >
+                <path
+                  d="M8 4c0 2.20914-1.79086 4-4 4-2.20914 0-4-1.79086-4-4 0-2.20914 1.79086-4 4-4 2.20914 0 4 1.79086 4 4z"
+                  fill="none"
+                  stroke="#9e9e9eff"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  vector-effect="non-scaling-stroke"
+                ></path>
+              </svg>
+              <svg
+                data-pencil-name="Vector"
+                viewBox="-0.0000019073486328125 0.0000030100345611572266 20.000011444091797 20.000002712011337"
+                preserveAspectRatio="none"
+                xmlns="http://www.w3.org/2000/svg"
+                class="box-border w-[16.667px] h-[16.667px] absolute left-[1.667px] top-[1.667px] overflow-visible [z-index:1]"
+              >
+                <path
+                  d="M14.00001 6.00001l0 5c0 0.79565 0.31607 1.55871 0.87868 2.12132 0.56261 0.56261 1.32567 0.87868 2.12132 0.87868 0.79565 0 1.55871-0.31607 2.12132-0.87868 0.56261-0.56261 0.87868-1.32567 0.87868-2.12132l0-1c0-2.2527-0.76061-4.4394-2.15859-6.20583-1.39798-1.76643-3.35144-3.00909-5.54388-3.52666-2.19243-0.51756-4.4954-0.2797-6.53576 0.67504-2.04037 0.95474-3.6986 2.57044-4.70604 4.58531-1.00744 2.01487-1.30505 4.31088-0.84463 6.51602 0.46042 2.20514 1.65191 4.19023 3.38143 5.63363 1.72951 1.44341 3.89572 2.26058 6.14765 2.31911 2.25194 0.05853 4.45767-0.64501 6.25982-1.99662"
+                  fill="none"
+                  stroke="#9e9e9eff"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  vector-effect="non-scaling-stroke"
+                ></path>
+              </svg>
+            </div>
+          </div>
+        </div>
+        <div
+          data-pencil-name="button"
+          class="box-border w-[328px] h-fit absolute left-[16px] top-[407px] flex flex-row gap-[8px] p-[16px_48px] justify-center items-center bg-[#d42323ff] rounded-[8px] [z-index:3]"
+        >
+          <div
+            data-pencil-name="NEXT"
+            class="text-[14px]/[normal] box-border text-[#ffffffff] font-['Red_Hat_Text',system-ui,sans-serif] font-semibold tracking-[0.84px] text-center [white-space:nowrap]"
+          >
+            GET CODE
+          </div>
+        </div>
+        <div
+          data-pencil-name="app bar"
+          class="box-border w-[360px] h-[80px] absolute left-0 top-[24px] bg-[#ffffffff] [z-index:4]"
+        >
+          <div
+            data-pencil-name="chevron-left"
+            class="box-border w-[24px] h-[24px] absolute left-[16px] top-[28px] overflow-hidden [z-index:0]"
+          >
+            <svg
+              data-pencil-name="Vector"
+              viewBox="0 0 6 12"
+              preserveAspectRatio="none"
+              xmlns="http://www.w3.org/2000/svg"
+              class="box-border w-[6px] h-[12px] absolute left-[9px] top-[6px] overflow-visible [z-index:0]"
+            >
+              <path
+                d="M6 12l-6-6 6-6"
+                fill="none"
+                stroke="#212121ff"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                vector-effect="non-scaling-stroke"
+              ></path>
+            </svg>
+          </div>
+        </div>
+      </div>
+      <div
+        data-pencil-name="Location"
+        class="box-border w-[360px] h-[800px] absolute left-[2489px] top-0 bg-[#fbfbfbff] overflow-hidden"
+      >
+        <div
+          data-pencil-name="system bar"
+          class="box-border w-[360px] h-[24px] absolute left-0 top-0 bg-[#ffffffff] overflow-hidden [z-index:0]"
+        ></div>
+        <div
+          data-pencil-name="app bar"
+          class="box-border w-[360px] h-[80px] absolute left-0 top-[24px] bg-[#ffffffff] [z-index:1]"
+        >
+          <div
+            data-pencil-name="chevron-left"
+            class="box-border w-[24px] h-[24px] absolute left-[16px] top-[28px] overflow-hidden [z-index:0]"
+          >
+            <svg
+              data-pencil-name="Vector"
+              viewBox="0 0 6 12"
+              preserveAspectRatio="none"
+              xmlns="http://www.w3.org/2000/svg"
+              class="box-border w-[6px] h-[12px] absolute left-[9px] top-[6px] overflow-visible [z-index:0]"
+            >
+              <path
+                d="M6 12l-6-6 6-6"
+                fill="none"
+                stroke="#212121ff"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                vector-effect="non-scaling-stroke"
+              ></path>
+            </svg>
+          </div>
+        </div>
+        <div
+          data-pencil-name="title banner"
+          class="box-border w-[360px] h-fit absolute left-0 top-[104px] flex flex-col gap-[16px] p-[16px] justify-start items-center bg-[#ffffffff] [z-index:2]"
+        >
+          <div
+            data-pencil-name="Sign in, we’ll do the cooking..."
+            class="text-[28px]/[36px] box-border w-full text-[#212121ff] font-['Red_Hat_Text',system-ui,sans-serif] font-bold tracking-[0.28px] text-center"
+          >
+            Find restaurants near you
+          </div>
+          <div
+            data-pencil-name="column"
+            class="box-border w-[328px] h-fit shrink-0 flex flex-col gap-[12px] justify-center items-center"
+          >
+            <div
+              data-pencil-name="Don’t have an account?"
+              class="text-[16px]/[24px] box-border w-full text-[#616161ff] font-['Red_Hat_Text',system-ui,sans-serif] font-medium tracking-[0.5px] text-center"
+            >
+              Simply enter your location and explore a list of top-rated restaurants in the area.
+            </div>
+            <div
+              data-pencil-name="Sign up"
+              class="text-[16px]/[normal] box-border text-[#d42323ff] font-['Red_Hat_Text',system-ui,sans-serif] font-medium tracking-[0.5px] text-left [white-space:nowrap]"
+            >
+              Didn't receive?
+            </div>
+          </div>
+        </div>
+        <div
+          data-pencil-name="button"
+          class="box-border w-[328px] h-fit absolute left-[16px] top-[327px] flex flex-row gap-[8px] p-[16px_48px] justify-center items-center bg-[#d42323ff] rounded-[8px] [z-index:3]"
+        >
+          <div
+            data-pencil-name="NEXT"
+            class="text-[14px]/[normal] box-border text-[#ffffffff] font-['Red_Hat_Text',system-ui,sans-serif] font-semibold tracking-[0.84px] text-center [white-space:nowrap]"
+          >
+            Use current location
+          </div>
+        </div>
+        <div
+          data-pencil-name="button"
+          class="box-border w-[328px] h-fit absolute left-[16px] top-[400px] flex flex-row gap-[8px] p-[16px_48px] justify-center items-center [border:2px_solid_#424242ff] rounded-[8px] [z-index:4]"
+        >
+          <div
+            data-pencil-name="NEXT"
+            class="text-[14px]/[normal] box-border text-[#424242ff] font-['Red_Hat_Text',system-ui,sans-serif] font-semibold tracking-[0.84px] text-center [white-space:nowrap]"
+          >
+            Enter a new address
+          </div>
+        </div>
+      </div>
+      <div
+        data-pencil-name="Location search"
+        class="box-border w-[360px] h-[800px] absolute left-[2904px] top-0 bg-[#fbfbfbff] overflow-hidden"
+      >
+        <div
+          data-pencil-name="system bar"
+          class="box-border w-[360px] h-[24px] absolute left-0 top-0 bg-[#ffffffff] overflow-hidden [z-index:0]"
+        ></div>
+        <div
+          data-pencil-name="suggestion"
+          class="box-border w-[360px] h-fit absolute left-0 top-[383px] flex flex-row gap-[8px] p-[0px_24px] justify-between items-center bg-[#ffffffff] [z-index:1]"
+        >
+          <div
+            data-pencil-name="row"
+            class="box-border [flex:1_1_0] h-fit flex flex-row gap-[249px] p-[12px_0px] justify-between items-center [border-width:0px_0px_1px_0px] [border-style:solid] [border-color:#e0e0e0ff]"
+          >
+            <div
+              data-pencil-name="column"
+              class="box-border w-fit shrink-0 h-fit flex flex-col gap-[8px] justify-start items-start"
+            >
+              <div
+                data-pencil-name="ABC river"
+                class="text-[16px]/[normal] box-border text-[#0d0d0dff] font-['Red_Hat_Text',system-ui,sans-serif] font-semibold tracking-[1px] text-center [white-space:nowrap]"
+              >
+                ABC river
+              </div>
+              <div
+                data-pencil-name="67 abc hotel"
+                class="text-[14px]/[normal] box-border text-[#9f9f9fff] font-['Red_Hat_Text',system-ui,sans-serif] font-medium tracking-[1px] text-center [white-space:nowrap]"
+              >
+                67 abc hotel
+              </div>
+            </div>
+            <div
+              data-pencil-name="arrow-up-right"
+              class="box-border w-[24px] shrink-0 h-[24px] overflow-hidden relative"
+            >
+              <svg
+                data-pencil-name="Vector"
+                viewBox="0 0 10 10"
+                preserveAspectRatio="none"
+                xmlns="http://www.w3.org/2000/svg"
+                class="box-border w-[10px] h-[10px] absolute left-[7px] top-[7px] overflow-visible [z-index:0]"
+              >
+                <path
+                  d="M0 0l10 0 0 10"
+                  fill="none"
+                  stroke="#424242ff"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  vector-effect="non-scaling-stroke"
+                ></path>
+              </svg>
+              <svg
+                data-pencil-name="Vector"
+                viewBox="0 0 10 10"
+                preserveAspectRatio="none"
+                xmlns="http://www.w3.org/2000/svg"
+                class="box-border w-[10px] h-[10px] absolute left-[7px] top-[7px] overflow-visible [z-index:1]"
+              >
+                <path
+                  d="M0 10l10-10"
+                  fill="none"
+                  stroke="#424242ff"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  vector-effect="non-scaling-stroke"
+                ></path>
+              </svg>
+            </div>
+          </div>
+        </div>
+        <div
+          data-pencil-name="suggestion"
+          class="box-border w-[360px] h-fit absolute left-0 top-[451px] flex flex-row gap-[8px] p-[0px_24px] justify-between items-center bg-[#ffffffff] [z-index:2]"
+        >
+          <div
+            data-pencil-name="row"
+            class="box-border [flex:1_1_0] h-fit flex flex-row gap-[249px] p-[12px_0px] justify-between items-center [border-width:0px_0px_1px_0px] [border-style:solid] [border-color:#e0e0e0ff]"
+          >
+            <div
+              data-pencil-name="column"
+              class="box-border w-fit shrink-0 h-fit flex flex-col gap-[8px] justify-start items-start"
+            >
+              <div
+                data-pencil-name="ABC river"
+                class="text-[16px]/[normal] box-border text-[#0d0d0dff] font-['Red_Hat_Text',system-ui,sans-serif] font-semibold tracking-[1px] text-center [white-space:nowrap]"
+              >
+                ABC river
+              </div>
+              <div
+                data-pencil-name="67 abc hotel"
+                class="text-[14px]/[normal] box-border text-[#9f9f9fff] font-['Red_Hat_Text',system-ui,sans-serif] font-medium tracking-[1px] text-center [white-space:nowrap]"
+              >
+                Silver inn
+              </div>
+            </div>
+            <div
+              data-pencil-name="arrow-up-right"
+              class="box-border w-[24px] shrink-0 h-[24px] overflow-hidden relative"
+            >
+              <svg
+                data-pencil-name="Vector"
+                viewBox="0 0 10 10"
+                preserveAspectRatio="none"
+                xmlns="http://www.w3.org/2000/svg"
+                class="box-border w-[10px] h-[10px] absolute left-[7px] top-[7px] overflow-visible [z-index:0]"
+              >
+                <path
+                  d="M0 0l10 0 0 10"
+                  fill="none"
+                  stroke="#424242ff"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  vector-effect="non-scaling-stroke"
+                ></path>
+              </svg>
+              <svg
+                data-pencil-name="Vector"
+                viewBox="0 0 10 10"
+                preserveAspectRatio="none"
+                xmlns="http://www.w3.org/2000/svg"
+                class="box-border w-[10px] h-[10px] absolute left-[7px] top-[7px] overflow-visible [z-index:1]"
+              >
+                <path
+                  d="M0 10l10-10"
+                  fill="none"
+                  stroke="#424242ff"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  vector-effect="non-scaling-stroke"
+                ></path>
+              </svg>
+            </div>
+          </div>
+        </div>
+        <div
+          data-pencil-name="title banner"
+          class="box-border w-[360px] h-fit absolute left-0 top-[104px] flex flex-col gap-[16px] p-[16px] justify-start items-center bg-[#ffffffff] [z-index:3]"
+        >
+          <div
+            data-pencil-name="Sign in, we’ll do the cooking..."
+            class="text-[28px]/[36px] box-border w-full text-[#212121ff] font-['Red_Hat_Text',system-ui,sans-serif] font-bold tracking-[0.28px] text-center"
+          >
+            Find restaurants near you
+          </div>
+          <div
+            data-pencil-name="column"
+            class="box-border w-[328px] h-fit shrink-0 flex flex-col gap-[12px] justify-center items-center"
+          >
+            <div
+              data-pencil-name="Don’t have an account?"
+              class="text-[16px]/[24px] box-border w-full text-[#616161ff] font-['Red_Hat_Text',system-ui,sans-serif] font-medium tracking-[0.5px] text-center"
+            >
+              Simply enter your location and explore a list of top-rated restaurants in the area.
+            </div>
+          </div>
+        </div>
+        <div
+          data-pencil-name="app bar"
+          class="box-border w-[360px] h-[80px] absolute left-0 top-[24px] bg-[#ffffffff] [z-index:4]"
+        >
+          <div
+            data-pencil-name="chevron-left"
+            class="box-border w-[24px] h-[24px] absolute left-[16px] top-[28px] overflow-hidden [z-index:0]"
+          >
+            <svg
+              data-pencil-name="Vector"
+              viewBox="0 0 6 12"
+              preserveAspectRatio="none"
+              xmlns="http://www.w3.org/2000/svg"
+              class="box-border w-[6px] h-[12px] absolute left-[9px] top-[6px] overflow-visible [z-index:0]"
+            >
+              <path
+                d="M6 12l-6-6 6-6"
+                fill="none"
+                stroke="#212121ff"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                vector-effect="non-scaling-stroke"
+              ></path>
+            </svg>
+          </div>
+        </div>
+        <div
+          data-pencil-name="input"
+          class="box-border w-[328px] h-fit absolute left-[16px] top-[288px] flex flex-col gap-[12px] justify-start items-start [z-index:5]"
+        >
+          <div
+            data-pencil-name="Phone number"
+            class="text-[16px]/[normal] box-border text-[#424242ff] font-['Red_Hat_Text',system-ui,sans-serif] font-medium tracking-[0.5px] text-left [white-space:nowrap]"
+          >
+            Search location
+          </div>
+          <div
+            data-pencil-name="input field"
+            class="box-border w-full h-fit shrink-0 flex flex-row gap-[8px] p-[14px_16px] justify-start items-center bg-[#eeeeeeff] rounded-[8px]"
+          >
+            <div
+              data-pencil-name="mail"
+              class="box-border w-[20px] shrink-0 h-[20px] overflow-hidden relative"
+            >
+              <svg
+                data-pencil-name="Vector"
+                viewBox="0 2.384185791015625e-7 16 19.99999976158142"
+                preserveAspectRatio="none"
+                xmlns="http://www.w3.org/2000/svg"
+                class="box-border w-[13.333px] h-[16.667px] absolute left-[3.333px] top-[1.667px] overflow-visible [z-index:0]"
+              >
+                <path
+                  d="M16 8c0 6-8 12-8 12 0 0-8-6-8-12 0-2.12173 0.84285-4.15656 2.34315-5.65685 1.50029-1.50029 3.53512-2.34315 5.65685-2.34315 2.12173 0 4.15656 0.84285 5.65685 2.34315 1.50029 1.50029 2.34314 3.53512 2.34315 5.65685z"
+                  fill="none"
+                  stroke="#9e9e9eff"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  vector-effect="non-scaling-stroke"
+                ></path>
+              </svg>
+              <svg
+                data-pencil-name="Vector"
+                viewBox="0 0 6 6"
+                preserveAspectRatio="none"
+                xmlns="http://www.w3.org/2000/svg"
+                class="box-border w-[5px] h-[5px] absolute left-[7.5px] top-[5.833px] overflow-visible [z-index:1]"
+              >
+                <path
+                  d="M6 3c0 1.65685-1.34315 3-3 3-1.65685 0-3-1.34315-3-3 0-1.65685 1.34315-3 3-3 1.65685 0 3 1.34315 3 3z"
+                  fill="none"
+                  stroke="#9e9e9eff"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  vector-effect="non-scaling-stroke"
+                ></path>
+              </svg>
+            </div>
+            <div
+              data-pencil-name="placeholder"
+              class="text-[16px]/[normal] box-border text-[#616161ff] font-['Red_Hat_Text',system-ui,sans-serif] font-medium tracking-[0.5px] text-left [white-space:nowrap]"
+            >
+              Mill river|
+            </div>
+            <div
+              data-pencil-name="spacer"
+              class="box-border [flex:1_1_0] h-[2px] opacity-[0] bg-[#d9d9d900]"
+            ></div>
+          </div>
+        </div>
+      </div>
+      <div
+        data-pencil-name="Forgot password"
+        class="box-border w-[360px] h-[800px] absolute left-[415px] top-0 bg-[#fbfbfbff] overflow-hidden"
+      >
+        <div
+          data-pencil-name="system bar"
+          class="box-border w-[360px] h-[24px] absolute left-0 top-0 bg-[#ffffffff] overflow-hidden [z-index:0]"
+        ></div>
+        <div
+          data-pencil-name="app bar"
+          class="box-border w-[360px] h-[80px] absolute left-0 top-[24px] bg-[#ffffffff] [z-index:1]"
+        >
+          <div
+            data-pencil-name="chevron-left"
+            class="box-border w-[24px] h-[24px] absolute left-[16px] top-[28px] overflow-hidden [z-index:0]"
+          >
+            <svg
+              data-pencil-name="Vector"
+              viewBox="0 0 6 12"
+              preserveAspectRatio="none"
+              xmlns="http://www.w3.org/2000/svg"
+              class="box-border w-[6px] h-[12px] absolute left-[9px] top-[6px] overflow-visible [z-index:0]"
+            >
+              <path
+                d="M6 12l-6-6 6-6"
+                fill="none"
+                stroke="#212121ff"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                vector-effect="non-scaling-stroke"
+              ></path>
+            </svg>
+          </div>
+        </div>
+        <div
+          data-pencil-name="title banner"
+          class="box-border w-[360px] h-fit absolute left-0 top-[104px] flex flex-col gap-[16px] p-[16px] justify-start items-center bg-[#ffffffff] [z-index:2]"
+        >
+          <div
+            data-pencil-name="Sign in, we’ll do the cooking..."
+            class="text-[28px]/[36px] box-border w-full text-[#212121ff] font-['Red_Hat_Text',system-ui,sans-serif] font-bold tracking-[0.28px] text-center"
+          >
+            Password reset link
+          </div>
+          <div
+            data-pencil-name="column"
+            class="box-border w-[328px] h-fit shrink-0 flex flex-col gap-[12px] justify-center items-center"
+          >
+            <div
+              data-pencil-name="Don’t have an account?"
+              class="text-[16px]/[24px] box-border w-full text-[#616161ff] font-['Red_Hat_Text',system-ui,sans-serif] font-medium tracking-[0.5px] text-center"
+            >
+              Enter your email address and we will send you the reset link
+            </div>
+          </div>
+        </div>
+        <div
+          data-pencil-name="input"
+          class="box-border w-[328px] h-fit absolute left-[16px] top-[252px] flex flex-col gap-[12px] justify-start items-start [z-index:3]"
+        >
+          <div
+            data-pencil-name="Phone number"
+            class="text-[16px]/[normal] box-border text-[#424242ff] font-['Red_Hat_Text',system-ui,sans-serif] font-medium tracking-[0.5px] text-left [white-space:nowrap]"
+          >
+            Email
+          </div>
+          <div
+            data-pencil-name="input field"
+            class="box-border w-full h-fit shrink-0 flex flex-row gap-[8px] p-[14px_16px] justify-start items-center bg-[#eeeeeeff] rounded-[8px]"
+          >
+            <div
+              data-pencil-name="placeholder"
+              class="text-[16px]/[normal] box-border text-[#616161ff] font-['Red_Hat_Text',system-ui,sans-serif] font-medium tracking-[0.5px] text-left [white-space:nowrap]"
+            >
+              gladys@domain.com
+            </div>
+            <div
+              data-pencil-name="spacer"
+              class="box-border [flex:1_1_0] h-[2px] opacity-[0] bg-[#d9d9d900]"
+            ></div>
+            <div
+              data-pencil-name="mail"
+              class="box-border w-[20px] shrink-0 h-[20px] overflow-hidden relative"
+            >
+              <svg
+                data-pencil-name="Vector"
+                viewBox="0 0 8 8"
+                preserveAspectRatio="none"
+                xmlns="http://www.w3.org/2000/svg"
+                class="box-border w-[6.667px] h-[6.667px] absolute left-[6.667px] top-[6.667px] overflow-visible [z-index:0]"
+              >
+                <path
+                  d="M8 4c0 2.20914-1.79086 4-4 4-2.20914 0-4-1.79086-4-4 0-2.20914 1.79086-4 4-4 2.20914 0 4 1.79086 4 4z"
+                  fill="none"
+                  stroke="#9e9e9eff"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  vector-effect="non-scaling-stroke"
+                ></path>
+              </svg>
+              <svg
+                data-pencil-name="Vector"
+                viewBox="-0.0000019073486328125 0.0000030100345611572266 20.000011444091797 20.000002712011337"
+                preserveAspectRatio="none"
+                xmlns="http://www.w3.org/2000/svg"
+                class="box-border w-[16.667px] h-[16.667px] absolute left-[1.667px] top-[1.667px] overflow-visible [z-index:1]"
+              >
+                <path
+                  d="M14.00001 6.00001l0 5c0 0.79565 0.31607 1.55871 0.87868 2.12132 0.56261 0.56261 1.32567 0.87868 2.12132 0.87868 0.79565 0 1.55871-0.31607 2.12132-0.87868 0.56261-0.56261 0.87868-1.32567 0.87868-2.12132l0-1c0-2.2527-0.76061-4.4394-2.15859-6.20583-1.39798-1.76643-3.35144-3.00909-5.54388-3.52666-2.19243-0.51756-4.4954-0.2797-6.53576 0.67504-2.04037 0.95474-3.6986 2.57044-4.70604 4.58531-1.00744 2.01487-1.30505 4.31088-0.84463 6.51602 0.46042 2.20514 1.65191 4.19023 3.38143 5.63363 1.72951 1.44341 3.89572 2.26058 6.14765 2.31911 2.25194 0.05853 4.45767-0.64501 6.25982-1.99662"
+                  fill="none"
+                  stroke="#9e9e9eff"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  vector-effect="non-scaling-stroke"
+                ></path>
+              </svg>
+            </div>
+          </div>
+        </div>
+        <div
+          data-pencil-name="button"
+          class="box-border w-[328px] h-fit absolute left-[16px] top-[358px] flex flex-row gap-[8px] p-[16px_48px] justify-center items-center bg-[#212121ff] rounded-[8px] [z-index:4]"
+        >
+          <div
+            data-pencil-name="NEXT"
+            class="text-[14px]/[normal] box-border text-[#ffffffff] font-['Red_Hat_Text',system-ui,sans-serif] font-semibold tracking-[0.84px] text-center [white-space:nowrap]"
+          >
+            RESET PASSWORD
+          </div>
+        </div>
+      </div>
+      <div
+        data-pencil-name="Check email"
+        class="box-border w-[360px] h-[800px] absolute left-[830px] top-0 bg-[#fbfbfbff] overflow-hidden"
+      >
+        <div
+          data-pencil-name="system bar"
+          class="box-border w-[360px] h-[24px] absolute left-0 top-0 bg-[#ffffffff] overflow-hidden [z-index:0]"
+        ></div>
+        <div
+          data-pencil-name="text link"
+          class="box-border w-fit h-fit absolute left-[130px] top-[380px] flex flex-row gap-[8px] justify-end items-center bg-[#ffffffff] [z-index:1]"
+        >
+          <div
+            data-pencil-name="Forgot password?"
+            class="text-[14px]/[normal] box-border text-[#212121ff] font-['Red_Hat_Text',system-ui,sans-serif] font-medium tracking-[0.5px] text-left [white-space:nowrap]"
+          >
+            Resend in: 34s
+          </div>
+        </div>
+        <div
+          data-pencil-name="app bar"
+          class="box-border w-[360px] h-[80px] absolute left-0 top-[24px] bg-[#ffffffff] [z-index:2]"
+        >
+          <div
+            data-pencil-name="chevron-left"
+            class="box-border w-[24px] h-[24px] absolute left-[16px] top-[28px] overflow-hidden [z-index:0]"
+          >
+            <svg
+              data-pencil-name="Vector"
+              viewBox="0 0 6 12"
+              preserveAspectRatio="none"
+              xmlns="http://www.w3.org/2000/svg"
+              class="box-border w-[6px] h-[12px] absolute left-[9px] top-[6px] overflow-visible [z-index:0]"
+            >
+              <path
+                d="M6 12l-6-6 6-6"
+                fill="none"
+                stroke="#212121ff"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                vector-effect="non-scaling-stroke"
+              ></path>
+            </svg>
+          </div>
+        </div>
+        <div
+          data-pencil-name="title banner"
+          class="box-border w-[360px] h-fit absolute left-0 top-[104px] flex flex-col gap-[16px] p-[16px] justify-start items-center bg-[#ffffffff] [z-index:3]"
+        >
+          <div
+            data-pencil-name="Sign in, we’ll do the cooking..."
+            class="text-[28px]/[36px] box-border w-full text-[#212121ff] font-['Red_Hat_Text',system-ui,sans-serif] font-bold tracking-[0.28px] text-center"
+          >
+            Check your mail
+          </div>
+          <div
+            data-pencil-name="column"
+            class="box-border w-[328px] h-fit shrink-0 flex flex-col gap-[12px] justify-center items-center"
+          >
+            <div
+              data-pencil-name="Don’t have an account?"
+              class="text-[16px]/[24px] box-border w-full text-[#616161ff] font-['Red_Hat_Text',system-ui,sans-serif] font-medium tracking-[0.5px] text-center"
+            >
+              We have just sent a instructions email gladys@domain.com.
+            </div>
+            <div
+              data-pencil-name="Sign up"
+              class="text-[16px]/[normal] box-border text-[#d42323ff] font-['Red_Hat_Text',system-ui,sans-serif] font-medium tracking-[0.5px] text-left [white-space:nowrap]"
+            >
+              Having a problem?
+            </div>
+          </div>
+        </div>
+        <div
+          data-pencil-name="button"
+          class="box-border w-[328px] h-fit absolute left-[16px] top-[299px] flex flex-row gap-[8px] p-[16px_48px] justify-center items-center bg-[#212121ff] rounded-[8px] [z-index:4]"
+        >
+          <div
+            data-pencil-name="NEXT"
+            class="text-[14px]/[normal] box-border text-[#ffffffff] font-['Red_Hat_Text',system-ui,sans-serif] font-semibold tracking-[0.84px] text-center [white-space:nowrap]"
+          >
+            RESEND LINK
+          </div>
+        </div>
+      </div>
+      <div
+        data-pencil-name="Check email"
+        class="box-border w-[360px] h-[800px] absolute left-[2075px] top-0 bg-[#fbfbfbff] overflow-hidden"
+      >
+        <div
+          data-pencil-name="system bar"
+          class="box-border w-[360px] h-[24px] absolute left-0 top-0 bg-[#ffffffff] overflow-hidden [z-index:0]"
+        ></div>
+        <div
+          data-pencil-name="app bar"
+          class="box-border w-[360px] h-[80px] absolute left-0 top-[24px] bg-[#ffffffff] [z-index:1]"
+        >
+          <div
+            data-pencil-name="chevron-left"
+            class="box-border w-[24px] h-[24px] absolute left-[16px] top-[28px] overflow-hidden [z-index:0]"
+          >
+            <svg
+              data-pencil-name="Vector"
+              viewBox="0 0 6 12"
+              preserveAspectRatio="none"
+              xmlns="http://www.w3.org/2000/svg"
+              class="box-border w-[6px] h-[12px] absolute left-[9px] top-[6px] overflow-visible [z-index:0]"
+            >
+              <path
+                d="M6 12l-6-6 6-6"
+                fill="none"
+                stroke="#212121ff"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                vector-effect="non-scaling-stroke"
+              ></path>
+            </svg>
+          </div>
+        </div>
+        <div
+          data-pencil-name="title banner"
+          class="box-border w-[360px] h-fit absolute left-0 top-[104px] flex flex-col gap-[16px] p-[16px] justify-start items-center bg-[#ffffffff] [z-index:2]"
+        >
+          <div
+            data-pencil-name="Sign in, we’ll do the cooking..."
+            class="text-[28px]/[36px] box-border w-full text-[#212121ff] font-['Red_Hat_Text',system-ui,sans-serif] font-bold tracking-[0.28px] text-center"
+          >
+            Verify phone number
+          </div>
+          <div
+            data-pencil-name="column"
+            class="box-border w-[328px] h-fit shrink-0 flex flex-col gap-[12px] justify-center items-center"
+          >
+            <div
+              data-pencil-name="Enter your phone number to use Chaski Food and enjoy your food."
+              class="text-[16px]/[24px] box-border w-full text-[#616161ff] font-['Red_Hat_Text',system-ui,sans-serif] font-medium tracking-[0.5px] text-center"
+            >
+              Enter your phone number to use Chaski Food and enjoy your food.
+            </div>
+            <div
+              data-pencil-name="Sign up"
+              class="text-[16px]/[normal] box-border text-[#d42323ff] font-['Red_Hat_Text',system-ui,sans-serif] font-medium tracking-[0.5px] text-left [white-space:nowrap]"
+            >
+              Didn't receive?
+            </div>
+          </div>
+        </div>
+        <div
+          data-pencil-name="Frame 1280"
+          class="box-border w-[328px] h-fit absolute left-[16px] top-[291px] flex flex-row gap-[15px] justify-between items-start [z-index:3]"
+        >
+          <div
+            data-pencil-name="input"
+            class="box-border w-[63px] shrink-0 h-fit flex flex-col gap-[12px] justify-start items-end"
+          >
+            <div
+              data-pencil-name="input field"
+              class="box-border w-full h-fit shrink-0 flex flex-row gap-[8px] p-[14px_16px] justify-center items-center bg-[#eeeeeeff] rounded-[8px]"
+            >
+              <div
+                data-pencil-name="placeholder"
+                class="text-[16px]/[normal] box-border text-[#616161ff] font-['Red_Hat_Text',system-ui,sans-serif] font-medium tracking-[0.5px] text-left [white-space:nowrap]"
+              >
+                3
+              </div>
+            </div>
+          </div>
+          <div
+            data-pencil-name="input"
+            class="box-border w-[63px] shrink-0 h-fit flex flex-col gap-[12px] justify-start items-end"
+          >
+            <div
+              data-pencil-name="input field"
+              class="box-border w-full h-fit shrink-0 flex flex-row gap-[8px] p-[14px_16px] justify-center items-center bg-[#eeeeeeff] rounded-[8px]"
+            >
+              <div
+                data-pencil-name="placeholder"
+                class="text-[16px]/[normal] box-border text-[#616161ff] font-['Red_Hat_Text',system-ui,sans-serif] font-medium tracking-[0.5px] text-left [white-space:nowrap]"
+              >
+                0
+              </div>
+            </div>
+          </div>
+          <div
+            data-pencil-name="input"
+            class="box-border w-[63px] shrink-0 h-fit flex flex-col gap-[12px] justify-start items-end"
+          >
+            <div
+              data-pencil-name="input field"
+              class="box-border w-full h-fit shrink-0 flex flex-row gap-[8px] p-[14px_16px] justify-center items-center bg-[#eeeeeeff] rounded-[8px]"
+            >
+              <div
+                data-pencil-name="placeholder"
+                class="text-[16px]/[normal] box-border text-[#616161ff] font-['Red_Hat_Text',system-ui,sans-serif] font-medium tracking-[0.5px] text-left [white-space:nowrap]"
+              >
+                5
+              </div>
+            </div>
+          </div>
+          <div
+            data-pencil-name="input"
+            class="box-border w-[63px] shrink-0 h-fit flex flex-col gap-[12px] justify-start items-end"
+          >
+            <div
+              data-pencil-name="input field"
+              class="box-border w-full h-fit shrink-0 flex flex-row gap-[8px] p-[14px_16px] justify-center items-center bg-[#eeeeeeff] rounded-[8px]"
+            >
+              <div
+                data-pencil-name="placeholder"
+                class="text-[16px]/[normal] box-border text-[#616161ff] font-['Red_Hat_Text',system-ui,sans-serif] font-medium tracking-[0.5px] text-left [white-space:nowrap]"
+              >
+                9
+              </div>
+            </div>
+          </div>
+        </div>
+        <div
+          data-pencil-name="button"
+          class="box-border w-[328px] h-fit absolute left-[16px] top-[378px] flex flex-row gap-[8px] p-[16px_48px] justify-center items-center bg-[#212121ff] rounded-[8px] [z-index:4]"
+        >
+          <div
+            data-pencil-name="NEXT"
+            class="text-[14px]/[normal] box-border text-[#ffffffff] font-['Red_Hat_Text',system-ui,sans-serif] font-semibold tracking-[0.84px] text-center [white-space:nowrap]"
+          >
+            SIGN UP
+          </div>
+        </div>
+        <div
+          data-pencil-name="By signing up, you have agreed to our Terms &amp; Privacy policy"
+          class="text-[14px]/[22px] box-border w-[311px] absolute left-[25px] top-[708px] text-[#757575ff] font-['Product_Sans',system-ui,sans-serif] font-normal text-center [z-index:5]"
+        >
+          By signing up, you have agreed to our
+          <br />
+          Terms &amp; Privacy policy
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

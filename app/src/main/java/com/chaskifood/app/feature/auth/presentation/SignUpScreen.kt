@@ -48,7 +48,7 @@ import com.chaskifood.app.ui.theme.ChaskiBackground
 @Composable
 fun SignUpScreen(
     modifier: Modifier = Modifier,
-    onSignUp: () -> Unit = {},
+    onSignUp: (hasPhone: Boolean) -> Unit = {},
     onGoSignIn: () -> Unit = {},
     onGoogle: () -> Unit = {},
     onFacebook: () -> Unit = {},
@@ -175,7 +175,7 @@ fun SignUpScreen(
             } else {
                 AuthSubmitButton(
                     text = "REGISTRARME",
-                    onClick = { viewModel.register(onSuccess = onSignUp) },
+                    onClick = { viewModel.register(onSuccess = { hasPhone -> onSignUp(hasPhone) }) },
                 )
             }
 
@@ -195,7 +195,7 @@ fun SignUpScreen(
 
             SocialAuthRow(
                 onGoogle = {
-                    viewModel.signInWithGoogle(context, onSuccess = onSignUp)
+                    viewModel.signInWithGoogle(context, onSuccess = { hasPhone -> onSignUp(hasPhone) })
                 },
                 onFacebook = onFacebook,
             )

@@ -1,22 +1,51 @@
-*.iml
-.gradle
-.kotlin
-/local.properties
-/.idea
-/build
-build/
-/captures
-.externalNativeBuild
-.cxx
-local.properties
-*.log
-.DS_Store
-/Export
-.artifacts/
+# Built application files
+*.apk
+*.aab
+*.aar
+*.ap_
 
-# Archivos de firma (Keys)
+# Files for the ART/Dalvik VM
+*.dex
+
+# Java class files
+*.class
+
+# Generated files
+/build
+app/build
+*/build
+.gradle/
+.kotlin/
+.externalNativeBuild/
+.cxx/
+/captures
+
+# Android Studio / IntelliJ project files
+*.iml
+.idea/
+.idea/caches/
+.idea/libraries/
+.idea/modules.xml
+.idea/workspace.xml
+.idea/navFolder.xml
+.idea/assetWizardSettings.xml
+
+# Local configuration file (SDK path, local credentials)
+local.properties
+
+# Signing files (Release Keys)
 *.jks
 *.keystore
+
+# Log files
+*.log
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Assistant artifacts
+.artifacts/
 
 # Firebase / Credenciales
 google-services.json

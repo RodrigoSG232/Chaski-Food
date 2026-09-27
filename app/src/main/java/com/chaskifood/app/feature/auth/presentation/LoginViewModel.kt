@@ -31,7 +31,7 @@ class LoginViewModel @Inject constructor(
     private val _uiState = MutableStateFlow<UiState<AuthUser?>>(UiState.Success(null))
     val uiState: StateFlow<UiState<AuthUser?>> = _uiState.asStateFlow()
 
-    fun login(onSuccess: () -> Unit) {
+    fun login(onSuccess: (hasPhoneNumber: Boolean) -> Unit) {
         val currentEmail = email.value.trim()
         val currentPassword = password.value
 
@@ -47,7 +47,8 @@ class LoginViewModel @Inject constructor(
             when (val result = authRepository.loginWithEmail(currentEmail, currentPassword)) {
                 is ApiResult.Success -> {
                     _uiState.value = UiState.Success(result.data)
-                    onSuccess()
+                    val hasPhone = !result.data.phoneNumber.isNullOrBlank()
+                    onSuccess(hasPhone)
                 }
                 is ApiResult.Failure -> {
                     _uiState.value = UiState.Error(result.message) {
@@ -58,7 +59,7 @@ class LoginViewModel @Inject constructor(
         }
     }
 
-    fun signInWithGoogle(context: Context, onSuccess: () -> Unit) {
+    fun signInWithGoogle(context: Context, onSuccess: (hasPhoneNumber: Boolean) -> Unit) {
         _uiState.value = UiState.Loading
         viewModelScope.launch {
             try {
@@ -83,7 +84,8 @@ class LoginViewModel @Inject constructor(
                     when (val authResult = authRepository.signInWithGoogle(googleIdTokenCredential.idToken)) {
                         is ApiResult.Success -> {
                             _uiState.value = UiState.Success(authResult.data)
-                            onSuccess()
+                            val hasPhone = !authResult.data.phoneNumber.isNullOrBlank()
+                            onSuccess(hasPhone)
                         }
                         is ApiResult.Failure -> {
                             _uiState.value = UiState.Error(authResult.message) {

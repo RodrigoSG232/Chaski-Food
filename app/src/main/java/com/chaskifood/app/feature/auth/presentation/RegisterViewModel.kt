@@ -1,6 +1,7 @@
 package com.chaskifood.app.feature.auth.presentation
 
 import android.content.Context
+import android.util.Patterns
 import androidx.credentials.CredentialManager
 import androidx.credentials.CustomCredential
 import androidx.credentials.GetCredentialRequest
@@ -32,13 +33,20 @@ class RegisterViewModel @Inject constructor(
     private val _uiState = MutableStateFlow<UiState<AuthUser?>>(UiState.Success(null))
     val uiState: StateFlow<UiState<AuthUser?>> = _uiState.asStateFlow()
 
-    fun register(onSuccess: () -> Unit) {
+    fun register(onSuccess: (hasPhoneNumber: Boolean) -> Unit) {
         val currentEmail = email.value.trim()
         val currentPassword = password.value
         val currentConfirmPassword = confirmPassword.value
 
         if (currentEmail.isBlank() || currentPassword.isBlank() || currentConfirmPassword.isBlank()) {
-            _uiState.value = UiState.Error("Por favor completa todos los campos.") {
+            _uiState.value = UiState.Error("Por favor completa todos los campos obligatorios.") {
+                _uiState.value = UiState.Success(null)
+            }
+            return
+        }
+
+        if (!Patterns.EMAIL_ADDRESS.matcher(currentEmail).matches()) {
+            _uiState.value = UiState.Error("Ingresa un correo electrónico con formato válido (ejemplo@correo.com).") {
                 _uiState.value = UiState.Success(null)
             }
             return
@@ -63,7 +71,8 @@ class RegisterViewModel @Inject constructor(
             when (val result = authRepository.signUpWithEmail(currentEmail, currentPassword)) {
                 is ApiResult.Success -> {
                     _uiState.value = UiState.Success(result.data)
-                    onSuccess()
+                    val hasPhone = !result.data.phoneNumber.isNullOrBlank()
+                    onSuccess(hasPhone)
                 }
                 is ApiResult.Failure -> {
                     _uiState.value = UiState.Error(result.message) {
@@ -74,7 +83,7 @@ class RegisterViewModel @Inject constructor(
         }
     }
 
-    fun signInWithGoogle(context: Context, onSuccess: () -> Unit) {
+    fun signInWithGoogle(context: Context, onSuccess: (hasPhoneNumber: Boolean) -> Unit) {
         _uiState.value = UiState.Loading
         viewModelScope.launch {
             try {
@@ -99,7 +108,8 @@ class RegisterViewModel @Inject constructor(
                     when (val authResult = authRepository.signInWithGoogle(googleIdTokenCredential.idToken)) {
                         is ApiResult.Success -> {
                             _uiState.value = UiState.Success(authResult.data)
-                            onSuccess()
+                            val hasPhone = !authResult.data.phoneNumber.isNullOrBlank()
+                            onSuccess(hasPhone)
                         }
                         is ApiResult.Failure -> {
                             _uiState.value = UiState.Error(authResult.message) {

@@ -3,7 +3,10 @@ package com.chaskifood.app.core.navigation
 import android.net.Uri
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -13,6 +16,7 @@ import com.chaskifood.app.feature.auth.presentation.CheckEmailScreen
 import com.chaskifood.app.feature.auth.presentation.ForgotPasswordScreen
 import com.chaskifood.app.feature.auth.presentation.LocationScreen
 import com.chaskifood.app.feature.auth.presentation.LocationSearchScreen
+import com.chaskifood.app.feature.auth.presentation.PhoneAuthViewModel
 import com.chaskifood.app.feature.auth.presentation.SignInScreen
 import com.chaskifood.app.feature.auth.presentation.SignUpPhoneScreen
 import com.chaskifood.app.feature.auth.presentation.SignUpScreen
@@ -68,9 +72,13 @@ fun ChaskiNavHost() {
         }
         composable(ChaskiDestinations.SIGN_IN) {
             SignInScreen(
-                onSignIn = {
-                    navController.navigate(ChaskiDestinations.MAIN) {
-                        popUpTo(ChaskiDestinations.SPLASH) { inclusive = true }
+                onSignIn = { hasPhone ->
+                    if (hasPhone) {
+                        navController.navigate(ChaskiDestinations.MAIN) {
+                            popUpTo(ChaskiDestinations.SPLASH) { inclusive = true }
+                        }
+                    } else {
+                        navController.navigate(ChaskiDestinations.SIGN_UP_PHONE)
                     }
                 },
                 onForgotPassword = {
@@ -83,8 +91,14 @@ fun ChaskiNavHost() {
         }
         composable(ChaskiDestinations.SIGN_UP) {
             SignUpScreen(
-                onSignUp = {
-                    navController.navigate(ChaskiDestinations.SIGN_UP_PHONE)
+                onSignUp = { hasPhone ->
+                    if (hasPhone) {
+                        navController.navigate(ChaskiDestinations.MAIN) {
+                            popUpTo(ChaskiDestinations.SPLASH) { inclusive = true }
+                        }
+                    } else {
+                        navController.navigate(ChaskiDestinations.SIGN_UP_PHONE)
+                    }
                 },
                 onGoSignIn = {
                     navController.popBackStack()
@@ -92,19 +106,33 @@ fun ChaskiNavHost() {
             )
         }
         composable(ChaskiDestinations.SIGN_UP_PHONE) {
+            val phoneViewModel: PhoneAuthViewModel = hiltViewModel()
             SignUpPhoneScreen(
-                onGetCode = {
-                    navController.navigate(ChaskiDestinations.VERIFY_PHONE)
+                viewModel = phoneViewModel,
+                onGetCode = { verificationId ->
+                    val encodedId = Uri.encode(verificationId)
+                    navController.navigate("verify_phone/$encodedId")
                 },
                 onBack = {
                     navController.popBackStack()
                 },
             )
         }
-        composable(ChaskiDestinations.VERIFY_PHONE) {
+        composable(
+            route = ChaskiDestinations.VERIFY_PHONE,
+            arguments = listOf(navArgument("verificationId") { type = NavType.StringType }),
+        ) { backStackEntry ->
+            val verificationId = backStackEntry.arguments?.getString("verificationId") ?: ""
+            val phoneViewModel: PhoneAuthViewModel = hiltViewModel()
+            LaunchedEffect(verificationId) {
+                phoneViewModel.verificationId.value = verificationId
+            }
             VerifyPhoneScreen(
+                viewModel = phoneViewModel,
                 onVerify = {
-                    navController.navigate(ChaskiDestinations.LOCATION)
+                    navController.navigate(ChaskiDestinations.MAIN) {
+                        popUpTo(ChaskiDestinations.SPLASH) { inclusive = true }
+                    }
                 },
                 onBack = {
                     navController.popBackStack()

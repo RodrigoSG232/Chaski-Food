@@ -158,5 +158,6 @@ class FirebaseAuthRepository @Inject constructor(
         uid = uid,
         email = email,
         displayName = displayName,
+        phoneNumber = phoneNumber,
     )
 }

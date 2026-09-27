@@ -47,7 +47,7 @@ import com.chaskifood.app.core.common.UiState
 @Composable
 fun SignInScreen(
     modifier: Modifier = Modifier,
-    onSignIn: () -> Unit = {},
+    onSignIn: (hasPhone: Boolean) -> Unit = {},
     onForgotPassword: () -> Unit = {},
     onGoSignUp: () -> Unit = {},
     onGoogle: () -> Unit = {},
@@ -160,7 +160,7 @@ fun SignInScreen(
             } else {
                 AuthSubmitButton(
                     text = "INICIAR SESIÓN",
-                    onClick = { viewModel.login(onSuccess = onSignIn) },
+                    onClick = { viewModel.login(onSuccess = { hasPhone -> onSignIn(hasPhone) }) },
                 )
             }
 
@@ -180,7 +180,7 @@ fun SignInScreen(
 
             SocialAuthRow(
                 onGoogle = {
-                    viewModel.signInWithGoogle(context, onSuccess = onSignIn)
+                    viewModel.signInWithGoogle(context, onSuccess = { hasPhone -> onSignIn(hasPhone) })
                 },
                 onFacebook = onFacebook,
             )
