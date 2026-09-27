@@ -28,6 +28,7 @@ fun MainScreen(
     onOpenPaymentMethods: () -> Unit = {},
     onOpenLocations: () -> Unit = {},
     onOpenReferral: () -> Unit = {},
+    onSignOut: () -> Unit = {},
 ) {
     val navController = rememberNavController()
 
@@ -65,6 +66,7 @@ fun MainScreen(
                 ProfileSettingsScreen(
                     onSave = onOpenPaymentMethods,
                     onMore = onOpenReferral,
+                    onSignOut = onSignOut,
                 )
             }
         }

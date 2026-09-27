@@ -17,6 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.hilt.navigation.compose.hiltViewModel
 import com.chaskifood.app.ui.components.ChaskiLogo
 import com.chaskifood.app.ui.theme.ChaskiSurface
 import com.chaskifood.app.ui.theme.ChaskiTextPrimary
@@ -24,12 +25,19 @@ import kotlinx.coroutines.delay
 
 @Composable
 fun SplashScreen(
-    onFinished: () -> Unit,
+    onNavigateToMain: () -> Unit,
+    onNavigateToOnboarding: () -> Unit,
     modifier: Modifier = Modifier,
+    viewModel: SplashViewModel = hiltViewModel(),
 ) {
     LaunchedEffect(Unit) {
-        delay(1600)
-        onFinished()
+        val isLoggedIn = viewModel.isUserLoggedIn()
+        delay(1400)
+        if (isLoggedIn) {
+            onNavigateToMain()
+        } else {
+            onNavigateToOnboarding()
+        }
     }
 
     Box(

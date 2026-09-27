@@ -54,7 +54,12 @@ fun ChaskiNavHost() {
     ) {
         composable(ChaskiDestinations.SPLASH) {
             SplashScreen(
-                onFinished = {
+                onNavigateToMain = {
+                    navController.navigate(ChaskiDestinations.MAIN) {
+                        popUpTo(ChaskiDestinations.SPLASH) { inclusive = true }
+                    }
+                },
+                onNavigateToOnboarding = {
                     navController.navigate(ChaskiDestinations.ONBOARDING) {
                         popUpTo(ChaskiDestinations.SPLASH) { inclusive = true }
                     }
@@ -218,6 +223,11 @@ fun ChaskiNavHost() {
                 },
                 onOpenReferral = {
                     navController.navigate(ChaskiDestinations.REFER_FRIEND)
+                },
+                onSignOut = {
+                    navController.navigate(ChaskiDestinations.SIGN_IN) {
+                        popUpTo(0) { inclusive = true }
+                    }
                 },
             )
         }

@@ -18,6 +18,8 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -30,8 +32,10 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.hilt.navigation.compose.hiltViewModel
 import com.chaskifood.app.ui.theme.ChaskiBackground
 import com.chaskifood.app.ui.theme.ChaskiDimens
 import com.chaskifood.app.ui.theme.ChaskiPrimary
@@ -42,10 +46,28 @@ fun ProfileSettingsScreen(
     modifier: Modifier = Modifier,
     onBack: (() -> Unit)? = null,
     onMore: (() -> Unit)? = null,
+    onSignOut: () -> Unit = {},
+    viewModel: ProfileViewModel = hiltViewModel(),
 ) {
-    var name by remember { mutableStateOf("Abel Biwott") }
-    var email by remember { mutableStateOf("abel@correo.com") }
-    var password by remember { mutableStateOf("") }
+    val currentUser by viewModel.currentUser.collectAsState()
+
+    var name by remember { mutableStateOf("") }
+    var email by remember { mutableStateOf("") }
+    var phone by remember { mutableStateOf("") }
+
+    LaunchedEffect(currentUser) {
+        currentUser?.let { user ->
+            if (!user.displayName.isNullOrBlank()) {
+                name = user.displayName
+            }
+            if (!user.email.isNullOrBlank()) {
+                email = user.email
+            }
+            if (!user.phoneNumber.isNullOrBlank()) {
+                phone = user.phoneNumber
+            }
+        }
+    }
 
     Column(
         modifier = modifier
@@ -70,28 +92,26 @@ fun ProfileSettingsScreen(
                 label = "Nombre completo",
                 value = name,
                 onValueChange = { name = it },
-                placeholder = "Abel Biwott",
+                placeholder = "Tu nombre",
             )
             ProfileField(
                 label = "Correo electrónico",
                 value = email,
                 onValueChange = { email = it },
-                placeholder = "abel@correo.com",
+                placeholder = "tu_correo@ejemplo.com",
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
             )
             ProfileField(
                 label = "Número de teléfono",
-                value = password,
-                onValueChange = { password = it },
-                placeholder = "********",
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                password = true,
+                value = phone,
+                onValueChange = { phone = it },
+                placeholder = "+51 999 999 999",
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
             )
 
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(bottom = ChaskiDimens.SpacingXl)
                     .clip(RoundedCornerShape(8.dp))
                     .background(ChaskiPrimary)
                     .clickable(onClick = onSave)
@@ -99,9 +119,32 @@ fun ProfileSettingsScreen(
                 horizontalArrangement = Arrangement.Center,
             ) {
                 Text(
-                    text = "SIGUIENTE",
+                    text = "GUARDAR / SIGUIENTE",
                     fontSize = 14.sp,
                     fontWeight = FontWeight.SemiBold,
+                    letterSpacing = 0.84.sp,
+                    color = Color.White,
+                )
+            }
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = ChaskiDimens.SpacingXl)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(Color(0xFFD32F2F))
+                    .clickable {
+                        viewModel.signOut {
+                            onSignOut()
+                        }
+                    }
+                    .padding(vertical = ChaskiDimens.SpacingLg, horizontal = 48.dp),
+                horizontalArrangement = Arrangement.Center,
+            ) {
+                Text(
+                    text = "CERRAR SESIÓN",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
                     letterSpacing = 0.84.sp,
                     color = Color.White,
                 )
@@ -158,7 +201,7 @@ private fun ProfileField(
                 visualTransformation = if (password) {
                     PasswordVisualTransformation()
                 } else {
-                    androidx.compose.ui.text.input.VisualTransformation.None
+                    VisualTransformation.None
                 },
                 modifier = Modifier.fillMaxWidth(),
             )
