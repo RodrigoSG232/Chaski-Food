@@ -68,13 +68,13 @@ fun SignUpScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(ChaskiBackground)
+            .background(Color.White)
             .statusBarsPadding()
             .verticalScroll(rememberScrollState())
             .imePadding()
             .navigationBarsPadding(),
     ) {
-        Spacer(Modifier.height(16.dp))
+        AuthAppBar(onBackClick = onGoSignIn)
 
         AuthTitleBanner(
             title = "Regístrate, tu comida te espera",
@@ -83,7 +83,7 @@ fun SignUpScreen(
             onLinkClick = onGoSignIn,
         )
 
-        Spacer(Modifier.height(54.dp))
+        Spacer(Modifier.height(20.dp))
 
         Column(
             modifier = Modifier

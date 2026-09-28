@@ -84,7 +84,7 @@ fun SignInScreen(
             titleWeight = FontWeight.Normal,
         )
 
-        Spacer(Modifier.height(68.dp))
+        Spacer(Modifier.height(20.dp))
 
         Column(
             modifier = Modifier

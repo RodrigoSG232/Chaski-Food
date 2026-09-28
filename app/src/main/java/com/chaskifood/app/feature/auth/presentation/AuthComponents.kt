@@ -4,6 +4,7 @@ package com.chaskifood.app.feature.auth.presentation
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -135,13 +136,12 @@ fun AuthTitleBanner(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = modifier
             .fillMaxWidth()
-            .background(ChaskiSurface)
-            .padding(ChaskiDimens.SpacingLg),
+            .padding(horizontal = ChaskiDimens.SpacingLg, vertical = ChaskiDimens.SpacingSm),
     ) {
         Text(
             text = title,
-            fontSize = 28.sp,
-            lineHeight = 36.sp,
+            fontSize = 26.sp,
+            lineHeight = 32.sp,
             fontWeight = titleWeight,
             letterSpacing = 0.28.sp,
             color = ChaskiTextPrimary,
@@ -149,36 +149,28 @@ fun AuthTitleBanner(
             modifier = Modifier.fillMaxWidth(),
         )
         if (text != null || linkText != null) {
-            Spacer(Modifier.height(ChaskiDimens.SpacingLg))
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier.fillMaxWidth(),
+            Spacer(Modifier.height(6.dp))
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center,
             ) {
                 if (text != null) {
                     Text(
                         text = text,
-                        fontSize = 16.sp,
-                        lineHeight = 24.sp,
+                        fontSize = 15.sp,
                         fontWeight = FontWeight.Medium,
-                        letterSpacing = 0.5.sp,
-                        color = ChaskiTextTertiary,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.fillMaxWidth(),
+                        color = ChaskiTextMuted,
                     )
-                    if (linkText != null) {
-                        Spacer(Modifier.height(ChaskiDimens.SpacingMd))
-                    }
                 }
                 if (linkText != null) {
-                    TextButton(onClick = onLinkClick) {
-                        Text(
-                            text = linkText,
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.Medium,
-                            letterSpacing = 0.5.sp,
-                            color = ChaskiPrimary,
-                        )
-                    }
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        text = linkText,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = ChaskiPrimary,
+                        modifier = Modifier.clickable(onClick = onLinkClick),
+                    )
                 }
             }
         }
