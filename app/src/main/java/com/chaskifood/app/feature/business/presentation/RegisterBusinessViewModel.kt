@@ -73,22 +73,8 @@ class RegisterBusinessViewModel @Inject constructor(
             return
         }
 
-        if (!currentRuc.startsWith("10") && !currentRuc.startsWith("15") && !currentRuc.startsWith("17") && !currentRuc.startsWith("20")) {
-            _uiState.value = UiState.Error("El RUC debe comenzar con 10, 15, 17 o 20 (RUC SUNAT válido).") {
-                _uiState.value = UiState.Success(null)
-            }
-            return
-        }
-
-        if (currentPhone.length < 7 || currentPhone.length > 12 || !currentPhone.all { it.isDigit() }) {
-            _uiState.value = UiState.Error("El teléfono de contacto debe contener entre 7 y 12 dígitos numéricos.") {
-                _uiState.value = UiState.Success(null)
-            }
-            return
-        }
-
         if (!Patterns.EMAIL_ADDRESS.matcher(currentEmail).matches()) {
-            _uiState.value = UiState.Error("Ingresa un correo electrónico comercial válido (ejemplo@negocio.com).") {
+            _uiState.value = UiState.Error("Ingresa un correo electrónico comercial válido.") {
                 _uiState.value = UiState.Success(null)
             }
             return

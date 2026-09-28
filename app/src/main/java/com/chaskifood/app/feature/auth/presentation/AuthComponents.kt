@@ -3,10 +3,11 @@
 package com.chaskifood.app.feature.auth.presentation
 
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -16,7 +17,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -33,18 +33,15 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.chaskifood.app.R
 import com.chaskifood.app.ui.components.ChaskiLogo
 import com.chaskifood.app.ui.theme.ChaskiBackground
 import com.chaskifood.app.ui.theme.ChaskiDimens
@@ -53,17 +50,13 @@ import com.chaskifood.app.ui.theme.ChaskiSurface
 import com.chaskifood.app.ui.theme.ChaskiSurfaceVariant
 import com.chaskifood.app.ui.theme.ChaskiTextMuted
 import com.chaskifood.app.ui.theme.ChaskiTextPrimary
+import com.chaskifood.app.ui.theme.ChaskiTextTertiary
 
 private val AuthLabelColor = Color(0xFF424242)
-private val AuthPlaceholderColor = Color(0xFF616161)
-private val AuthBorderColor = Color(0xFFE0E0E0)
+private val AuthPlaceholderColor = Color(0xFF9E9E9E)
+private val AuthBorderColor = Color(0xFFEEEEEE)
 private val AuthTitleDark = Color(0xFF0D0D0D)
 private val AuthIconColor = Color(0xFF9E9E9E)
-private val GoogleBlue = Color(0xFF4285F4)
-private val GoogleRed = Color(0xFFEA4335)
-private val GoogleYellow = Color(0xFFFBBC05)
-private val GoogleGreen = Color(0xFF34A853)
-private val FacebookBlue = Color(0xFF395998)
 
 /** Fondo base de las pantallas de auth: blanco para Sign in, #FBFBFB para el resto. */
 @Composable
@@ -168,7 +161,7 @@ fun AuthTitleBanner(
                         lineHeight = 24.sp,
                         fontWeight = FontWeight.Medium,
                         letterSpacing = 0.5.sp,
-                        color = com.chaskifood.app.ui.theme.ChaskiTextTertiary,
+                        color = ChaskiTextTertiary,
                         textAlign = TextAlign.Center,
                         modifier = Modifier.fillMaxWidth(),
                     )
@@ -193,8 +186,8 @@ fun AuthTitleBanner(
 }
 
 /**
- * Campo de auth del diseño: etiqueta 16sp fw500 #424242 (tracking 0.5) + caja
- * rellena #EEEEEE radius 8 con icono opcional y placeholder #616161, 16sp.
+ * Campo de auth del diseño: etiqueta 16sp fw500 #424242 + caja
+ * rellena #EEEEEE radius 8 con icono opcional y placeholder sutil #9E9E9E, 15sp.
  */
 @Composable
 fun AuthTextField(
@@ -227,9 +220,8 @@ fun AuthTextField(
                 {
                     Text(
                         text = text,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Medium,
-                        letterSpacing = 0.5.sp,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Normal,
                         color = AuthPlaceholderColor,
                     )
                 }
@@ -267,8 +259,7 @@ fun AuthTextField(
 }
 
 /**
- * Botón principal de auth: relleno rojo (o negro según [containerColor]),
- * radius 8, texto 14sp semibold tracking 0.84, sin chevrons.
+ * Botón principal de auth: relleno rojo, radius 8, texto 14sp semibold.
  */
 @Composable
 fun AuthSubmitButton(
@@ -287,7 +278,7 @@ fun AuthSubmitButton(
             containerColor = containerColor,
             contentColor = Color.White,
         ),
-        contentPadding = androidx.compose.foundation.layout.PaddingValues(
+        contentPadding = PaddingValues(
             horizontal = 48.dp,
             vertical = ChaskiDimens.SpacingLg,
         ),
@@ -312,7 +303,7 @@ fun SocialAuthRow(
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = modifier.fillMaxWidth(),
-        horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(ChaskiDimens.SpacingLg),
+        horizontalArrangement = Arrangement.spacedBy(ChaskiDimens.SpacingLg),
     ) {
         SocialAuthButton(
             text = "Google",
@@ -340,26 +331,29 @@ private fun SocialAuthButton(
         onClick = onClick,
         modifier = modifier.heightIn(min = 48.dp),
         shape = RoundedCornerShape(8.dp),
-        border = BorderStroke(2.5.dp, AuthBorderColor),
+        border = BorderStroke(1.dp, AuthBorderColor),
         colors = ButtonDefaults.outlinedButtonColors(
             containerColor = ChaskiSurface,
             contentColor = AuthLabelColor,
         ),
-        contentPadding = androidx.compose.foundation.layout.PaddingValues(
+        contentPadding = PaddingValues(
             horizontal = ChaskiDimens.SpacingLg,
-            vertical = 14.dp,
+            vertical = 12.dp,
         ),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center,
+        ) {
+            logo()
+            Spacer(Modifier.width(8.dp))
             Text(
                 text = text,
                 fontSize = 14.sp,
                 fontWeight = FontWeight.SemiBold,
-                letterSpacing = 0.84.sp,
+                letterSpacing = 0.5.sp,
                 color = AuthLabelColor,
             )
-            Spacer(Modifier.width(ChaskiDimens.SpacingSm))
-            logo()
         }
     }
 }
@@ -385,53 +379,26 @@ fun AuthTextLink(
     }
 }
 
-/** Logo de Google de 4 colores (estilo aro). */
+/** Logo de Google oficial. */
 @Composable
 fun GoogleLogo(modifier: Modifier = Modifier) {
-    Canvas(
-        modifier = modifier.size(19.dp),
-    ) {
-        val stroke = this.size.minDimension * 0.17f
-        val gap = this.size.minDimension * 0.05f
-        val radius = (this.size.minDimension - stroke - gap * 2) / 2f
-        val c = center
-        val topLeft = Offset(c.x - radius, c.y - radius)
-        val arcSize = Size(radius * 2, radius * 2)
-        fun arc(color: Color, start: Float, sweep: Float) {
-            drawArc(
-                color = color,
-                startAngle = start,
-                sweepAngle = sweep,
-                useCenter = false,
-                topLeft = topLeft,
-                size = arcSize,
-                style = Stroke(width = stroke, cap = StrokeCap.Round),
-            )
-        }
-        arc(GoogleBlue, 120f, 60f)
-        arc(GoogleRed, -10f, 70f)
-        arc(GoogleYellow, 180f, 70f)
-        arc(GoogleGreen, 70f, 50f)
-    }
+    Icon(
+        painter = painterResource(id = R.drawable.ic_google_logo),
+        contentDescription = "Google",
+        modifier = modifier.size(20.dp),
+        tint = Color.Unspecified,
+    )
 }
 
-/** Insignia de Facebook: círculo #395998 con la "f" (logo del diseño). */
+/** Logo de Facebook oficial. */
 @Composable
 fun FacebookLogo(modifier: Modifier = Modifier) {
-    Box(
-        contentAlignment = Alignment.Center,
-        modifier = modifier
-            .size(19.dp)
-            .clip(CircleShape)
-            .background(FacebookBlue),
-    ) {
-        Text(
-            text = "f",
-            fontSize = 13.sp,
-            fontWeight = FontWeight.Bold,
-            color = Color.White,
-        )
-    }
+    Icon(
+        painter = painterResource(id = R.drawable.ic_facebook_logo),
+        contentDescription = "Facebook",
+        modifier = modifier.size(20.dp),
+        tint = Color.Unspecified,
+    )
 }
 
 /** Footer de términos (Registro / Verificar teléfono): 14/22 #757575 centrado. */

@@ -116,6 +116,7 @@ fun SignInScreen(
                 value = password,
                 onValueChange = { viewModel.password.value = it },
                 label = stringResource(R.string.password_label),
+                placeholder = stringResource(R.string.password_placeholder),
                 keyboardOptions = KeyboardOptions(
                     keyboardType = KeyboardType.Password,
                     imeAction = ImeAction.Done,

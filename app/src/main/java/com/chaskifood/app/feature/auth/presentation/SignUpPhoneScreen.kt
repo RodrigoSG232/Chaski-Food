@@ -171,7 +171,7 @@ fun SignUpPhoneScreen(
 
                 OutlinedTextField(
                     value = phoneInput,
-                    onValueChange = { phoneInput = it.filter { char -> char.isDigit() }.take(9) },
+                    onValueChange = { phoneInput = it.filter { char -> char.isDigit() } },
                     modifier = Modifier.weight(1f),
                     placeholder = {
                         Text(

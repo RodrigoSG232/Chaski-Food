@@ -34,7 +34,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import com.chaskifood.app.R
+import com.chaskifood.app.ui.theme.ChaskiTextDisabled
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -108,14 +111,14 @@ fun SignUpScreen(
             AuthTextField(
                 value = email,
                 onValueChange = { viewModel.email.value = it },
-                label = "Correo electrónico",
+                label = stringResource(R.string.email_label),
                 placeholder = "laura@correo.com",
                 trailingIcon = {
                     Icon(
                         imageVector = Icons.Filled.Mail,
                         contentDescription = null,
                         modifier = Modifier.size(20.dp),
-                        tint = Color(0xFF9E9E9E),
+                        tint = ChaskiTextDisabled,
                     )
                 },
                 keyboardOptions = KeyboardOptions(
@@ -132,8 +135,8 @@ fun SignUpScreen(
                     viewModel.password.value = it
                     viewModel.confirmPassword.value = it
                 },
-                label = "Contraseña",
-                placeholder = "••••••••",
+                label = stringResource(R.string.password_label),
+                placeholder = stringResource(R.string.password_placeholder),
                 keyboardOptions = KeyboardOptions(
                     keyboardType = KeyboardType.Password,
                     imeAction = ImeAction.Done,
@@ -151,8 +154,8 @@ fun SignUpScreen(
                             } else {
                                 Icons.Filled.Visibility
                             },
-                            contentDescription = if (showPassword) "Ocultar" else "Mostrar",
-                            tint = Color(0xFF9E9E9E),
+                            contentDescription = null,
+                            tint = ChaskiTextDisabled,
                         )
                     }
                 },
@@ -176,7 +179,7 @@ fun SignUpScreen(
                 )
             } else {
                 AuthSubmitButton(
-                    text = "REGISTRARME",
+                    text = stringResource(R.string.sign_up_button),
                     onClick = { viewModel.register(onSuccess = { hasPhone -> onSignUp(hasPhone) }) },
                 )
             }

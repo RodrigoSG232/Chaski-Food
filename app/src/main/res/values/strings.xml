@@ -9,6 +9,7 @@
     <string name="sign_up_subtitle">Ingresa tus datos para registrarte en Chaski Food</string>
     <string name="email_label">Correo electrónico</string>
     <string name="password_label">Contraseña</string>
+    <string name="password_placeholder">• • • • • •</string>
     <string name="forgot_password">¿Olvidaste tu contraseña?</string>
     <string name="sign_in_button">INICIAR SESIÓN</string>
     <string name="sign_up_button">REGISTRARSE</string>
