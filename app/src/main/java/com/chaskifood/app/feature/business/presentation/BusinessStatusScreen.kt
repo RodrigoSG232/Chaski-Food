@@ -252,6 +252,52 @@ fun BusinessStatusScreen(
                                 }
                             }
                         }
+
+                        BusinessStatus.SUSPENDED -> {
+                            Card(
+                                colors = CardDefaults.cardColors(containerColor = Color(0xFFEDE7F6)),
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
+                                Column(modifier = Modifier.padding(ChaskiDimens.SpacingLg)) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(
+                                            imageVector = Icons.Filled.Warning,
+                                            contentDescription = null,
+                                            tint = Color(0xFF4A148C),
+                                            modifier = Modifier.size(32.dp),
+                                        )
+                                        Text(
+                                            text = "Estado: NEGOCIO SUSPENDIDO",
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 18.sp,
+                                            color = Color(0xFF4A148C),
+                                            modifier = Modifier.padding(start = ChaskiDimens.SpacingSm),
+                                        )
+                                    }
+                                    Spacer(Modifier.height(ChaskiDimens.SpacingMd))
+                                    Text(
+                                        text = "Tu negocio ha sido suspendido por el Administrador Chaski.",
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = Color(0xFF4A148C),
+                                    )
+                                    if (!request.suspensionReason.isNullOrBlank()) {
+                                        Spacer(Modifier.height(ChaskiDimens.SpacingXs))
+                                        Text(
+                                            text = "Motivo: ${request.suspensionReason}",
+                                            fontSize = 14.sp,
+                                            color = Color(0xFF6A1B9A),
+                                        )
+                                    }
+                                    Spacer(Modifier.height(ChaskiDimens.SpacingSm))
+                                    Text(
+                                        text = "⚠️ Tu negocio no puede recibir nuevos pedidos en este momento.",
+                                        fontSize = 13.sp,
+                                        color = Color(0xFFB71C1C),
+                                    )
+                                }
+                            }
+                        }
                     }
 
                     Spacer(Modifier.height(ChaskiDimens.SpacingLg))

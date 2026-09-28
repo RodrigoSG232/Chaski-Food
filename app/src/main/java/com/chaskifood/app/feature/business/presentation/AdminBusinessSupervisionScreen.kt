@@ -51,17 +51,17 @@ import com.chaskifood.app.ui.theme.ChaskiBackground
 import com.chaskifood.app.ui.theme.ChaskiDimens
 
 @Composable
-fun AdminBusinessReviewScreen(
+fun AdminBusinessSupervisionScreen(
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
-    viewModel: AdminBusinessReviewViewModel = hiltViewModel(),
+    viewModel: AdminBusinessSupervisionViewModel = hiltViewModel(),
 ) {
     val selectedFilter by viewModel.selectedFilter.collectAsState()
     val filteredResult by viewModel.filteredRequests.collectAsState()
     val actionState by viewModel.actionState.collectAsState()
 
-    var activeDialogRequest by remember { mutableStateOf<Pair<BusinessRequest, BusinessStatus>?>(null) }
-    var dialogObservationInput by remember { mutableStateOf("") }
+    var activeSuspendRequest by remember { mutableStateOf<BusinessRequest?>(null) }
+    var suspendReasonInput by remember { mutableStateOf("") }
 
     Column(
         modifier = modifier
@@ -78,7 +78,7 @@ fun AdminBusinessReviewScreen(
                 .padding(horizontal = ChaskiDimens.ScreenPadding),
         ) {
             Text(
-                text = "Panel Admin Chaski",
+                text = "Supervisión de Negocios",
                 fontSize = 28.sp,
                 fontWeight = FontWeight.Bold,
                 color = Color(0xFF0D0D0D),
@@ -87,7 +87,7 @@ fun AdminBusinessReviewScreen(
             Spacer(Modifier.height(ChaskiDimens.SpacingXs))
 
             Text(
-                text = "Revisa y evalúa las solicitudes de incorporación de negocios en Chaski Food.",
+                text = "Controla quién puede operar en la plataforma. Suspende o reactiva negocios según corresponda.",
                 fontSize = 14.sp,
                 color = Color(0xFF757575),
             )
@@ -100,11 +100,9 @@ fun AdminBusinessReviewScreen(
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 val filters = listOf(
-                    BusinessStatus.PENDING_REVIEW to "Pendientes",
-                    BusinessStatus.OBSERVED to "Observadas",
-                    BusinessStatus.APPROVED to "Aprobadas",
-                    BusinessStatus.REJECTED to "Rechazadas",
-                    null to "Todas",
+                    BusinessStatus.APPROVED to "Habilitados / Activos",
+                    BusinessStatus.SUSPENDED to "Suspendidos",
+                    null to "Todos",
                 )
 
                 items(filters, key = { it.second }) { (status, label) ->
@@ -129,7 +127,7 @@ fun AdminBusinessReviewScreen(
 
             if (actionState is UiState.Error) {
                 Text(
-                    text = (actionState as UiState.Error).message ?: "Error al procesar evaluación",
+                    text = (actionState as UiState.Error).message ?: "Error al procesar acción",
                     color = MaterialTheme.colorScheme.error,
                     style = MaterialTheme.typography.bodySmall,
                     modifier = Modifier.padding(bottom = 8.dp),
@@ -146,7 +144,7 @@ fun AdminBusinessReviewScreen(
 
                 if (requests.isEmpty()) {
                     Text(
-                        text = "No se encontraron solicitudes con el filtro seleccionado.",
+                        text = "No se encontraron negocios con el filtro seleccionado.",
                         fontSize = 14.sp,
                         color = Color(0xFF757575),
                         modifier = Modifier.padding(top = ChaskiDimens.SpacingLg),
@@ -157,22 +155,17 @@ fun AdminBusinessReviewScreen(
                         modifier = Modifier.fillMaxWidth(),
                     ) {
                         items(requests, key = { it.id }) { request ->
-                            AdminBusinessCard(
+                            SupervisionBusinessCard(
                                 request = request,
-                                onApprove = {
-                                    viewModel.evaluateRequest(
-                                        requestId = request.id,
-                                        status = BusinessStatus.APPROVED,
+                                onSuspend = {
+                                    suspendReasonInput = ""
+                                    activeSuspendRequest = request
+                                },
+                                onReactivate = {
+                                    viewModel.reactivateBusiness(
+                                        request = request,
                                         onSuccess = {},
                                     )
-                                },
-                                onObserve = {
-                                    dialogObservationInput = request.observations ?: ""
-                                    activeDialogRequest = request to BusinessStatus.OBSERVED
-                                },
-                                onReject = {
-                                    dialogObservationInput = request.observations ?: ""
-                                    activeDialogRequest = request to BusinessStatus.REJECTED
                                 },
                             )
                         }
@@ -182,32 +175,26 @@ fun AdminBusinessReviewScreen(
         }
     }
 
-    // Modal para Observar / Rechazar con comentario obligatorio
-    activeDialogRequest?.let { (request, targetStatus) ->
-        val isObserve = targetStatus == BusinessStatus.OBSERVED
+    // Modal de Suspensión
+    activeSuspendRequest?.let { request ->
         AlertDialog(
-            onDismissRequest = { activeDialogRequest = null },
+            onDismissRequest = { activeSuspendRequest = null },
             title = {
-                Text(text = if (isObserve) "Observar Solicitud" else "Rechazar Solicitud")
+                Text(text = "Suspender Negocio")
             },
             text = {
                 Column {
                     Text(
-                        text = "Ingresa el motivo u observaciones para '${request.businessName}':",
+                        text = "Ingresa el motivo obligatorio para suspender la operación de '${request.businessName}':",
                         fontSize = 14.sp,
                         color = Color(0xFF424242),
                     )
                     Spacer(Modifier.height(12.dp))
                     OutlinedTextField(
-                        value = dialogObservationInput,
-                        onValueChange = { dialogObservationInput = it },
+                        value = suspendReasonInput,
+                        onValueChange = { suspendReasonInput = it },
                         placeholder = {
-                            Text(
-                                text = if (isObserve)
-                                    "Ej. El RUC ingresado no coincide con la Razón Social."
-                                else
-                                    "Ej. El negocio no cumple los requisitos mínimos.",
-                            )
+                            Text(text = "Ej. Incumplimiento de normas de higiene o incidencias recurrentes.")
                         },
                         modifier = Modifier.fillMaxWidth(),
                         minLines = 3,
@@ -217,25 +204,21 @@ fun AdminBusinessReviewScreen(
             confirmButton = {
                 Button(
                     onClick = {
-                        val obs = dialogObservationInput.trim()
-                        viewModel.evaluateRequest(
-                            requestId = request.id,
-                            status = targetStatus,
-                            observations = obs,
+                        viewModel.suspendBusiness(
+                            request = request,
+                            reason = suspendReasonInput,
                             onSuccess = {
-                                activeDialogRequest = null
+                                activeSuspendRequest = null
                             },
                         )
                     },
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = if (isObserve) Color(0xFFE65100) else Color(0xFFC62828),
-                    ),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD32F2F)),
                 ) {
-                    Text(text = if (isObserve) "OBSERVAR" else "RECHAZAR")
+                    Text(text = "SUSPENDER")
                 }
             },
             dismissButton = {
-                TextButton(onClick = { activeDialogRequest = null }) {
+                TextButton(onClick = { activeSuspendRequest = null }) {
                     Text(text = "CANCELAR")
                 }
             },
@@ -244,12 +227,13 @@ fun AdminBusinessReviewScreen(
 }
 
 @Composable
-private fun AdminBusinessCard(
+private fun SupervisionBusinessCard(
     request: BusinessRequest,
-    onApprove: () -> Unit,
-    onObserve: () -> Unit,
-    onReject: () -> Unit,
+    onSuspend: () -> Unit,
+    onReactivate: () -> Unit,
 ) {
+    val isSuspended = request.status == BusinessStatus.SUSPENDED
+
     Card(
         colors = CardDefaults.cardColors(containerColor = Color.White),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
@@ -268,7 +252,7 @@ private fun AdminBusinessCard(
                     color = Color(0xFF212121),
                     modifier = Modifier.weight(1f),
                 )
-                StatusBadge(status = request.status)
+                SupervisionStatusBadge(status = request.status)
             }
 
             Spacer(Modifier.height(ChaskiDimens.SpacingSm))
@@ -290,22 +274,13 @@ private fun AdminBusinessCard(
                 color = Color(0xFF757575),
             )
 
-            if (!request.observations.isNullOrBlank()) {
+            if (!request.suspensionReason.isNullOrBlank()) {
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    text = "Observaciones: ${request.observations}",
+                    text = "Motivo de Suspensión: ${request.suspensionReason}",
                     fontSize = 13.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = Color(0xFFE65100),
-                )
-            }
-
-            if (!request.reviewedBy.isNullOrBlank()) {
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    text = "Revisado por: ${request.reviewedBy}",
-                    fontSize = 12.sp,
-                    color = Color(0xFF9E9E9E),
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFFC62828),
                 )
             }
 
@@ -314,56 +289,36 @@ private fun AdminBusinessCard(
                 color = Color(0xFFEEEEEE),
             )
 
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.fillMaxWidth(),
-            ) {
+            if (isSuspended) {
                 Row(
                     modifier = Modifier
-                        .weight(1f)
+                        .fillMaxWidth()
                         .clip(RoundedCornerShape(6.dp))
                         .background(Color(0xFF2E7D32))
-                        .clickable(onClick = onApprove)
-                        .padding(vertical = 10.dp),
+                        .clickable(onClick = onReactivate)
+                        .padding(vertical = 12.dp),
                     horizontalArrangement = Arrangement.Center,
                 ) {
                     Text(
-                        text = "APROBAR",
-                        fontSize = 12.sp,
+                        text = "REACTIVAR NEGOCIO",
+                        fontSize = 13.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color.White,
                     )
                 }
-
+            } else {
                 Row(
                     modifier = Modifier
-                        .weight(1f)
+                        .fillMaxWidth()
                         .clip(RoundedCornerShape(6.dp))
-                        .background(Color(0xFFE65100))
-                        .clickable(onClick = onObserve)
-                        .padding(vertical = 10.dp),
+                        .background(Color(0xFFD32F2F))
+                        .clickable(onClick = onSuspend)
+                        .padding(vertical = 12.dp),
                     horizontalArrangement = Arrangement.Center,
                 ) {
                     Text(
-                        text = "OBSERVAR",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White,
-                    )
-                }
-
-                Row(
-                    modifier = Modifier
-                        .weight(1f)
-                        .clip(RoundedCornerShape(6.dp))
-                        .background(Color(0xFFC62828))
-                        .clickable(onClick = onReject)
-                        .padding(vertical = 10.dp),
-                    horizontalArrangement = Arrangement.Center,
-                ) {
-                    Text(
-                        text = "RECHAZAR",
-                        fontSize = 12.sp,
+                        text = "SUSPENDER NEGOCIO",
+                        fontSize = 13.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color.White,
                     )
@@ -374,13 +329,11 @@ private fun AdminBusinessCard(
 }
 
 @Composable
-private fun StatusBadge(status: BusinessStatus) {
+private fun SupervisionStatusBadge(status: BusinessStatus) {
     val (bg, fg, label) = when (status) {
-        BusinessStatus.PENDING_REVIEW -> Triple(Color(0xFFFFF8E1), Color(0xFFF57F17), "PENDIENTE")
-        BusinessStatus.OBSERVED -> Triple(Color(0xFFFFE0B2), Color(0xFFE65100), "OBSERVADA")
-        BusinessStatus.APPROVED -> Triple(Color(0xE8E8F5E9), Color(0xFF2E7D32), "APROBADA")
-        BusinessStatus.REJECTED -> Triple(Color(0xFFFFEBEE), Color(0xFFC62828), "RECHAZADA")
-        BusinessStatus.SUSPENDED -> Triple(Color(0xFFEDE7F6), Color(0xFF4A148C), "SUSPENDIDO")
+        BusinessStatus.APPROVED -> Triple(Color(0xE8E8F5E9), Color(0xFF2E7D32), "HABILITADO")
+        BusinessStatus.SUSPENDED -> Triple(Color(0xFFFFEBEE), Color(0xFFC62828), "SUSPENDIDO")
+        else -> Triple(Color(0xFFEEEEEE), Color(0xFF616161), status.name)
     }
 
     Surface(

@@ -21,6 +21,7 @@ import androidx.compose.material.icons.filled.AdminPanelSettings
 import androidx.compose.material.icons.filled.Campaign
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.CreditCard
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.People
@@ -29,6 +30,7 @@ import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Store
+import androidx.compose.material.icons.filled.Storefront
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -56,6 +58,8 @@ fun AccountScreen(
     onOpenReferral: () -> Unit,
     onOpenBusiness: () -> Unit = {},
     onOpenAdminReview: () -> Unit = {},
+    onOpenAdminSupervision: () -> Unit = {},
+    onOpenAdminAuditLog: () -> Unit = {},
     onSignOut: () -> Unit,
     modifier: Modifier = Modifier,
     viewModel: ProfileViewModel = hiltViewModel(),
@@ -111,9 +115,25 @@ fun AccountScreen(
             AccountMenuItem(
                 icon = Icons.Filled.AdminPanelSettings,
                 title = "Panel Admin Chaski: Evaluar Solicitudes",
-                subtitle = "Revisa, aprueba, observa o rechaza solicitudes",
+                subtitle = "Revisa, aprueba, observa o rechaza solicitudes de ingreso",
                 titleColor = Color(0xFF1565C0),
                 onClick = onOpenAdminReview,
+            )
+
+            AccountMenuItem(
+                icon = Icons.Filled.Storefront,
+                title = "Panel Admin Chaski: Supervisar Negocios",
+                subtitle = "Monitorea, suspende o reactiva la operación de negocios",
+                titleColor = Color(0xFF1565C0),
+                onClick = onOpenAdminSupervision,
+            )
+
+            AccountMenuItem(
+                icon = Icons.Filled.History,
+                title = "Panel Admin Chaski: Historial de Auditoría",
+                subtitle = "Registro cronológico inmutable de todas las acciones",
+                titleColor = Color(0xFF1565C0),
+                onClick = onOpenAdminAuditLog,
             )
         }
 

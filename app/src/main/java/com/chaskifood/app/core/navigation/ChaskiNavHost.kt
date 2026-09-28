@@ -23,7 +23,9 @@ import com.chaskifood.app.feature.auth.presentation.SignInScreen
 import com.chaskifood.app.feature.auth.presentation.SignUpPhoneScreen
 import com.chaskifood.app.feature.auth.presentation.SignUpScreen
 import com.chaskifood.app.feature.auth.presentation.VerifyPhoneScreen
+import com.chaskifood.app.feature.business.presentation.AdminAuditLogScreen
 import com.chaskifood.app.feature.business.presentation.AdminBusinessReviewScreen
+import com.chaskifood.app.feature.business.presentation.AdminBusinessSupervisionScreen
 import com.chaskifood.app.feature.business.presentation.BusinessStatusScreen
 import com.chaskifood.app.feature.business.presentation.RegisterBusinessScreen
 import com.chaskifood.app.feature.cart.presentation.YourOrderScreen
@@ -247,6 +249,12 @@ fun ChaskiNavHost() {
                 onOpenAdminReview = {
                     navController.navigate(ChaskiDestinations.ADMIN_BUSINESS_REVIEW)
                 },
+                onOpenAdminSupervision = {
+                    navController.navigate(ChaskiDestinations.ADMIN_BUSINESS_SUPERVISION)
+                },
+                onOpenAdminAuditLog = {
+                    navController.navigate(ChaskiDestinations.ADMIN_AUDIT_LOG)
+                },
                 onSignOut = {
                     navController.navigate(ChaskiDestinations.SIGN_IN) {
                         popUpTo(0) { inclusive = true }
@@ -277,6 +285,16 @@ fun ChaskiNavHost() {
         }
         composable(ChaskiDestinations.ADMIN_BUSINESS_REVIEW) {
             AdminBusinessReviewScreen(
+                onBack = { navController.popBackStack() },
+            )
+        }
+        composable(ChaskiDestinations.ADMIN_BUSINESS_SUPERVISION) {
+            AdminBusinessSupervisionScreen(
+                onBack = { navController.popBackStack() },
+            )
+        }
+        composable(ChaskiDestinations.ADMIN_AUDIT_LOG) {
+            AdminAuditLogScreen(
                 onBack = { navController.popBackStack() },
             )
         }

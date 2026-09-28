@@ -43,6 +43,8 @@ object ChaskiDestinations {
     const val REGISTER_BUSINESS = "register_business"
     const val BUSINESS_STATUS = "business_status"
     const val ADMIN_BUSINESS_REVIEW = "admin_business_review"
+    const val ADMIN_BUSINESS_SUPERVISION = "admin_business_supervision"
+    const val ADMIN_AUDIT_LOG = "admin_audit_log"
 
     const val FOODS_PER_CATEGORY = "foods/{category}"
     const val FILTER = "filter"

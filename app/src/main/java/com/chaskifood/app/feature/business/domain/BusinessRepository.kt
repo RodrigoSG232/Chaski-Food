@@ -14,4 +14,19 @@ interface BusinessRepository {
         observations: String?,
         reviewerEmail: String,
     ): ApiResult<Unit>
+    suspend fun suspendBusiness(
+        requestId: String,
+        reason: String,
+        adminEmail: String,
+        businessName: String,
+        ruc: String,
+    ): ApiResult<Unit>
+    suspend fun reactivateBusiness(
+        requestId: String,
+        adminEmail: String,
+        businessName: String,
+        ruc: String,
+    ): ApiResult<Unit>
+    fun getAuditLogs(): Flow<ApiResult<List<AuditLog>>>
+    suspend fun recordAuditLog(log: AuditLog): ApiResult<Unit>
 }

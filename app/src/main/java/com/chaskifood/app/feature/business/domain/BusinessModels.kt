@@ -5,6 +5,7 @@ enum class BusinessStatus {
     APPROVED,
     OBSERVED,
     REJECTED,
+    SUSPENDED,
 }
 
 data class BusinessRequest(
@@ -18,6 +19,17 @@ data class BusinessRequest(
     val category: String = "Restaurante",
     val status: BusinessStatus = BusinessStatus.PENDING_REVIEW,
     val observations: String? = null,
+    val suspensionReason: String? = null,
     val reviewedBy: String? = null,
     val reviewedAt: Long? = null,
+)
+
+data class AuditLog(
+    val id: String = "",
+    val adminEmail: String = "",
+    val action: String = "",
+    val targetBusinessName: String = "",
+    val targetRuc: String = "",
+    val details: String? = null,
+    val timestamp: Long = System.currentTimeMillis(),
 )
