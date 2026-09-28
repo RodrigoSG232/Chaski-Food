@@ -47,6 +47,7 @@ dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)
     implementation(libs.maplibre.android)
+    implementation(libs.coil.compose)
 
     // Compose
     implementation(platform(libs.androidx.compose.bom))

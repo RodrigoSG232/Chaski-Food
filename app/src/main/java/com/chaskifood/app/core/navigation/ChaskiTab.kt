@@ -48,6 +48,7 @@ object ChaskiDestinations {
     const val ADMIN_AUDIT_LOG = "admin_audit_log"
     const val MANAGE_STORES = "manage_stores"
     const val STORE_OPERATIONS = "store_operations"
+    const val MANAGE_CATALOG = "manage_catalog"
 
     const val FOODS_PER_CATEGORY = "foods/{category}"
     const val FILTER = "filter"

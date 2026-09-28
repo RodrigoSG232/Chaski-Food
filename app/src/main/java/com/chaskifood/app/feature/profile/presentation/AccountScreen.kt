@@ -28,6 +28,7 @@ import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.Place
+import androidx.compose.material.icons.filled.RestaurantMenu
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Store
@@ -67,6 +68,7 @@ fun AccountScreen(
     onOpenReferral: () -> Unit,
     onOpenBusiness: () -> Unit = {},
     onOpenStoreOperations: () -> Unit = {},
+    onOpenManageCatalog: () -> Unit = {},
     onOpenAdminReview: () -> Unit = {},
     onOpenAdminSupervision: () -> Unit = {},
     onOpenAdminAuditLog: () -> Unit = {},
@@ -118,6 +120,13 @@ fun AccountScreen(
             title = stringResource(R.string.business_register_title),
             subtitle = stringResource(R.string.business_register_subtitle),
             onClick = onOpenBusiness,
+        )
+
+        AccountMenuItem(
+            icon = Icons.Filled.RestaurantMenu,
+            title = "Menú y Catálogo de Productos",
+            subtitle = "Gestiona categorías, platillos, precios y fotografías",
+            onClick = onOpenManageCatalog,
         )
 
         AccountMenuItem(
