@@ -57,6 +57,8 @@ class FirebaseBusinessRepository @Inject constructor() : BusinessRepository {
                         category = data["category"] as? String ?: "Restaurante",
                         status = try { BusinessStatus.valueOf(statusStr) } catch (e: Exception) { BusinessStatus.PENDING_REVIEW },
                         observations = data["observations"] as? String,
+                        reviewedBy = data["reviewedBy"] as? String,
+                        reviewedAt = (data["reviewedAt"] as? Timestamp)?.toDate()?.time,
                     )
                     trySend(ApiResult.Success(request))
                 } else {
@@ -65,6 +67,39 @@ class FirebaseBusinessRepository @Inject constructor() : BusinessRepository {
             } else {
                 trySend(ApiResult.Success(null))
             }
+        }
+
+        awaitClose { listener.remove() }
+    }
+
+    override fun getAllBusinessRequests(): Flow<ApiResult<List<BusinessRequest>>> = callbackFlow {
+        val listener = collectionRef.addSnapshotListener { snapshot, error ->
+            if (error != null) {
+                trySend(ApiResult.Failure(error.localizedMessage ?: "Error al consultar solicitudes.", error))
+                return@addSnapshotListener
+            }
+
+            val list = snapshot?.documents?.mapNotNull { doc ->
+                if (!doc.exists()) return@mapNotNull null
+                val data = doc.data ?: return@mapNotNull null
+                val statusStr = data["status"] as? String ?: "PENDING_REVIEW"
+                BusinessRequest(
+                    id = doc.id,
+                    ownerUid = data["ownerUid"] as? String ?: doc.id,
+                    businessName = data["businessName"] as? String ?: "",
+                    ruc = data["ruc"] as? String ?: "",
+                    legalAddress = data["legalAddress"] as? String ?: "",
+                    phone = data["phone"] as? String ?: "",
+                    email = data["email"] as? String ?: "",
+                    category = data["category"] as? String ?: "Restaurante",
+                    status = try { BusinessStatus.valueOf(statusStr) } catch (e: Exception) { BusinessStatus.PENDING_REVIEW },
+                    observations = data["observations"] as? String,
+                    reviewedBy = data["reviewedBy"] as? String,
+                    reviewedAt = (data["reviewedAt"] as? Timestamp)?.toDate()?.time,
+                )
+            } ?: emptyList()
+
+            trySend(ApiResult.Success(list))
         }
 
         awaitClose { listener.remove() }
@@ -102,5 +137,26 @@ class FirebaseBusinessRepository @Inject constructor() : BusinessRepository {
 
     override suspend fun resubmitBusinessRequest(request: BusinessRequest): ApiResult<BusinessRequest> {
         return submitBusinessRequest(request)
+    }
+
+    override suspend fun evaluateBusinessRequest(
+        requestId: String,
+        status: BusinessStatus,
+        observations: String?,
+        reviewerEmail: String,
+    ): ApiResult<Unit> {
+        return try {
+            val updates = mapOf(
+                "status" to status.name,
+                "observations" to observations,
+                "reviewedBy" to reviewerEmail,
+                "reviewedAt" to Timestamp.now(),
+                "updatedAt" to Timestamp.now(),
+            )
+            collectionRef.document(requestId).update(updates).await()
+            ApiResult.Success(Unit)
+        } catch (e: Exception) {
+            ApiResult.Failure(e.localizedMessage ?: "Error al evaluar la solicitud de negocio.", e)
+        }
     }
 }

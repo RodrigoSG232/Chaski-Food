@@ -23,6 +23,7 @@ import com.chaskifood.app.feature.auth.presentation.SignInScreen
 import com.chaskifood.app.feature.auth.presentation.SignUpPhoneScreen
 import com.chaskifood.app.feature.auth.presentation.SignUpScreen
 import com.chaskifood.app.feature.auth.presentation.VerifyPhoneScreen
+import com.chaskifood.app.feature.business.presentation.AdminBusinessReviewScreen
 import com.chaskifood.app.feature.business.presentation.BusinessStatusScreen
 import com.chaskifood.app.feature.business.presentation.RegisterBusinessScreen
 import com.chaskifood.app.feature.cart.presentation.YourOrderScreen
@@ -243,6 +244,9 @@ fun ChaskiNavHost() {
                 onOpenBusiness = {
                     navController.navigate(ChaskiDestinations.BUSINESS_STATUS)
                 },
+                onOpenAdminReview = {
+                    navController.navigate(ChaskiDestinations.ADMIN_BUSINESS_REVIEW)
+                },
                 onSignOut = {
                     navController.navigate(ChaskiDestinations.SIGN_IN) {
                         popUpTo(0) { inclusive = true }
@@ -268,6 +272,11 @@ fun ChaskiNavHost() {
                 onEditAndResubmit = {
                     navController.navigate(ChaskiDestinations.REGISTER_BUSINESS)
                 },
+                onBack = { navController.popBackStack() },
+            )
+        }
+        composable(ChaskiDestinations.ADMIN_BUSINESS_REVIEW) {
+            AdminBusinessReviewScreen(
                 onBack = { navController.popBackStack() },
             )
         }

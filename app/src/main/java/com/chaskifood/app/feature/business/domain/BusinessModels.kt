@@ -18,4 +18,6 @@ data class BusinessRequest(
     val category: String = "Restaurante",
     val status: BusinessStatus = BusinessStatus.PENDING_REVIEW,
     val observations: String? = null,
+    val reviewedBy: String? = null,
+    val reviewedAt: Long? = null,
 )

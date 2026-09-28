@@ -5,6 +5,13 @@ import kotlinx.coroutines.flow.Flow
 
 interface BusinessRepository {
     fun getBusinessRequest(ownerUid: String): Flow<ApiResult<BusinessRequest?>>
+    fun getAllBusinessRequests(): Flow<ApiResult<List<BusinessRequest>>>
     suspend fun submitBusinessRequest(request: BusinessRequest): ApiResult<BusinessRequest>
     suspend fun resubmitBusinessRequest(request: BusinessRequest): ApiResult<BusinessRequest>
+    suspend fun evaluateBusinessRequest(
+        requestId: String,
+        status: BusinessStatus,
+        observations: String?,
+        reviewerEmail: String,
+    ): ApiResult<Unit>
 }

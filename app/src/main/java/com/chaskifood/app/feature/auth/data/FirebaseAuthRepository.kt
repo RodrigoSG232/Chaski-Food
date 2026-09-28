@@ -184,10 +184,25 @@ class FirebaseAuthRepository @Inject constructor(
         sessionDataStore.clearSession()
     }
 
-    private fun FirebaseUser.toAuthUser() = AuthUser(
-        uid = uid,
-        email = email,
-        displayName = displayName,
-        phoneNumber = phoneNumber,
-    )
+    companion object {
+        // Lista de correos con rol de Administrador Chaski delegado
+        private val DELEGATED_ADMIN_EMAILS = setOf(
+            "chaskifood2@gmail.com",
+            // Agrega aquí cualquier otro correo al que desees otorgar permisos de Administrador
+        )
+    }
+
+    private fun FirebaseUser.toAuthUser(): AuthUser {
+        val mail = email?.lowercase() ?: ""
+        val isUserAdmin = mail.contains("admin") ||
+            mail.endsWith("@chaskifood.com") ||
+            DELEGATED_ADMIN_EMAILS.contains(mail)
+        return AuthUser(
+            uid = uid,
+            email = email,
+            displayName = displayName,
+            phoneNumber = phoneNumber,
+            isAdmin = isUserAdmin,
+        )
+    }
 }

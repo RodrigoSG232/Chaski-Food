@@ -32,6 +32,7 @@ fun MainScreen(
     onOpenSecurity: () -> Unit = {},
     onOpenSocialAccounts: () -> Unit = {},
     onOpenBusiness: () -> Unit = {},
+    onOpenAdminReview: () -> Unit = {},
     onSignOut: () -> Unit = {},
 ) {
     val navController = rememberNavController()
@@ -75,6 +76,7 @@ fun MainScreen(
                     onOpenSocialAccounts = onOpenSocialAccounts,
                     onOpenReferral = onOpenReferral,
                     onOpenBusiness = onOpenBusiness,
+                    onOpenAdminReview = onOpenAdminReview,
                     onSignOut = onSignOut,
                 )
             }

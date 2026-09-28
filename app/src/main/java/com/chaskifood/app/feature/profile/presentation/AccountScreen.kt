@@ -17,6 +17,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.automirrored.filled.HelpOutline
 import androidx.compose.material.icons.automirrored.filled.Message
+import androidx.compose.material.icons.filled.AdminPanelSettings
 import androidx.compose.material.icons.filled.Campaign
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.CreditCard
@@ -54,6 +55,7 @@ fun AccountScreen(
     onOpenSocialAccounts: () -> Unit,
     onOpenReferral: () -> Unit,
     onOpenBusiness: () -> Unit = {},
+    onOpenAdminReview: () -> Unit = {},
     onSignOut: () -> Unit,
     modifier: Modifier = Modifier,
     viewModel: ProfileViewModel = hiltViewModel(),
@@ -104,6 +106,16 @@ fun AccountScreen(
             subtitle = "Solicita la habilitación comercial de tu negocio",
             onClick = onOpenBusiness,
         )
+
+        if (currentUser?.isAdmin == true) {
+            AccountMenuItem(
+                icon = Icons.Filled.AdminPanelSettings,
+                title = "Panel Admin Chaski: Evaluar Solicitudes",
+                subtitle = "Revisa, aprueba, observa o rechaza solicitudes",
+                titleColor = Color(0xFF1565C0),
+                onClick = onOpenAdminReview,
+            )
+        }
 
         AccountMenuItem(
             icon = Icons.Filled.Lock,
