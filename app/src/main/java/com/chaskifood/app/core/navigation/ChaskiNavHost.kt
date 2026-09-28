@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -14,6 +15,10 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.chaskifood.app.feature.address.presentation.AddressRoute
+import com.chaskifood.app.feature.address.presentation.AddressAction
+import com.chaskifood.app.feature.address.presentation.AddressViewModel
 import com.chaskifood.app.feature.auth.presentation.CheckEmailScreen
 import com.chaskifood.app.feature.auth.presentation.ForgotPasswordScreen
 import com.chaskifood.app.feature.auth.presentation.LocationScreen
@@ -203,7 +208,15 @@ fun ChaskiNavHost() {
             )
         }
         composable(ChaskiDestinations.MAIN) {
+            val addressViewModel: AddressViewModel = hiltViewModel()
+            val addressState by addressViewModel.uiState.collectAsStateWithLifecycle()
             MainScreen(
+                deliveryAddress = addressState.book?.let { book ->
+                    book.addresses.find { it.id == book.selectedAddressId }?.addressText
+                },
+                deliveryAddressUnavailable = addressState.book == null,
+                deliveryNotice = addressState.deliveryNotice,
+                onDismissDeliveryNotice = { addressViewModel.onAction(AddressAction.DismissMessage) },
                 onSeeAllRestaurants = {
                     navController.navigate(ChaskiDestinations.RESTAURANTS)
                 },
@@ -229,7 +242,7 @@ fun ChaskiNavHost() {
                     navController.navigate(ChaskiDestinations.PROFILE_PAYMENTS)
                 },
                 onOpenLocations = {
-                    navController.navigate(ChaskiDestinations.ADD_LOCATION)
+                    navController.navigate(ChaskiDestinations.ADDRESS_BOOK) { launchSingleTop = true }
                 },
                 onOpenReferral = {
                     navController.navigate(ChaskiDestinations.REFER_FRIEND)
@@ -256,6 +269,20 @@ fun ChaskiNavHost() {
                     navController.navigate(ChaskiDestinations.ADMIN_AUDIT_LOG)
                 },
                 onSignOut = {
+                    navController.navigate(ChaskiDestinations.SIGN_IN) {
+                        popUpTo(0) { inclusive = true }
+                    }
+                },
+            )
+        }
+        composable(ChaskiDestinations.ADDRESS_BOOK) { entry ->
+            // Una sola observación para Inicio y gestión, con vida del destino Main.
+            val mainEntry = remember(entry) { navController.getBackStackEntry(ChaskiDestinations.MAIN) }
+            val viewModel: AddressViewModel = hiltViewModel(mainEntry)
+            AddressRoute(
+                viewModel = viewModel,
+                onBack = { navController.popBackStack() },
+                onSignIn = {
                     navController.navigate(ChaskiDestinations.SIGN_IN) {
                         popUpTo(0) { inclusive = true }
                     }

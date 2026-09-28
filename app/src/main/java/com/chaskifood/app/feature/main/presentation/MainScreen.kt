@@ -18,6 +18,10 @@ import com.chaskifood.app.ui.theme.ChaskiSurface
 @Composable
 fun MainScreen(
     modifier: Modifier = Modifier,
+    deliveryAddress: String? = null,
+    deliveryAddressUnavailable: Boolean = false,
+    deliveryNotice: String? = null,
+    onDismissDeliveryNotice: () -> Unit = {},
     onSeeAllRestaurants: () -> Unit = {},
     onOpenYourOrder: () -> Unit = {},
     onRestaurantClick: (String) -> Unit = {},
@@ -51,6 +55,10 @@ fun MainScreen(
         ) {
             composable(ChaskiTab.HOME.route) {
                 HomeScreen(
+                    deliveryAddress = deliveryAddress,
+                    deliveryAddressUnavailable = deliveryAddressUnavailable,
+                    deliveryNotice = deliveryNotice,
+                    onDismissDeliveryNotice = onDismissDeliveryNotice,
                     onSeeAll = onSeeAllRestaurants,
                     onRestaurantClick = onRestaurantClick,
                     onOpenLocations = onOpenLocations,
