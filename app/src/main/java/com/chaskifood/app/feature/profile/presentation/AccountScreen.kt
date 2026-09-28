@@ -33,6 +33,7 @@ import androidx.compose.material.icons.filled.Store
 import androidx.compose.material.icons.filled.Storefront
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -50,6 +51,7 @@ import com.chaskifood.app.R
 import com.chaskifood.app.ui.theme.ChaskiAdminAccent
 import com.chaskifood.app.ui.theme.ChaskiBackground
 import com.chaskifood.app.ui.theme.ChaskiDimens
+import com.chaskifood.app.ui.theme.ChaskiError
 import com.chaskifood.app.ui.theme.ChaskiTextDisabled
 import com.chaskifood.app.ui.theme.ChaskiTextMuted
 import com.chaskifood.app.ui.theme.ChaskiTextPrimary
@@ -83,7 +85,7 @@ fun AccountScreen(
 
         Text(
             text = stringResource(R.string.account_title),
-            fontSize = 28.sp,
+            style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.Bold,
             color = ChaskiTextPrimary,
         )
@@ -92,8 +94,7 @@ fun AccountScreen(
 
         Text(
             text = stringResource(R.string.account_subtitle),
-            fontSize = 14.sp,
-            fontWeight = FontWeight.Normal,
+            style = MaterialTheme.typography.bodyMedium,
             color = ChaskiTextMuted,
             lineHeight = 20.sp,
         )
@@ -145,22 +146,22 @@ fun AccountScreen(
 
         AccountMenuItem(
             icon = Icons.Filled.Lock,
-            title = "Seguridad",
-            subtitle = "Cambia los detalles de tu contraseña",
+            title = stringResource(R.string.security_title),
+            subtitle = stringResource(R.string.security_subtitle),
             onClick = onOpenSecurity,
         )
 
         AccountMenuItem(
             icon = Icons.Filled.CreditCard,
-            title = "Métodos de pago",
-            subtitle = "Agrega tus tarjetas de crédito y débito",
+            title = stringResource(R.string.payment_methods_title),
+            subtitle = stringResource(R.string.payment_methods_subtitle),
             onClick = onOpenPaymentMethods,
         )
 
         AccountMenuItem(
             icon = Icons.Filled.Place,
-            title = "Ubicación",
-            subtitle = "Gestiona tus direcciones de entrega",
+            title = stringResource(R.string.location_title),
+            subtitle = stringResource(R.string.location_subtitle),
             onClick = onOpenLocations,
         )
 
@@ -184,7 +185,7 @@ fun AccountScreen(
         )
 
         // SECCIÓN NOTIFICACIONES
-        SectionHeader(title = "NOTIFICACIONES")
+        SectionHeader(title = stringResource(R.string.section_notifications))
 
         AccountMenuItem(
             icon = Icons.AutoMirrored.Filled.Message,
@@ -213,7 +214,7 @@ fun AccountScreen(
         )
 
         // SECCIÓN MÁS
-        SectionHeader(title = "MÁS")
+        SectionHeader(title = stringResource(R.string.section_more))
 
         AccountMenuItem(
             icon = Icons.Filled.Star,
@@ -231,9 +232,9 @@ fun AccountScreen(
 
         AccountMenuItem(
             icon = Icons.AutoMirrored.Filled.ExitToApp,
-            title = "Cerrar sesión",
-            subtitle = "Cierra la sesión actual de tu cuenta",
-            titleColor = Color(0xFFD32F2F),
+            title = stringResource(R.string.sign_out_title),
+            subtitle = stringResource(R.string.sign_out_subtitle),
+            titleColor = ChaskiError,
             onClick = {
                 viewModel.signOut(onSignedOut = onSignOut)
             },
@@ -247,10 +248,10 @@ fun AccountScreen(
 private fun SectionHeader(title: String) {
     Text(
         text = title,
-        fontSize = 12.sp,
+        style = MaterialTheme.typography.labelMedium,
         fontWeight = FontWeight.SemiBold,
         letterSpacing = 0.8.sp,
-        color = Color(0xFF9E9E9E),
+        color = ChaskiTextDisabled,
         modifier = Modifier.padding(bottom = ChaskiDimens.SpacingSm, top = ChaskiDimens.SpacingSm),
     )
 }
@@ -261,7 +262,7 @@ private fun AccountMenuItem(
     title: String,
     subtitle: String,
     onClick: () -> Unit,
-    titleColor: Color = Color(0xFF212121),
+    titleColor: Color = ChaskiTextPrimary,
 ) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -273,7 +274,7 @@ private fun AccountMenuItem(
         Icon(
             imageVector = icon,
             contentDescription = null,
-            tint = if (titleColor != Color(0xFF212121)) titleColor else Color(0xFF757575),
+            tint = if (titleColor != ChaskiTextPrimary) titleColor else ChaskiTextMuted,
             modifier = Modifier.size(24.dp),
         )
 
@@ -282,23 +283,22 @@ private fun AccountMenuItem(
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = title,
-                fontSize = 16.sp,
+                style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
                 color = titleColor,
             )
             Spacer(Modifier.height(2.dp))
             Text(
                 text = subtitle,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Normal,
-                color = Color(0xFF9E9E9E),
+                style = MaterialTheme.typography.bodySmall,
+                color = ChaskiTextDisabled,
             )
         }
 
         Icon(
             imageVector = Icons.Filled.ChevronRight,
             contentDescription = null,
-            tint = Color(0xFFBDBDBD),
+            tint = ChaskiTextDisabled,
             modifier = Modifier.size(20.dp),
         )
     }
