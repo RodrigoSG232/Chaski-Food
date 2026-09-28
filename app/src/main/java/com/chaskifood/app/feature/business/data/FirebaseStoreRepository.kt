@@ -2,9 +2,14 @@ package com.chaskifood.app.feature.business.data
 
 import com.chaskifood.app.core.common.ApiResult
 import com.chaskifood.app.feature.business.domain.BusinessStore
+import com.chaskifood.app.feature.business.domain.DayOfWeekEnum
+import com.chaskifood.app.feature.business.domain.DayOperatingHours
+import com.chaskifood.app.feature.business.domain.OperationalStatus
 import com.chaskifood.app.feature.business.domain.StoreManager
 import com.chaskifood.app.feature.business.domain.StoreRepository
 import com.chaskifood.app.feature.business.domain.StoreStatus
+import com.chaskifood.app.feature.business.domain.defaultWeeklyOperatingHours
+import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FieldPath
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.channels.awaitClose
@@ -37,20 +42,7 @@ class FirebaseStoreRepository @Inject constructor(
                 }
 
                 val list = snapshot?.documents?.mapNotNull { doc ->
-                    if (!doc.exists()) return@mapNotNull null
-                    val data = doc.data ?: return@mapNotNull null
-                    val statusStr = data["status"] as? String ?: "ACTIVE"
-                    BusinessStore(
-                        id = doc.id,
-                        businessId = data["businessId"] as? String ?: "",
-                        name = data["name"] as? String ?: "",
-                        address = data["address"] as? String ?: "",
-                        latitude = (data["latitude"] as? Number)?.toDouble() ?: 0.0,
-                        longitude = (data["longitude"] as? Number)?.toDouble() ?: 0.0,
-                        phone = data["phone"] as? String ?: "",
-                        status = try { StoreStatus.valueOf(statusStr) } catch (e: Exception) { StoreStatus.ACTIVE },
-                        createdAt = (data["createdAt"] as? Number)?.toLong() ?: System.currentTimeMillis(),
-                    )
+                    doc.toBusinessStore()
                 } ?: emptyList()
 
                 trySend(ApiResult.Success(list))
@@ -65,6 +57,15 @@ class FirebaseStoreRepository @Inject constructor(
             val storeId = docRef.id
             val newStore = store.copy(id = storeId)
 
+            val hoursData = newStore.operatingHours.map { h ->
+                mapOf(
+                    "dayOfWeek" to h.dayOfWeek.name,
+                    "openTime" to h.openTime,
+                    "closeTime" to h.closeTime,
+                    "enabled" to h.enabled,
+                )
+            }
+
             val data = mapOf(
                 "businessId" to newStore.businessId,
                 "name" to newStore.name,
@@ -73,6 +74,9 @@ class FirebaseStoreRepository @Inject constructor(
                 "longitude" to newStore.longitude,
                 "phone" to newStore.phone,
                 "status" to newStore.status.name,
+                "operationalStatus" to newStore.operationalStatus.name,
+                "pauseReason" to (newStore.pauseReason ?: ""),
+                "operatingHours" to hoursData,
                 "createdAt" to newStore.createdAt,
             )
 
@@ -89,6 +93,15 @@ class FirebaseStoreRepository @Inject constructor(
                 return ApiResult.Failure("El ID del local no puede estar vacío.")
             }
 
+            val hoursData = store.operatingHours.map { h ->
+                mapOf(
+                    "dayOfWeek" to h.dayOfWeek.name,
+                    "openTime" to h.openTime,
+                    "closeTime" to h.closeTime,
+                    "enabled" to h.enabled,
+                )
+            }
+
             val data = mapOf(
                 "businessId" to store.businessId,
                 "name" to store.name,
@@ -97,6 +110,9 @@ class FirebaseStoreRepository @Inject constructor(
                 "longitude" to store.longitude,
                 "phone" to store.phone,
                 "status" to store.status.name,
+                "operationalStatus" to store.operationalStatus.name,
+                "pauseReason" to (store.pauseReason ?: ""),
+                "operatingHours" to hoursData,
             )
 
             storesRef.document(store.id).update(data).await()
@@ -200,19 +216,7 @@ class FirebaseStoreRepository @Inject constructor(
                 .get()
                 .addOnSuccessListener { storesSnapshot ->
                     val stores = storesSnapshot.documents.mapNotNull { doc ->
-                        val data = doc.data ?: return@mapNotNull null
-                        val statusStr = data["status"] as? String ?: "ACTIVE"
-                        BusinessStore(
-                            id = doc.id,
-                            businessId = data["businessId"] as? String ?: "",
-                            name = data["name"] as? String ?: "",
-                            address = data["address"] as? String ?: "",
-                            latitude = (data["latitude"] as? Number)?.toDouble() ?: 0.0,
-                            longitude = (data["longitude"] as? Number)?.toDouble() ?: 0.0,
-                            phone = data["phone"] as? String ?: "",
-                            status = try { StoreStatus.valueOf(statusStr) } catch (e: Exception) { StoreStatus.ACTIVE },
-                            createdAt = (data["createdAt"] as? Number)?.toLong() ?: System.currentTimeMillis(),
-                        )
+                        doc.toBusinessStore()
                     }
                     trySend(ApiResult.Success(stores))
                 }
@@ -222,5 +226,84 @@ class FirebaseStoreRepository @Inject constructor(
         }
 
         awaitClose { listener.remove() }
+    }
+
+    override suspend fun updateOperationalStatus(
+        storeId: String,
+        status: OperationalStatus,
+        pauseReason: String?,
+    ): ApiResult<Unit> {
+        return try {
+            val data = mutableMapOf<String, Any>(
+                "operationalStatus" to status.name,
+            )
+            if (pauseReason != null) {
+                data["pauseReason"] = pauseReason
+            }
+            storesRef.document(storeId).update(data).await()
+            ApiResult.Success(Unit)
+        } catch (e: Exception) {
+            ApiResult.Failure(e.localizedMessage ?: "Error al actualizar el estado operativo del local.", e)
+        }
+    }
+
+    override suspend fun updateOperatingHours(
+        storeId: String,
+        hours: List<DayOperatingHours>,
+    ): ApiResult<Unit> {
+        return try {
+            val hoursData = hours.map { h ->
+                mapOf(
+                    "dayOfWeek" to h.dayOfWeek.name,
+                    "openTime" to h.openTime,
+                    "closeTime" to h.closeTime,
+                    "enabled" to h.enabled,
+                )
+            }
+            storesRef.document(storeId).update("operatingHours", hoursData).await()
+            ApiResult.Success(Unit)
+        } catch (e: Exception) {
+            ApiResult.Failure(e.localizedMessage ?: "Error al actualizar los horarios del local.", e)
+        }
+    }
+
+    private fun DocumentSnapshot.toBusinessStore(): BusinessStore? {
+        if (!exists()) return null
+        val data = data ?: return null
+        val statusStr = data["status"] as? String ?: "ACTIVE"
+        val opStatusStr = data["operationalStatus"] as? String ?: "OPEN"
+        return BusinessStore(
+            id = id,
+            businessId = data["businessId"] as? String ?: "",
+            name = data["name"] as? String ?: "",
+            address = data["address"] as? String ?: "",
+            latitude = (data["latitude"] as? Number)?.toDouble() ?: 0.0,
+            longitude = (data["longitude"] as? Number)?.toDouble() ?: 0.0,
+            phone = data["phone"] as? String ?: "",
+            status = try { StoreStatus.valueOf(statusStr) } catch (e: Exception) { StoreStatus.ACTIVE },
+            operationalStatus = try { OperationalStatus.valueOf(opStatusStr) } catch (e: Exception) { OperationalStatus.OPEN },
+            pauseReason = data["pauseReason"] as? String,
+            operatingHours = parseOperatingHours(data["operatingHours"]),
+            createdAt = (data["createdAt"] as? Number)?.toLong() ?: System.currentTimeMillis(),
+        )
+    }
+
+    private fun parseOperatingHours(rawList: Any?): List<DayOperatingHours> {
+        val list = rawList as? List<*> ?: return defaultWeeklyOperatingHours()
+        val result = list.mapNotNull { item ->
+            val map = item as? Map<*, *> ?: return@mapNotNull null
+            val dayStr = map["dayOfWeek"] as? String ?: return@mapNotNull null
+            val dayEnum = try { DayOfWeekEnum.valueOf(dayStr) } catch (e: Exception) { return@mapNotNull null }
+            val open = map["openTime"] as? String ?: "08:00"
+            val close = map["closeTime"] as? String ?: "22:00"
+            val enabled = map["enabled"] as? Boolean ?: true
+            DayOperatingHours(
+                dayOfWeek = dayEnum,
+                openTime = open,
+                closeTime = close,
+                enabled = enabled,
+            )
+        }
+        return if (result.isNotEmpty()) result else defaultWeeklyOperatingHours()
     }
 }
