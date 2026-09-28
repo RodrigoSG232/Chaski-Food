@@ -34,18 +34,24 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.chaskifood.app.R
 import com.chaskifood.app.core.common.UiState
 import com.chaskifood.app.feature.auth.presentation.AuthAppBar
 import com.chaskifood.app.feature.auth.presentation.AuthSubmitButton
 import com.chaskifood.app.feature.auth.presentation.AuthTextField
 import com.chaskifood.app.ui.theme.ChaskiBackground
 import com.chaskifood.app.ui.theme.ChaskiDimens
+import com.chaskifood.app.ui.theme.ChaskiStatusObservedBg
+import com.chaskifood.app.ui.theme.ChaskiStatusObservedFg
+import com.chaskifood.app.ui.theme.ChaskiTextMuted
+import com.chaskifood.app.ui.theme.ChaskiTextPrimary
 
 @Composable
 fun RegisterBusinessScreen(
@@ -81,24 +87,24 @@ fun RegisterBusinessScreen(
                 .padding(horizontal = ChaskiDimens.ScreenPadding),
         ) {
             Text(
-                text = if (isResubmission) "Corregir Solicitud" else "Registrar Negocio",
+                text = if (isResubmission) "Corregir Solicitud" else stringResource(R.string.register_business_screen_title),
                 fontSize = 28.sp,
                 fontWeight = FontWeight.Bold,
-                color = Color(0xFF0D0D0D),
+                color = ChaskiTextPrimary,
             )
 
             Spacer(Modifier.height(ChaskiDimens.SpacingXs))
 
             Text(
-                text = "Ingresa la información requerida de tu negocio para solicitar su habilitación en Chaski Food.",
+                text = stringResource(R.string.register_business_screen_subtitle),
                 fontSize = 14.sp,
-                color = Color(0xFF757575),
+                color = ChaskiTextMuted,
             )
 
             if (!observations.isNullOrBlank()) {
                 Spacer(Modifier.height(ChaskiDimens.SpacingLg))
                 Card(
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF3E0)),
+                    colors = CardDefaults.cardColors(containerColor = ChaskiStatusObservedBg),
                     modifier = Modifier.fillMaxWidth(),
                 ) {
                     Column(modifier = Modifier.padding(ChaskiDimens.SpacingMd)) {
@@ -106,12 +112,12 @@ fun RegisterBusinessScreen(
                             Icon(
                                 imageVector = Icons.Filled.Warning,
                                 contentDescription = null,
-                                tint = Color(0xFFE65100),
+                                tint = ChaskiStatusObservedFg,
                             )
                             Text(
                                 text = "Observaciones del Administrador",
                                 fontWeight = FontWeight.Bold,
-                                color = Color(0xFFE65100),
+                                color = ChaskiStatusObservedFg,
                                 modifier = Modifier.padding(start = ChaskiDimens.SpacingSm),
                             )
                         }

@@ -31,16 +31,32 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.chaskifood.app.R
 import com.chaskifood.app.core.common.ApiResult
 import com.chaskifood.app.feature.auth.presentation.AuthAppBar
 import com.chaskifood.app.feature.auth.presentation.AuthSubmitButton
 import com.chaskifood.app.feature.business.domain.BusinessStatus
+import com.chaskifood.app.ui.theme.ChaskiAdminAccent
+import com.chaskifood.app.ui.theme.ChaskiAdminCardBg
 import com.chaskifood.app.ui.theme.ChaskiBackground
 import com.chaskifood.app.ui.theme.ChaskiDimens
+import com.chaskifood.app.ui.theme.ChaskiStatusApprovedBg
+import com.chaskifood.app.ui.theme.ChaskiStatusApprovedFg
+import com.chaskifood.app.ui.theme.ChaskiStatusObservedBg
+import com.chaskifood.app.ui.theme.ChaskiStatusObservedFg
+import com.chaskifood.app.ui.theme.ChaskiStatusPendingBg
+import com.chaskifood.app.ui.theme.ChaskiStatusPendingFg
+import com.chaskifood.app.ui.theme.ChaskiStatusRejectedBg
+import com.chaskifood.app.ui.theme.ChaskiStatusRejectedFg
+import com.chaskifood.app.ui.theme.ChaskiStatusSuspendedBg
+import com.chaskifood.app.ui.theme.ChaskiStatusSuspendedFg
+import com.chaskifood.app.ui.theme.ChaskiTextMuted
+import com.chaskifood.app.ui.theme.ChaskiTextPrimary
 
 @Composable
 fun BusinessStatusScreen(
@@ -68,18 +84,18 @@ fun BusinessStatusScreen(
                 .padding(horizontal = ChaskiDimens.ScreenPadding),
         ) {
             Text(
-                text = "Estado del Negocio",
+                text = stringResource(R.string.business_status_title),
                 fontSize = 28.sp,
                 fontWeight = FontWeight.Bold,
-                color = Color(0xFF0D0D0D),
+                color = ChaskiTextPrimary,
             )
 
             Spacer(Modifier.height(ChaskiDimens.SpacingXs))
 
             Text(
-                text = "Consulta la información y el estado de habilitación de tu negocio.",
+                text = stringResource(R.string.business_status_subtitle),
                 fontSize = 14.sp,
-                color = Color(0xFF757575),
+                color = ChaskiTextMuted,
             )
 
             Spacer(Modifier.height(ChaskiDimens.SpacingXl))
@@ -87,39 +103,39 @@ fun BusinessStatusScreen(
             if (businessResult == null) {
                 CircularProgressIndicator(
                     modifier = Modifier.align(Alignment.CenterHorizontally),
-                    color = Color(0xFF388E3C),
+                    color = ChaskiStatusApprovedFg,
                 )
             } else if (businessResult is ApiResult.Success) {
                 val request = (businessResult as ApiResult.Success).data
 
                 if (request == null) {
                     Card(
-                        colors = CardDefaults.cardColors(containerColor = Color(0xFFE3F2FD)),
+                        colors = CardDefaults.cardColors(containerColor = ChaskiAdminCardBg),
                         modifier = Modifier.fillMaxWidth(),
                     ) {
                         Column(modifier = Modifier.padding(ChaskiDimens.SpacingLg)) {
                             Icon(
                                 imageVector = Icons.Filled.Info,
                                 contentDescription = null,
-                                tint = Color(0xFF1976D2),
+                                tint = ChaskiAdminAccent,
                                 modifier = Modifier.size(32.dp),
                             )
                             Spacer(Modifier.height(ChaskiDimens.SpacingSm))
                             Text(
-                                text = "Aún no has registrado un negocio",
+                                text = stringResource(R.string.no_business_registered),
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 18.sp,
-                                color = Color(0xFF0D47A1),
+                                color = ChaskiAdminAccent,
                             )
                             Spacer(Modifier.height(ChaskiDimens.SpacingXs))
                             Text(
-                                text = "Envía la información de tu negocio para solicitar su revisión y habilitación comercial en Chaski Food.",
+                                text = stringResource(R.string.no_business_description),
                                 fontSize = 14.sp,
-                                color = Color(0xFF1565C0),
+                                color = ChaskiAdminAccent,
                             )
                             Spacer(Modifier.height(ChaskiDimens.SpacingLg))
                             AuthSubmitButton(
-                                text = "SOLICITAR HABILITACIÓN DE NEGOCIO",
+                                text = stringResource(R.string.submit_business_request),
                                 onClick = onRegisterNew,
                             )
                         }

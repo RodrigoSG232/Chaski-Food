@@ -41,12 +41,18 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.chaskifood.app.R
+import com.chaskifood.app.ui.theme.ChaskiAdminAccent
 import com.chaskifood.app.ui.theme.ChaskiBackground
 import com.chaskifood.app.ui.theme.ChaskiDimens
+import com.chaskifood.app.ui.theme.ChaskiTextDisabled
+import com.chaskifood.app.ui.theme.ChaskiTextMuted
+import com.chaskifood.app.ui.theme.ChaskiTextPrimary
 
 @Composable
 fun AccountScreen(
@@ -76,63 +82,63 @@ fun AccountScreen(
         Spacer(Modifier.height(ChaskiDimens.SpacingLg))
 
         Text(
-            text = "Cuenta",
+            text = stringResource(R.string.account_title),
             fontSize = 28.sp,
             fontWeight = FontWeight.Bold,
-            color = Color(0xFF0D0D0D),
+            color = ChaskiTextPrimary,
         )
 
         Spacer(Modifier.height(ChaskiDimens.SpacingXs))
 
         Text(
-            text = "Actualiza los datos de tu cuenta como notificaciones, pagos, perfil, etc.",
+            text = stringResource(R.string.account_subtitle),
             fontSize = 14.sp,
             fontWeight = FontWeight.Normal,
-            color = Color(0xFF757575),
+            color = ChaskiTextMuted,
             lineHeight = 20.sp,
         )
 
         Spacer(Modifier.height(ChaskiDimens.SpacingXl))
 
         // SECCIÓN PERFIL
-        SectionHeader(title = "PERFIL")
+        SectionHeader(title = stringResource(R.string.section_profile))
 
         AccountMenuItem(
             icon = Icons.Filled.Person,
-            title = "Información del perfil",
-            subtitle = currentUser?.displayName ?: "Cambia la información de tu cuenta",
+            title = stringResource(R.string.profile_info_title),
+            subtitle = currentUser?.displayName ?: stringResource(R.string.profile_info_subtitle),
             onClick = onOpenProfileInfo,
         )
 
         AccountMenuItem(
             icon = Icons.Filled.Store,
-            title = "Registrar o Administrar Negocio",
-            subtitle = "Solicita la habilitación comercial de tu negocio",
+            title = stringResource(R.string.business_register_title),
+            subtitle = stringResource(R.string.business_register_subtitle),
             onClick = onOpenBusiness,
         )
 
         if (currentUser?.isAdmin == true) {
             AccountMenuItem(
                 icon = Icons.Filled.AdminPanelSettings,
-                title = "Panel Admin Chaski: Evaluar Solicitudes",
-                subtitle = "Revisa, aprueba, observa o rechaza solicitudes de ingreso",
-                titleColor = Color(0xFF1565C0),
+                title = stringResource(R.string.admin_hu06_title),
+                subtitle = stringResource(R.string.admin_hu06_subtitle),
+                titleColor = ChaskiAdminAccent,
                 onClick = onOpenAdminReview,
             )
 
             AccountMenuItem(
                 icon = Icons.Filled.Storefront,
-                title = "Panel Admin Chaski: Supervisar Negocios",
-                subtitle = "Monitorea, suspende o reactiva la operación de negocios",
-                titleColor = Color(0xFF1565C0),
+                title = stringResource(R.string.admin_hu07_title),
+                subtitle = stringResource(R.string.admin_hu07_subtitle),
+                titleColor = ChaskiAdminAccent,
                 onClick = onOpenAdminSupervision,
             )
 
             AccountMenuItem(
                 icon = Icons.Filled.History,
-                title = "Panel Admin Chaski: Historial de Auditoría",
-                subtitle = "Registro cronológico inmutable de todas las acciones",
-                titleColor = Color(0xFF1565C0),
+                title = stringResource(R.string.admin_audit_title),
+                subtitle = stringResource(R.string.admin_audit_subtitle),
+                titleColor = ChaskiAdminAccent,
                 onClick = onOpenAdminAuditLog,
             )
         }

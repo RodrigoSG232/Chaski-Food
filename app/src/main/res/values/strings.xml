@@ -1,4 +1,74 @@
 <resources>
     <string name="app_name">Chaski Food</string>
     <string name="default_web_client_id" translatable="false">220568639274-3ocaifmrb36mllq82k4t6lahop6omu16.apps.googleusercontent.com</string>
+
+    <!-- Autenticación -->
+    <string name="sign_in_title">Iniciar sesión</string>
+    <string name="sign_in_subtitle">Ingresa tu correo y contraseña para continuar</string>
+    <string name="sign_up_title">Crear cuenta</string>
+    <string name="sign_up_subtitle">Ingresa tus datos para registrarte en Chaski Food</string>
+    <string name="email_label">Correo electrónico</string>
+    <string name="password_label">Contraseña</string>
+    <string name="forgot_password">¿Olvidaste tu contraseña?</string>
+    <string name="sign_in_button">INICIAR SESIÓN</string>
+    <string name="sign_up_button">REGISTRARSE</string>
+    <string name="or_connect_with">O conecta con</string>
+    <string name="no_account_prompt">¿No tienes una cuenta?</string>
+    <string name="sign_up_link">Regístrate</string>
+    <string name="has_account_prompt">¿Ya tienes una cuenta?</string>
+    <string name="sign_in_link">Inicia sesión</string>
+
+    <!-- Cuenta y Perfil -->
+    <string name="account_title">Cuenta</string>
+    <string name="account_subtitle">Actualiza los datos de tu cuenta como notificaciones, pagos, perfil, etc.</string>
+    <string name="section_profile">PERFIL</string>
+    <string name="profile_info_title">Información del perfil</string>
+    <string name="profile_info_subtitle">Cambia la información de tu cuenta</string>
+    <string name="business_register_title">Registrar o Administrar Negocio</string>
+    <string name="business_register_subtitle">Solicita la habilitación comercial de tu negocio</string>
+    <string name="admin_hu06_title">Panel Admin Chaski: Evaluar Solicitudes (HU06)</string>
+    <string name="admin_hu06_subtitle">Revisa, aprueba, observa o rechaza solicitudes de ingreso</string>
+    <string name="admin_hu07_title">Panel Admin Chaski: Supervisar Negocios (HU07)</string>
+    <string name="admin_hu07_subtitle">Monitorea, suspende o reactiva la operación de negocios</string>
+    <string name="admin_audit_title">Panel Admin Chaski: Historial de Auditoría</string>
+    <string name="admin_audit_subtitle">Registro cronológico inmutable de todas las acciones</string>
+    <string name="security_title">Seguridad</string>
+    <string name="security_subtitle">Cambia los detalles de tu contraseña</string>
+    <string name="payment_methods_title">Métodos de pago</string>
+    <string name="payment_methods_subtitle">Agrega tus tarjetas de crédito y débito</string>
+    <string name="location_title">Ubicación</string>
+    <string name="location_subtitle">Gestiona tus direcciones de entrega</string>
+    <string name="section_notifications">NOTIFICACIONES</string>
+    <string name="section_more">MÁS</string>
+    <string name="sign_out_title">Cerrar sesión</string>
+    <string name="sign_out_subtitle">Cierra la sesión actual de tu cuenta</string>
+
+    <!-- Negocio (HU05) -->
+    <string name="register_business_screen_title">Registro de Negocio</string>
+    <string name="register_business_screen_subtitle">Completa el formulario para solicitar la habilitación comercial de tu negocio en Chaski Food.</string>
+    <string name="business_name_label">Nombre o Razón Social del Negocio *</string>
+    <string name="ruc_label">RUC (11 dígitos) *</string>
+    <string name="legal_address_label">Dirección Legal *</string>
+    <string name="phone_label">Teléfono de Contacto *</string>
+    <string name="business_email_label">Correo Comercial *</string>
+    <string name="category_label">Categoría *</string>
+    <string name="submit_business_request">SOLICITAR HABILITACIÓN</string>
+    <string name="business_status_title">Estado del Negocio</string>
+    <string name="business_status_subtitle">Consulta la información y el estado de habilitación de tu negocio.</string>
+    <string name="no_business_registered">Aún no has registrado un negocio</string>
+    <string name="no_business_description">Envía la información de tu negocio para solicitar su revisión y habilitación comercial en Chaski Food.</string>
+
+    <!-- Paneles de Administración Chaski (HU06, HU07, Audit Log) -->
+    <string name="admin_review_title">Panel Admin Chaski</string>
+    <string name="admin_review_subtitle">Revisa y evalúa las solicitudes de incorporación de negocios en Chaski Food.</string>
+    <string name="admin_supervision_title">Supervisión de Negocios</string>
+    <string name="admin_supervision_subtitle">Controla quién puede operar en la plataforma. Suspende o reactiva negocios según corresponda.</string>
+    <string name="admin_audit_log_title">Historial de Auditoría</string>
+    <string name="admin_audit_log_subtitle">Registro cronológico inmutable de todas las acciones administrativas tomadas en Chaski Food.</string>
+    <string name="btn_approve">APROBAR</string>
+    <string name="btn_observe">OBSERVAR</string>
+    <string name="btn_reject">RECHAZAR</string>
+    <string name="btn_suspend">SUSPENDER NEGOCIO</string>
+    <string name="btn_reactivate">REACTIVAR NEGOCIO</string>
+    <string name="btn_cancel">CANCELAR</string>
 </resources>

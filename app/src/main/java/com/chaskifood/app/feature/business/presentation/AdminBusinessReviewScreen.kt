@@ -38,10 +38,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.chaskifood.app.R
 import com.chaskifood.app.core.common.ApiResult
 import com.chaskifood.app.core.common.UiState
 import com.chaskifood.app.feature.auth.presentation.AuthAppBar
@@ -49,6 +51,18 @@ import com.chaskifood.app.feature.business.domain.BusinessRequest
 import com.chaskifood.app.feature.business.domain.BusinessStatus
 import com.chaskifood.app.ui.theme.ChaskiBackground
 import com.chaskifood.app.ui.theme.ChaskiDimens
+import com.chaskifood.app.ui.theme.ChaskiStatusApprovedBg
+import com.chaskifood.app.ui.theme.ChaskiStatusApprovedFg
+import com.chaskifood.app.ui.theme.ChaskiStatusObservedBg
+import com.chaskifood.app.ui.theme.ChaskiStatusObservedFg
+import com.chaskifood.app.ui.theme.ChaskiStatusPendingBg
+import com.chaskifood.app.ui.theme.ChaskiStatusPendingFg
+import com.chaskifood.app.ui.theme.ChaskiStatusRejectedBg
+import com.chaskifood.app.ui.theme.ChaskiStatusRejectedFg
+import com.chaskifood.app.ui.theme.ChaskiStatusSuspendedBg
+import com.chaskifood.app.ui.theme.ChaskiStatusSuspendedFg
+import com.chaskifood.app.ui.theme.ChaskiTextMuted
+import com.chaskifood.app.ui.theme.ChaskiTextPrimary
 
 @Composable
 fun AdminBusinessReviewScreen(
@@ -78,18 +92,18 @@ fun AdminBusinessReviewScreen(
                 .padding(horizontal = ChaskiDimens.ScreenPadding),
         ) {
             Text(
-                text = "Panel Admin Chaski",
+                text = stringResource(R.string.admin_review_title),
                 fontSize = 28.sp,
                 fontWeight = FontWeight.Bold,
-                color = Color(0xFF0D0D0D),
+                color = ChaskiTextPrimary,
             )
 
             Spacer(Modifier.height(ChaskiDimens.SpacingXs))
 
             Text(
-                text = "Revisa y evalúa las solicitudes de incorporación de negocios en Chaski Food.",
+                text = stringResource(R.string.admin_review_subtitle),
                 fontSize = 14.sp,
-                color = Color(0xFF757575),
+                color = ChaskiTextMuted,
             )
 
             Spacer(Modifier.height(ChaskiDimens.SpacingMd))
@@ -376,11 +390,11 @@ private fun AdminBusinessCard(
 @Composable
 private fun StatusBadge(status: BusinessStatus) {
     val (bg, fg, label) = when (status) {
-        BusinessStatus.PENDING_REVIEW -> Triple(Color(0xFFFFF8E1), Color(0xFFF57F17), "PENDIENTE")
-        BusinessStatus.OBSERVED -> Triple(Color(0xFFFFE0B2), Color(0xFFE65100), "OBSERVADA")
-        BusinessStatus.APPROVED -> Triple(Color(0xE8E8F5E9), Color(0xFF2E7D32), "APROBADA")
-        BusinessStatus.REJECTED -> Triple(Color(0xFFFFEBEE), Color(0xFFC62828), "RECHAZADA")
-        BusinessStatus.SUSPENDED -> Triple(Color(0xFFEDE7F6), Color(0xFF4A148C), "SUSPENDIDO")
+        BusinessStatus.PENDING_REVIEW -> Triple(ChaskiStatusPendingBg, ChaskiStatusPendingFg, "PENDIENTE")
+        BusinessStatus.OBSERVED -> Triple(ChaskiStatusObservedBg, ChaskiStatusObservedFg, "OBSERVADA")
+        BusinessStatus.APPROVED -> Triple(ChaskiStatusApprovedBg, ChaskiStatusApprovedFg, "APROBADA")
+        BusinessStatus.REJECTED -> Triple(ChaskiStatusRejectedBg, ChaskiStatusRejectedFg, "RECHAZADA")
+        BusinessStatus.SUSPENDED -> Triple(ChaskiStatusSuspendedBg, ChaskiStatusSuspendedFg, "SUSPENDIDO")
     }
 
     Surface(

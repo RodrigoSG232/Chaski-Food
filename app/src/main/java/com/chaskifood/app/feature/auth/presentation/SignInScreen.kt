@@ -33,6 +33,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
+import com.chaskifood.app.R
+import com.chaskifood.app.ui.theme.ChaskiTextDisabled
+import com.chaskifood.app.ui.theme.ChaskiTextSecondary
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -73,9 +77,9 @@ fun SignInScreen(
         AuthLogoBar()
 
         AuthTitleBanner(
-            title = "Inicia sesión, nosotros cocinamos por ti",
-            text = "¿No tienes cuenta?",
-            linkText = "Regístrate",
+            title = stringResource(R.string.sign_in_title),
+            text = stringResource(R.string.no_account_prompt),
+            linkText = stringResource(R.string.sign_up_link),
             onLinkClick = onGoSignUp,
             titleWeight = FontWeight.Normal,
         )
@@ -90,14 +94,14 @@ fun SignInScreen(
             AuthTextField(
                 value = email,
                 onValueChange = { viewModel.email.value = it },
-                label = "Correo",
+                label = stringResource(R.string.email_label),
                 placeholder = "laura@correo.com",
                 trailingIcon = {
                     Icon(
                         imageVector = Icons.Filled.Mail,
                         contentDescription = null,
                         modifier = Modifier.size(20.dp),
-                        tint = Color(0xFF9E9E9E),
+                        tint = ChaskiTextDisabled,
                     )
                 },
                 keyboardOptions = KeyboardOptions(
@@ -111,7 +115,7 @@ fun SignInScreen(
             AuthTextField(
                 value = password,
                 onValueChange = { viewModel.password.value = it },
-                label = "Contraseña",
+                label = stringResource(R.string.password_label),
                 keyboardOptions = KeyboardOptions(
                     keyboardType = KeyboardType.Password,
                     imeAction = ImeAction.Done,
@@ -129,8 +133,8 @@ fun SignInScreen(
                             } else {
                                 Icons.Filled.Visibility
                             },
-                            contentDescription = if (showPassword) "Ocultar" else "Mostrar",
-                            tint = Color(0xFF9E9E9E),
+                            contentDescription = null,
+                            tint = ChaskiTextDisabled,
                         )
                     }
                 },
@@ -140,14 +144,14 @@ fun SignInScreen(
                 modifier = Modifier.fillMaxWidth(),
                 contentAlignment = Alignment.CenterEnd,
             ) {
-                AuthTextLink(text = "¿Olvidaste tu contraseña?", onClick = onForgotPassword)
+                AuthTextLink(text = stringResource(R.string.forgot_password), onClick = onForgotPassword)
             }
 
             Spacer(Modifier.height(8.dp))
 
             if (uiState is UiState.Error) {
                 Text(
-                    text = (uiState as UiState.Error).message ?: "Error al iniciar sesión",
+                    text = (uiState as UiState.Error).message ?: "Error",
                     color = MaterialTheme.colorScheme.error,
                     style = MaterialTheme.typography.bodySmall,
                     modifier = Modifier.padding(bottom = 8.dp),
@@ -161,7 +165,7 @@ fun SignInScreen(
                 )
             } else {
                 AuthSubmitButton(
-                    text = "INICIAR SESIÓN",
+                    text = stringResource(R.string.sign_in_button),
                     onClick = { viewModel.login(onSuccess = { hasPhone -> onSignIn(hasPhone) }) },
                 )
             }
@@ -169,11 +173,11 @@ fun SignInScreen(
             Spacer(Modifier.height(32.dp))
 
             Text(
-                text = "o conéctate con",
+                text = stringResource(R.string.or_connect_with),
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Medium,
                 letterSpacing = 0.5.sp,
-                color = Color(0xFF424242),
+                color = ChaskiTextSecondary,
                 modifier = Modifier.fillMaxWidth(),
                 textAlign = TextAlign.Center,
             )
