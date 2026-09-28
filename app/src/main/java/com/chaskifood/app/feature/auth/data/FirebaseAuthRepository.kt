@@ -185,10 +185,8 @@ class FirebaseAuthRepository @Inject constructor(
     }
 
     companion object {
-        // Lista de correos con rol de Administrador Chaski delegado
         private val DELEGATED_ADMIN_EMAILS = setOf(
             "chaskifood2@gmail.com",
-            // Agrega aquí cualquier otro correo al que desees otorgar permisos de Administrador
         )
     }
 
