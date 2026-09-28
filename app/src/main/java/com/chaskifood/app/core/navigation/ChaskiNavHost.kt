@@ -23,6 +23,8 @@ import com.chaskifood.app.feature.auth.presentation.SignInScreen
 import com.chaskifood.app.feature.auth.presentation.SignUpPhoneScreen
 import com.chaskifood.app.feature.auth.presentation.SignUpScreen
 import com.chaskifood.app.feature.auth.presentation.VerifyPhoneScreen
+import com.chaskifood.app.feature.business.presentation.BusinessStatusScreen
+import com.chaskifood.app.feature.business.presentation.RegisterBusinessScreen
 import com.chaskifood.app.feature.cart.presentation.YourOrderScreen
 import com.chaskifood.app.feature.checkout.presentation.AddCardScreen
 import com.chaskifood.app.feature.checkout.presentation.CheckoutScreen
@@ -238,11 +240,35 @@ fun ChaskiNavHost() {
                 onOpenSocialAccounts = {
                     navController.navigate(ChaskiDestinations.SOCIAL_ACCOUNTS)
                 },
+                onOpenBusiness = {
+                    navController.navigate(ChaskiDestinations.BUSINESS_STATUS)
+                },
                 onSignOut = {
                     navController.navigate(ChaskiDestinations.SIGN_IN) {
                         popUpTo(0) { inclusive = true }
                     }
                 },
+            )
+        }
+        composable(ChaskiDestinations.REGISTER_BUSINESS) {
+            RegisterBusinessScreen(
+                onSubmitted = {
+                    navController.navigate(ChaskiDestinations.BUSINESS_STATUS) {
+                        popUpTo(ChaskiDestinations.REGISTER_BUSINESS) { inclusive = true }
+                    }
+                },
+                onBack = { navController.popBackStack() },
+            )
+        }
+        composable(ChaskiDestinations.BUSINESS_STATUS) {
+            BusinessStatusScreen(
+                onRegisterNew = {
+                    navController.navigate(ChaskiDestinations.REGISTER_BUSINESS)
+                },
+                onEditAndResubmit = {
+                    navController.navigate(ChaskiDestinations.REGISTER_BUSINESS)
+                },
+                onBack = { navController.popBackStack() },
             )
         }
         composable(ChaskiDestinations.PROFILE_INFO) {

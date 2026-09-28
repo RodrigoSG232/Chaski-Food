@@ -27,6 +27,7 @@ import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.Store
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -52,6 +53,7 @@ fun AccountScreen(
     onOpenLocations: () -> Unit,
     onOpenSocialAccounts: () -> Unit,
     onOpenReferral: () -> Unit,
+    onOpenBusiness: () -> Unit = {},
     onSignOut: () -> Unit,
     modifier: Modifier = Modifier,
     viewModel: ProfileViewModel = hiltViewModel(),
@@ -94,6 +96,13 @@ fun AccountScreen(
             title = "Información del perfil",
             subtitle = currentUser?.displayName ?: "Cambia la información de tu cuenta",
             onClick = onOpenProfileInfo,
+        )
+
+        AccountMenuItem(
+            icon = Icons.Filled.Store,
+            title = "Registrar o Administrar Negocio",
+            subtitle = "Solicita la habilitación comercial de tu negocio",
+            onClick = onOpenBusiness,
         )
 
         AccountMenuItem(

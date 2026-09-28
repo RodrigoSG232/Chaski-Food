@@ -40,6 +40,8 @@ object ChaskiDestinations {
     const val ADD_LOCATION = "add_location"
     const val LOCATIONS = "locations"
     const val PROFILE_INFO = "profile_info"
+    const val REGISTER_BUSINESS = "register_business"
+    const val BUSINESS_STATUS = "business_status"
 
     const val FOODS_PER_CATEGORY = "foods/{category}"
     const val FILTER = "filter"
