@@ -524,12 +524,14 @@ private fun StoreDialog(
                     value = name,
                     onValueChange = { name = it },
                     label = { Text("Nombre del Local") },
+                    placeholder = { Text("Ej. Local Central - Miraflores") },
                     modifier = Modifier.fillMaxWidth(),
                 )
                 OutlinedTextField(
                     value = address,
                     onValueChange = { address = it },
                     label = { Text("Dirección") },
+                    placeholder = { Text("Ej. Av. Larco 123, Lima") },
                     modifier = Modifier.fillMaxWidth(),
                 )
                 Row(
@@ -540,19 +542,29 @@ private fun StoreDialog(
                         value = latitude,
                         onValueChange = { latitude = it },
                         label = { Text("Latitud") },
+                        placeholder = { Text("Ej. -12.046374") },
                         modifier = Modifier.weight(1f),
                     )
                     OutlinedTextField(
                         value = longitude,
                         onValueChange = { longitude = it },
                         label = { Text("Longitud") },
+                        placeholder = { Text("Ej. -77.042793") },
                         modifier = Modifier.weight(1f),
                     )
                 }
+                Text(
+                    text = "💡 Referencia: Ingresa las coordenadas GPS en formato decimal (Ejemplo: Latitud: -12.046374, Longitud: -77.042793). Puedes obtenerlas directamente desde Google Maps.",
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.primary,
+                    lineHeight = 16.sp,
+                    modifier = Modifier.padding(vertical = 2.dp),
+                )
                 OutlinedTextField(
                     value = phone,
                     onValueChange = { phone = it },
                     label = { Text("Teléfono de Contacto") },
+                    placeholder = { Text("Ej. +51 987654321") },
                     modifier = Modifier.fillMaxWidth(),
                 )
             }
@@ -610,18 +622,21 @@ private fun ManagerDialog(
                     value = email,
                     onValueChange = { email = it },
                     label = { Text("Correo del Responsable") },
+                    placeholder = { Text("Ej. responsable@negocio.com") },
                     modifier = Modifier.fillMaxWidth(),
                 )
                 OutlinedTextField(
                     value = fullName,
                     onValueChange = { fullName = it },
                     label = { Text("Nombre Completo") },
+                    placeholder = { Text("Ej. Carlos Mendoza") },
                     modifier = Modifier.fillMaxWidth(),
                 )
                 OutlinedTextField(
                     value = phone,
                     onValueChange = { phone = it },
                     label = { Text("Teléfono (Opcional)") },
+                    placeholder = { Text("Ej. +51 912345678") },
                     modifier = Modifier.fillMaxWidth(),
                 )
 
