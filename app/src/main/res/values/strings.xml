@@ -61,6 +61,9 @@
     <string name="no_business_registered">Aún no has registrado un negocio</string>
     <string name="no_business_description">Envía la información de tu negocio para solicitar su revisión y habilitación comercial en Chaski Food.</string>
 
+    <!-- Carrito -->
+    <string name="your_order_title">Tu pedido</string>
+
     <!-- Paneles de Administración Chaski (HU06, HU07, Audit Log) -->
     <string name="admin_review_title">Panel Admin Chaski</string>
     <string name="admin_review_subtitle">Revisa y evalúa las solicitudes de incorporación de negocios en Chaski Food.</string>

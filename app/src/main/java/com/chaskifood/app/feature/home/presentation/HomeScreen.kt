@@ -27,6 +27,7 @@ import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material.icons.filled.AddPhotoAlternate
 import androidx.compose.material.icons.filled.DeliveryDining
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.outlined.ShoppingBag
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -120,6 +121,7 @@ fun HomeScreen(
     onSeeAll: () -> Unit = {},
     onRestaurantClick: (String) -> Unit = {},
     onOpenLocations: () -> Unit = {},
+    onOpenYourOrder: () -> Unit = {},
 ) {
     LazyColumn(
         modifier = modifier
@@ -128,8 +130,12 @@ fun HomeScreen(
         contentPadding = PaddingValues(bottom = ChaskiDimens.SpacingXxl),
     ) {
         item(key = "appbar") {
-            HomeAppBar(onLocationClick = onOpenLocations,
-                deliveryAddress = deliveryAddress, unavailable = deliveryAddressUnavailable)
+            HomeAppBar(
+                onLocationClick = onOpenLocations,
+                onCartClick = onOpenYourOrder,
+                deliveryAddress = deliveryAddress,
+                unavailable = deliveryAddressUnavailable,
+            )
         }
         if (deliveryNotice != null) item(key = "delivery-notice") {
             Column(Modifier.fillMaxWidth().padding(16.dp).semantics { liveRegion = LiveRegionMode.Polite }) {
@@ -204,6 +210,7 @@ fun HomeScreen(
 private fun HomeAppBar(
     modifier: Modifier = Modifier,
     onLocationClick: () -> Unit = {},
+    onCartClick: () -> Unit = {},
     deliveryAddress: String? = null,
     unavailable: Boolean = false,
 ) {
@@ -249,28 +256,35 @@ private fun HomeAppBar(
 
         Spacer(Modifier.width(16.dp))
 
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(
-                imageVector = HomeIcons.ShoppingBasket,
-                contentDescription = "Carrito",
-                tint = Color(0xFF757575),
-                modifier = Modifier.size(24.dp),
-            )
-            Spacer(Modifier.width(ChaskiDimens.SpacingXs))
-            Box(
-                modifier = Modifier
-                    .size(20.dp)
-                    .clip(CircleShape)
-                    .background(ChaskiSecondary),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    text = "5",
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Medium,
-                    letterSpacing = 1.sp,
-                    color = ChaskiOnSecondary,
+        Box(
+            modifier = Modifier
+                .clip(RoundedCornerShape(12.dp))
+                .clickable(onClick = onCartClick)
+                .padding(6.dp),
+        ) {
+            Box(contentAlignment = Alignment.TopEnd) {
+                Icon(
+                    imageVector = Icons.Outlined.ShoppingBag,
+                    contentDescription = stringResource(R.string.your_order_title),
+                    tint = ChaskiTextPrimary,
+                    modifier = Modifier
+                        .padding(top = 4.dp, end = 4.dp)
+                        .size(26.dp),
                 )
+                Box(
+                    modifier = Modifier
+                        .size(18.dp)
+                        .clip(CircleShape)
+                        .background(ChaskiPrimary),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        text = "3",
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White,
+                    )
+                }
             }
         }
     }

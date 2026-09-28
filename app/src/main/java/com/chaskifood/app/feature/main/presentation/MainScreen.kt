@@ -62,6 +62,7 @@ fun MainScreen(
                     onSeeAll = onSeeAllRestaurants,
                     onRestaurantClick = onRestaurantClick,
                     onOpenLocations = onOpenLocations,
+                    onOpenYourOrder = onOpenYourOrder,
                 )
             }
             composable(ChaskiTab.SEARCH.route) {
