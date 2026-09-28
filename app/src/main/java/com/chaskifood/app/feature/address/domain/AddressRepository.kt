@@ -5,18 +5,19 @@ import kotlinx.coroutines.flow.Flow
 
 /**
  * Contrato para la cuenta autenticada; la UI no suministra un UID propietario.
- * Aún sin implementación. Data deberá capturar/revalidar la sesión por operación,
+ * Data debe capturar/revalidar la sesión por operación,
  * cancelar listeners al cambiar de cuenta y no entregar respuestas de la anterior.
  * La presentación también debe descartar borradores/resultados al cambiar sesión.
- * Los errores son Failure, no listas vacías. Las cancelaciones no se absorben.
+ * Lecturas fallidas emiten Error, escrituras fallidas devuelven Failure; nunca vacío ficticio.
+ * Las cancelaciones no se absorben.
  */
 interface AddressRepository {
     /**
      * Observa direcciones, predeterminada remota y selección local por UID.
-     * Success requiere datos confirmados; no presentar caché/escrituras pendientes
-     * como confirmación remota. Sin sesión, emitir Failure y no mantener datos visibles.
+     * Ready requiere datos confirmados; no presentar caché/escrituras pendientes
+     * como confirmación remota. Loading/SignedOut descartan datos de la cuenta anterior.
      */
-    fun observeAddressBook(): Flow<ApiResult<AddressBook>>
+    fun observeAddressBook(): Flow<AddressBookState>
 
     /**
      * Validar/normalizar el borrador antes de escribir. operationId es un identificador

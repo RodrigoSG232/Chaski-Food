@@ -68,3 +68,11 @@ data class AddressBook(
     val defaultAddressId: String?,
     val selectedAddressId: String?,
 )
+
+/** Cambiar de cuenta invalida inmediatamente la lectura anterior, no produce un vacío ficticio. */
+sealed interface AddressBookState {
+    data object SignedOut : AddressBookState
+    data class Loading(val ownerUid: String) : AddressBookState
+    data class Ready(val book: AddressBook) : AddressBookState
+    data class Error(val ownerUid: String, val message: String) : AddressBookState
+}
