@@ -10,4 +10,6 @@ interface StoreRepository {
     fun getManagersByBusiness(businessId: String): Flow<ApiResult<List<StoreManager>>>
     suspend fun assignManager(manager: StoreManager): ApiResult<StoreManager>
     fun getStoresForManager(managerEmailOrUid: String): Flow<ApiResult<List<BusinessStore>>>
+    suspend fun updateOperationalStatus(storeId: String, status: OperationalStatus, pauseReason: String? = null): ApiResult<Unit>
+    suspend fun updateOperatingHours(storeId: String, hours: List<DayOperatingHours>): ApiResult<Unit>
 }
