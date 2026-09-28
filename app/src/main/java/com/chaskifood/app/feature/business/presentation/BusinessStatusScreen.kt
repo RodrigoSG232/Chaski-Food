@@ -62,6 +62,7 @@ import com.chaskifood.app.ui.theme.ChaskiTextPrimary
 fun BusinessStatusScreen(
     onRegisterNew: () -> Unit,
     onEditAndResubmit: () -> Unit,
+    onManageStores: () -> Unit = {},
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
     viewModel: BusinessViewModel = hiltViewModel(),
@@ -242,6 +243,11 @@ fun BusinessStatusScreen(
                                         text = "¡Tu negocio está habilitado para vender en Chaski Food!",
                                         fontSize = 14.sp,
                                         color = Color(0xFF1B5E20),
+                                    )
+                                    Spacer(Modifier.height(ChaskiDimens.SpacingLg))
+                                    AuthSubmitButton(
+                                        text = "GESTIONAR LOCALES Y RESPONSABLES",
+                                        onClick = onManageStores,
                                     )
                                 }
                             }
