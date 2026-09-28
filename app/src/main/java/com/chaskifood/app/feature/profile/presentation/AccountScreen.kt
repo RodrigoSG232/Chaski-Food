@@ -28,6 +28,7 @@ import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.Place
+import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Store
 import androidx.compose.material.icons.filled.Storefront
@@ -65,6 +66,7 @@ fun AccountScreen(
     onOpenSocialAccounts: () -> Unit,
     onOpenReferral: () -> Unit,
     onOpenBusiness: () -> Unit = {},
+    onOpenStoreOperations: () -> Unit = {},
     onOpenAdminReview: () -> Unit = {},
     onOpenAdminSupervision: () -> Unit = {},
     onOpenAdminAuditLog: () -> Unit = {},
@@ -116,6 +118,13 @@ fun AccountScreen(
             title = stringResource(R.string.business_register_title),
             subtitle = stringResource(R.string.business_register_subtitle),
             onClick = onOpenBusiness,
+        )
+
+        AccountMenuItem(
+            icon = Icons.Filled.Schedule,
+            title = "Operaciones de Locales",
+            subtitle = "Control de disponibilidad y horarios de atención",
+            onClick = onOpenStoreOperations,
         )
 
         if (currentUser?.isAdmin == true) {
