@@ -15,6 +15,7 @@ import com.google.firebase.auth.GoogleAuthProvider
 import com.google.firebase.auth.PhoneAuthCredential
 import com.google.firebase.auth.PhoneAuthOptions
 import com.google.firebase.auth.PhoneAuthProvider
+import com.google.firebase.auth.userProfileChangeRequest
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
@@ -158,6 +159,23 @@ class FirebaseAuthRepository @Inject constructor(
             ApiResult.Failure("No existe ninguna cuenta registrada con este correo electrónico.")
         } catch (e: Exception) {
             ApiResult.Failure(e.localizedMessage ?: "Error al enviar el correo de recuperación.", e)
+        }
+    }
+
+    override suspend fun updateProfile(displayName: String): ApiResult<Unit> {
+        return try {
+            val user = firebaseAuth.currentUser
+            if (user != null) {
+                val profileUpdates = userProfileChangeRequest {
+                    this.displayName = displayName
+                }
+                user.updateProfile(profileUpdates).await()
+                ApiResult.Success(Unit)
+            } else {
+                ApiResult.Failure("No hay una sesión de usuario activa.")
+            }
+        } catch (e: Exception) {
+            ApiResult.Failure(e.localizedMessage ?: "Error al actualizar el perfil.", e)
         }
     }
 

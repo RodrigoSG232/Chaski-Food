@@ -10,7 +10,7 @@ import androidx.navigation.compose.rememberNavController
 import com.chaskifood.app.core.navigation.ChaskiTab
 import com.chaskifood.app.feature.home.presentation.HomeScreen
 import com.chaskifood.app.feature.orders.presentation.OrdersScreen
-import com.chaskifood.app.feature.profile.presentation.ProfileSettingsScreen
+import com.chaskifood.app.feature.profile.presentation.AccountScreen
 import com.chaskifood.app.feature.search.presentation.SearchFoodScreen
 import com.chaskifood.app.ui.components.ChaskiBottomNav
 import com.chaskifood.app.ui.theme.ChaskiSurface
@@ -28,6 +28,9 @@ fun MainScreen(
     onOpenPaymentMethods: () -> Unit = {},
     onOpenLocations: () -> Unit = {},
     onOpenReferral: () -> Unit = {},
+    onOpenProfileInfo: () -> Unit = {},
+    onOpenSecurity: () -> Unit = {},
+    onOpenSocialAccounts: () -> Unit = {},
     onSignOut: () -> Unit = {},
 ) {
     val navController = rememberNavController()
@@ -63,9 +66,13 @@ fun MainScreen(
                 )
             }
             composable(ChaskiTab.ACCOUNT.route) {
-                ProfileSettingsScreen(
-                    onSave = onOpenPaymentMethods,
-                    onMore = onOpenReferral,
+                AccountScreen(
+                    onOpenProfileInfo = onOpenProfileInfo,
+                    onOpenSecurity = onOpenSecurity,
+                    onOpenPaymentMethods = onOpenPaymentMethods,
+                    onOpenLocations = onOpenLocations,
+                    onOpenSocialAccounts = onOpenSocialAccounts,
+                    onOpenReferral = onOpenReferral,
                     onSignOut = onSignOut,
                 )
             }

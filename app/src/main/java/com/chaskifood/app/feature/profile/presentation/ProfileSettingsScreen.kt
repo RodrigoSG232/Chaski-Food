@@ -16,6 +16,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -24,6 +26,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
@@ -36,6 +39,7 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.chaskifood.app.core.common.UiState
 import com.chaskifood.app.ui.theme.ChaskiBackground
 import com.chaskifood.app.ui.theme.ChaskiDimens
 import com.chaskifood.app.ui.theme.ChaskiPrimary
@@ -50,6 +54,7 @@ fun ProfileSettingsScreen(
     viewModel: ProfileViewModel = hiltViewModel(),
 ) {
     val currentUser by viewModel.currentUser.collectAsState()
+    val uiState by viewModel.uiState.collectAsState()
 
     var name by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
@@ -88,6 +93,7 @@ fun ProfileSettingsScreen(
             verticalArrangement = Arrangement.spacedBy(ChaskiDimens.SpacingXl),
         ) {
             Spacer(Modifier.height(ChaskiDimens.SpacingSm))
+
             ProfileField(
                 label = "Nombre completo",
                 value = name,
@@ -95,36 +101,55 @@ fun ProfileSettingsScreen(
                 placeholder = "Tu nombre",
             )
             ProfileField(
-                label = "Correo electrónico",
+                label = "Correo electrónico (Solo lectura)",
                 value = email,
-                onValueChange = { email = it },
+                onValueChange = {},
                 placeholder = "tu_correo@ejemplo.com",
+                readOnly = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
             )
             ProfileField(
-                label = "Número de teléfono",
+                label = "Número de teléfono (Verificado)",
                 value = phone,
-                onValueChange = { phone = it },
+                onValueChange = {},
                 placeholder = "+51 999 999 999",
+                readOnly = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
             )
 
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(ChaskiPrimary)
-                    .clickable(onClick = onSave)
-                    .padding(vertical = ChaskiDimens.SpacingLg, horizontal = 48.dp),
-                horizontalArrangement = Arrangement.Center,
-            ) {
+            if (uiState is UiState.Error) {
                 Text(
-                    text = "GUARDAR / SIGUIENTE",
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    letterSpacing = 0.84.sp,
-                    color = Color.White,
+                    text = (uiState as UiState.Error).message ?: "Error al guardar el perfil",
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodySmall,
                 )
+            }
+
+            if (uiState is UiState.Loading) {
+                CircularProgressIndicator(
+                    modifier = Modifier.align(Alignment.CenterHorizontally),
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            } else {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(ChaskiPrimary)
+                        .clickable {
+                            viewModel.updateProfile(name, onSuccess = onSave)
+                        }
+                        .padding(vertical = ChaskiDimens.SpacingLg, horizontal = 48.dp),
+                    horizontalArrangement = Arrangement.Center,
+                ) {
+                    Text(
+                        text = "GUARDAR CAMBIOS",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        letterSpacing = 0.84.sp,
+                        color = Color.White,
+                    )
+                }
             }
 
             Row(
@@ -159,6 +184,7 @@ private fun ProfileField(
     value: String,
     onValueChange: (String) -> Unit,
     placeholder: String,
+    readOnly: Boolean = false,
     keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
     password: Boolean = false,
 ) {
@@ -174,7 +200,7 @@ private fun ProfileField(
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(8.dp))
-                .background(Color(0xFFEEEEEE))
+                .background(if (readOnly) Color(0xFFE0E0E0) else Color(0xFFEEEEEE))
                 .padding(horizontal = ChaskiDimens.SpacingLg, vertical = 14.dp),
         ) {
             if (value.isEmpty()) {
@@ -188,14 +214,15 @@ private fun ProfileField(
             }
             BasicTextField(
                 value = value,
-                onValueChange = onValueChange,
+                onValueChange = if (readOnly) { {} } else onValueChange,
+                readOnly = readOnly,
                 singleLine = true,
                 cursorBrush = SolidColor(Color(0xFF616161)),
                 textStyle = TextStyle(
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Medium,
                     letterSpacing = 0.5.sp,
-                    color = Color(0xFF212121),
+                    color = if (readOnly) Color(0xFF757575) else Color(0xFF212121),
                 ),
                 keyboardOptions = keyboardOptions,
                 visualTransformation = if (password) {

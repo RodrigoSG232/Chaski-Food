@@ -2,10 +2,12 @@ package com.chaskifood.app.core.navigation
 
 import android.net.Uri
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -26,6 +28,7 @@ import com.chaskifood.app.feature.checkout.presentation.AddCardScreen
 import com.chaskifood.app.feature.checkout.presentation.CheckoutScreen
 import com.chaskifood.app.feature.checkout.presentation.PaymentScreen
 import com.chaskifood.app.feature.main.presentation.MainScreen
+import com.chaskifood.app.feature.profile.presentation.ProfileSettingsScreen
 import com.chaskifood.app.feature.menu.presentation.MenuToppingScreen
 import com.chaskifood.app.feature.onboarding.presentation.OnboardingScreen
 import com.chaskifood.app.feature.orders.presentation.OrderDeliveredScreen
@@ -43,6 +46,8 @@ import com.chaskifood.app.feature.restaurants.presentation.RestaurantsScreen
 import com.chaskifood.app.feature.search.presentation.FoodsPerCategoryScreen
 import com.chaskifood.app.feature.search.presentation.FilterScreen
 import com.chaskifood.app.feature.splash.presentation.SplashScreen
+import com.chaskifood.app.ui.components.ChaskiFlowBottomBar
+import com.chaskifood.app.ui.components.FlowTab
 
 @Composable
 fun ChaskiNavHost() {
@@ -224,12 +229,50 @@ fun ChaskiNavHost() {
                 onOpenReferral = {
                     navController.navigate(ChaskiDestinations.REFER_FRIEND)
                 },
+                onOpenProfileInfo = {
+                    navController.navigate(ChaskiDestinations.PROFILE_INFO)
+                },
+                onOpenSecurity = {
+                    navController.navigate(ChaskiDestinations.FORGOT_PASSWORD)
+                },
+                onOpenSocialAccounts = {
+                    navController.navigate(ChaskiDestinations.SOCIAL_ACCOUNTS)
+                },
                 onSignOut = {
                     navController.navigate(ChaskiDestinations.SIGN_IN) {
                         popUpTo(0) { inclusive = true }
                     }
                 },
             )
+        }
+        composable(ChaskiDestinations.PROFILE_INFO) {
+            Scaffold(
+                containerColor = Color.White,
+                bottomBar = {
+                    ChaskiFlowBottomBar(
+                        selected = FlowTab.Account,
+                        onTabClick = { tab ->
+                            if (tab == FlowTab.Home) {
+                                navController.popBackStack(
+                                    ChaskiDestinations.MAIN,
+                                    inclusive = false,
+                                )
+                            }
+                        },
+                    )
+                },
+            ) { innerPadding ->
+                ProfileSettingsScreen(
+                    onSave = { navController.popBackStack() },
+                    onBack = { navController.popBackStack() },
+                    onSignOut = {
+                        navController.navigate(ChaskiDestinations.SIGN_IN) {
+                            popUpTo(0) { inclusive = true }
+                        }
+                    },
+                    modifier = Modifier.padding(innerPadding),
+                )
+            }
         }
         composable(ChaskiDestinations.SEARCH_CATEGORIES) {
             androidx.compose.material3.Scaffold(

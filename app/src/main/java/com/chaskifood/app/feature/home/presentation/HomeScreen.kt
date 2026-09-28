@@ -63,6 +63,7 @@ private val HomeImgGray = Color(0xFFD9D9D9)
 private val HomeBigImgBg = Color(0xFFEEEEEE)
 
 private data class FeaturedCard(
+    val id: String,
     val name: String,
     val subtitle: String,
     val rating: String,
@@ -74,6 +75,7 @@ private data class FeaturedCard(
 private data class CategoryItem(val label: String, val imageRes: Int)
 
 private data class PopularCard(
+    val id: String,
     val name: String,
     val cuisines: List<String>,
     val rating: String,
@@ -82,9 +84,9 @@ private data class PopularCard(
 )
 
 private val featuredCards = listOf(
-    FeaturedCard("Hotel Athi 67", "Casa de verano, Miraflores", "4.2", "32 min", "Envío gratis", R.drawable.home_featured),
-    FeaturedCard("The white resort", "Av. Sumbulah", "4.0", "20 min", "$3", R.drawable.home_featured),
-    FeaturedCard("The white resort", "Av. Sumbulah", "4.0", "20 min", "$3", null),
+    FeaturedCard("feat-1", "Hotel Athi 67", "Casa de verano, Miraflores", "4.2", "32 min", "Envío gratis", R.drawable.home_featured),
+    FeaturedCard("feat-2", "The white resort", "Av. Sumbulah", "4.0", "20 min", "$3", R.drawable.home_featured),
+    FeaturedCard("feat-3", "The white resort 2", "Av. Sumbulah", "4.0", "20 min", "$3", null),
 )
 
 private val categories = listOf(
@@ -96,9 +98,9 @@ private val categories = listOf(
 )
 
 private val popularCards = listOf(
-    PopularCard("Silver Inn", listOf("Comida tailandesa"), "4.2", "32 min", "Gratis"),
-    PopularCard("Hillside Retreat", listOf("Comida tailandesa", "Americana", "Italiana"), "4.2", "22 min", "$5"),
-    PopularCard("Luxe Residences", listOf("Comida francesa", "Vegetariana", "Comida india"), "4.2", "22 min", "$5"),
+    PopularCard("pop-1", "Silver Inn", listOf("Comida tailandesa"), "4.2", "32 min", "Gratis"),
+    PopularCard("pop-2", "Hillside Retreat", listOf("Comida tailandesa", "Americana", "Italiana"), "4.2", "22 min", "$5"),
+    PopularCard("pop-3", "Luxe Residences", listOf("Comida francesa", "Vegetariana", "Comida india"), "4.2", "22 min", "$5"),
 )
 
 @Composable
@@ -135,7 +137,7 @@ fun HomeScreen(
                 ),
                 horizontalArrangement = Arrangement.spacedBy(ChaskiDimens.SpacingXl),
             ) {
-                items(featuredCards, key = { it.name + it.time }) { card ->
+                items(featuredCards, key = { it.id }) { card ->
                     FeaturedRestaurantCard(
                         card = card,
                         onClick = { onRestaurantClick(card.name) },
@@ -155,7 +157,7 @@ fun HomeScreen(
                 ),
                 horizontalArrangement = Arrangement.spacedBy(ChaskiDimens.SpacingMd),
             ) {
-                items(categories, key = { it.label + it.imageRes }) { category ->
+                items(categories, key = { it.label }) { category ->
                     FoodCategoryCard(category = category)
                 }
             }
@@ -164,7 +166,7 @@ fun HomeScreen(
         item(key = "popular-title") {
             SectionTitle(title = "Populares")
         }
-        items(popularCards, key = { it.name }) { card ->
+        items(popularCards, key = { it.id }) { card ->
             BigRestaurantCard(
                 card = card,
                 onClick = { onRestaurantClick(card.name) },

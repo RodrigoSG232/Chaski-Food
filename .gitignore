@@ -19,6 +19,9 @@ app/build
 .externalNativeBuild/
 .cxx/
 /captures
+Export/
+exports/
+export/
 
 # Android Studio / IntelliJ project files
 *.iml

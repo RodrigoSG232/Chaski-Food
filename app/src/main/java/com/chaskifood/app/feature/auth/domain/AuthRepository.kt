@@ -12,5 +12,6 @@ interface AuthRepository {
     suspend fun sendPhoneVerificationCode(activity: Activity, phoneNumber: String): ApiResult<String>
     suspend fun verifyPhoneCode(verificationId: String, code: String): ApiResult<Unit>
     suspend fun sendPasswordResetEmail(email: String): ApiResult<Unit>
+    suspend fun updateProfile(displayName: String): ApiResult<Unit>
     suspend fun signOut()
 }
