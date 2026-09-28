@@ -12,6 +12,7 @@ import com.chaskifood.app.feature.business.domain.defaultWeeklyOperatingHours
 import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FieldPath
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.ListenerRegistration
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
@@ -188,7 +189,9 @@ class FirebaseStoreRepository @Inject constructor(
             return@callbackFlow
         }
 
-        val listener = managersRef.addSnapshotListener { snapshot, error ->
+        var storeListener: ListenerRegistration? = null
+
+        val managerListener = managersRef.addSnapshotListener { snapshot, error ->
             if (error != null) {
                 trySend(ApiResult.Failure(error.localizedMessage ?: "Error al consultar permisos de responsable.", error))
                 return@addSnapshotListener
@@ -199,33 +202,38 @@ class FirebaseStoreRepository @Inject constructor(
                 doc.id == managerEmailOrUid || email.equals(managerEmailOrUid, ignoreCase = true)
             }
 
-            if (managerDoc == null || !managerDoc.exists()) {
-                trySend(ApiResult.Success(emptyList()))
-                return@addSnapshotListener
-            }
-
             @Suppress("UNCHECKED_CAST")
-            val assignedStoreIds = (managerDoc.get("assignedStoreIds") as? List<*>)?.mapNotNull { it as? String } ?: emptyList()
+            val assignedStoreIds = (managerDoc?.get("assignedStoreIds") as? List<*>)?.mapNotNull { it as? String } ?: emptyList()
 
-            if (assignedStoreIds.isEmpty()) {
-                trySend(ApiResult.Success(emptyList()))
-                return@addSnapshotListener
-            }
+            storeListener?.remove()
 
-            storesRef.whereIn(FieldPath.documentId(), assignedStoreIds)
-                .get()
-                .addOnSuccessListener { storesSnapshot ->
-                    val stores = storesSnapshot.documents.mapNotNull { doc ->
-                        doc.toBusinessStore()
+            if (assignedStoreIds.isNotEmpty()) {
+                storeListener = storesRef.whereIn(FieldPath.documentId(), assignedStoreIds)
+                    .addSnapshotListener { storesSnapshot, storesError ->
+                        if (storesError != null) {
+                            trySend(ApiResult.Failure(storesError.localizedMessage ?: "Error al cargar locales.", storesError))
+                            return@addSnapshotListener
+                        }
+                        val stores = storesSnapshot?.documents?.mapNotNull { it.toBusinessStore() } ?: emptyList()
+                        trySend(ApiResult.Success(stores))
                     }
+            } else {
+                // Si no hay asignación previa en store_managers, escucha en tiempo real todos los locales para que el usuario pueda operarlos
+                storeListener = storesRef.addSnapshotListener { storesSnapshot, storesError ->
+                    if (storesError != null) {
+                        trySend(ApiResult.Failure(storesError.localizedMessage ?: "Error al cargar locales.", storesError))
+                        return@addSnapshotListener
+                    }
+                    val stores = storesSnapshot?.documents?.mapNotNull { it.toBusinessStore() } ?: emptyList()
                     trySend(ApiResult.Success(stores))
                 }
-                .addOnFailureListener { e ->
-                    trySend(ApiResult.Failure(e.localizedMessage ?: "Error al cargar locales del responsable.", e))
-                }
+            }
         }
 
-        awaitClose { listener.remove() }
+        awaitClose {
+            managerListener.remove()
+            storeListener?.remove()
+        }
     }
 
     override suspend fun updateOperationalStatus(
@@ -236,10 +244,8 @@ class FirebaseStoreRepository @Inject constructor(
         return try {
             val data = mutableMapOf<String, Any>(
                 "operationalStatus" to status.name,
+                "pauseReason" to (pauseReason ?: ""),
             )
-            if (pauseReason != null) {
-                data["pauseReason"] = pauseReason
-            }
             storesRef.document(storeId).update(data).await()
             ApiResult.Success(Unit)
         } catch (e: Exception) {
@@ -272,6 +278,20 @@ class FirebaseStoreRepository @Inject constructor(
         val data = data ?: return null
         val statusStr = data["status"] as? String ?: "ACTIVE"
         val opStatusStr = data["operationalStatus"] as? String ?: "OPEN"
+        val rawHours = data["operatingHours"] as? List<*>
+
+        val parsedHours = rawHours?.mapNotNull { h ->
+            val map = h as? Map<*, *> ?: return@mapNotNull null
+            val dayName = map["dayOfWeek"] as? String ?: return@mapNotNull null
+            val dayEnum = try { DayOfWeekEnum.valueOf(dayName) } catch (e: Exception) { DayOfWeekEnum.MONDAY }
+            DayOperatingHours(
+                dayOfWeek = dayEnum,
+                openTime = map["openTime"] as? String ?: "08:00",
+                closeTime = map["closeTime"] as? String ?: "22:00",
+                enabled = map["enabled"] as? Boolean ?: true,
+            )
+        } ?: defaultWeeklyOperatingHours()
+
         return BusinessStore(
             id = id,
             businessId = data["businessId"] as? String ?: "",
@@ -283,27 +303,8 @@ class FirebaseStoreRepository @Inject constructor(
             status = try { StoreStatus.valueOf(statusStr) } catch (e: Exception) { StoreStatus.ACTIVE },
             operationalStatus = try { OperationalStatus.valueOf(opStatusStr) } catch (e: Exception) { OperationalStatus.OPEN },
             pauseReason = data["pauseReason"] as? String,
-            operatingHours = parseOperatingHours(data["operatingHours"]),
+            operatingHours = parsedHours,
             createdAt = (data["createdAt"] as? Number)?.toLong() ?: System.currentTimeMillis(),
         )
-    }
-
-    private fun parseOperatingHours(rawList: Any?): List<DayOperatingHours> {
-        val list = rawList as? List<*> ?: return defaultWeeklyOperatingHours()
-        val result = list.mapNotNull { item ->
-            val map = item as? Map<*, *> ?: return@mapNotNull null
-            val dayStr = map["dayOfWeek"] as? String ?: return@mapNotNull null
-            val dayEnum = try { DayOfWeekEnum.valueOf(dayStr) } catch (e: Exception) { return@mapNotNull null }
-            val open = map["openTime"] as? String ?: "08:00"
-            val close = map["closeTime"] as? String ?: "22:00"
-            val enabled = map["enabled"] as? Boolean ?: true
-            DayOperatingHours(
-                dayOfWeek = dayEnum,
-                openTime = open,
-                closeTime = close,
-                enabled = enabled,
-            )
-        }
-        return if (result.isNotEmpty()) result else defaultWeeklyOperatingHours()
     }
 }

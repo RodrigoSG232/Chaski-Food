@@ -1,6 +1,10 @@
 package com.chaskifood.app.feature.business.presentation
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import com.chaskifood.app.feature.address.domain.AddressCoordinates
+import com.chaskifood.app.feature.address.presentation.AddressMapRequest
+import com.chaskifood.app.feature.address.presentation.AddressMapRoute
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -9,8 +13,10 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
@@ -24,6 +30,7 @@ import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.Store
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
@@ -32,7 +39,9 @@ import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
@@ -51,6 +60,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.chaskifood.app.feature.auth.presentation.AuthAppBar
 import com.chaskifood.app.feature.auth.presentation.AuthSubmitButton
@@ -503,10 +514,48 @@ private fun StoreDialog(
 ) {
     var name by remember { mutableStateOf(storeToEdit?.name ?: "") }
     var address by remember { mutableStateOf(storeToEdit?.address ?: "") }
-    var latitude by remember { mutableStateOf(storeToEdit?.latitude?.toString() ?: "") }
-    var longitude by remember { mutableStateOf(storeToEdit?.longitude?.toString() ?: "") }
+    var latitude by remember { mutableStateOf(storeToEdit?.latitude?.takeIf { it != 0.0 }?.toString() ?: "") }
+    var longitude by remember { mutableStateOf(storeToEdit?.longitude?.takeIf { it != 0.0 }?.toString() ?: "") }
     var phone by remember { mutableStateOf(storeToEdit?.phone ?: "") }
     var isActive by remember { mutableStateOf(storeToEdit?.status == StoreStatus.ACTIVE || storeToEdit == null) }
+
+    var showMapPicker by remember { mutableStateOf(false) }
+
+    if (showMapPicker) {
+        Dialog(
+            onDismissRequest = { showMapPicker = false },
+            properties = DialogProperties(usePlatformDefaultWidth = false),
+        ) {
+            Surface(modifier = Modifier.fillMaxSize()) {
+                val initialCoords = if (latitude.isNotBlank() && longitude.isNotBlank()) {
+                    try {
+                        AddressCoordinates(latitude.toDouble(), longitude.toDouble())
+                    } catch (e: Exception) {
+                        AddressCoordinates(-12.046374, -77.042793)
+                    }
+                } else {
+                    AddressCoordinates(-12.046374, -77.042793)
+                }
+
+                AddressMapRoute(
+                    request = AddressMapRequest(
+                        id = "store_map_${System.currentTimeMillis()}",
+                        initialPoint = initialCoords,
+                    ),
+                    addressText = address,
+                    onCancel = { showMapPicker = false },
+                    onConfirm = { point, suggestedAddress ->
+                        latitude = point.latitude.toString()
+                        longitude = point.longitude.toString()
+                        if (!suggestedAddress.isNullOrBlank()) {
+                            address = suggestedAddress
+                        }
+                        showMapPicker = false
+                    },
+                )
+            }
+        }
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -518,53 +567,72 @@ private fun StoreDialog(
                 modifier = Modifier
                     .fillMaxWidth()
                     .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
-                    label = { Text("Nombre del Local") },
+                    label = { Text("Nombre del Local *") },
                     placeholder = { Text("Ej. Local Central - Miraflores") },
                     modifier = Modifier.fillMaxWidth(),
                 )
+
                 OutlinedTextField(
                     value = address,
                     onValueChange = { address = it },
-                    label = { Text("Dirección") },
+                    label = { Text("Dirección *") },
                     placeholder = { Text("Ej. Av. Larco 123, Lima") },
                     modifier = Modifier.fillMaxWidth(),
                 )
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    OutlinedTextField(
-                        value = latitude,
-                        onValueChange = { latitude = it },
-                        label = { Text("Latitud") },
-                        placeholder = { Text("Ej. -12.046374") },
-                        modifier = Modifier.weight(1f),
+
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(
+                        text = "Ubicación en el Mapa *",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
                     )
-                    OutlinedTextField(
-                        value = longitude,
-                        onValueChange = { longitude = it },
-                        label = { Text("Longitud") },
-                        placeholder = { Text("Ej. -77.042793") },
-                        modifier = Modifier.weight(1f),
-                    )
+
+                    OutlinedButton(
+                        onClick = { showMapPicker = true },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 48.dp),
+                        shape = RoundedCornerShape(8.dp),
+                        border = BorderStroke(1.dp, ChaskiPrimary),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = ChaskiPrimary),
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.LocationOn,
+                                contentDescription = null,
+                                modifier = Modifier.size(20.dp),
+                                tint = ChaskiPrimary,
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                text = if (latitude.isNotBlank() && longitude.isNotBlank())
+                                    "📍 Cambiar ubicación en el mapa"
+                                else
+                                    "📍 Seleccionar ubicación en el mapa",
+                                fontWeight = FontWeight.Bold,
+                            )
+                        }
+                    }
+
+                    if (latitude.isNotBlank() && longitude.isNotBlank()) {
+                        Text(
+                            text = "Coordenadas fijadas: $latitude, $longitude",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = ChaskiTextMuted,
+                        )
+                    }
                 }
-                Text(
-                    text = "💡 Referencia: Ingresa las coordenadas GPS en formato decimal (Ejemplo: Latitud: -12.046374, Longitud: -77.042793). Puedes obtenerlas directamente desde Google Maps.",
-                    fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.primary,
-                    lineHeight = 16.sp,
-                    modifier = Modifier.padding(vertical = 2.dp),
-                )
+
                 OutlinedTextField(
                     value = phone,
-                    onValueChange = { phone = it },
-                    label = { Text("Teléfono de Contacto") },
-                    placeholder = { Text("Ej. +51 987654321") },
+                    onValueChange = { phone = it.filter { char -> char.isDigit() }.take(12) },
+                    label = { Text("Teléfono de Contacto *") },
+                    placeholder = { Text("Ej. 987654321") },
                     modifier = Modifier.fillMaxWidth(),
                 )
             }

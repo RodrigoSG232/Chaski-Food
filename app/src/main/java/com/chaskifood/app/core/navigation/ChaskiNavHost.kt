@@ -34,6 +34,7 @@ import com.chaskifood.app.feature.business.presentation.AdminBusinessSupervision
 import com.chaskifood.app.feature.business.presentation.BusinessStatusScreen
 import com.chaskifood.app.feature.business.presentation.ManageStoresScreen
 import com.chaskifood.app.feature.business.presentation.RegisterBusinessScreen
+import com.chaskifood.app.feature.business.presentation.StoreOperationsScreen
 import com.chaskifood.app.feature.cart.presentation.YourOrderScreen
 import com.chaskifood.app.feature.checkout.presentation.AddCardScreen
 import com.chaskifood.app.feature.checkout.presentation.CheckoutScreen
@@ -260,6 +261,9 @@ fun ChaskiNavHost() {
                 onOpenBusiness = {
                     navController.navigate(ChaskiDestinations.BUSINESS_STATUS)
                 },
+                onOpenStoreOperations = {
+                    navController.navigate(ChaskiDestinations.STORE_OPERATIONS)
+                },
                 onOpenAdminReview = {
                     navController.navigate(ChaskiDestinations.ADMIN_BUSINESS_REVIEW)
                 },
@@ -316,6 +320,11 @@ fun ChaskiNavHost() {
         }
         composable(ChaskiDestinations.MANAGE_STORES) {
             ManageStoresScreen(
+                onBack = { navController.popBackStack() },
+            )
+        }
+        composable(ChaskiDestinations.STORE_OPERATIONS) {
+            StoreOperationsScreen(
                 onBack = { navController.popBackStack() },
             )
         }
