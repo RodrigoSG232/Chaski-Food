@@ -1,6 +1,8 @@
 package com.chaskifood.app.feature.business.presentation
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -11,26 +13,36 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Business
 import androidx.compose.material.icons.filled.Category
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Numbers
-import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -46,6 +58,7 @@ import com.chaskifood.app.core.common.UiState
 import com.chaskifood.app.feature.auth.presentation.AuthAppBar
 import com.chaskifood.app.feature.auth.presentation.AuthSubmitButton
 import com.chaskifood.app.feature.auth.presentation.AuthTextField
+import com.chaskifood.app.feature.auth.presentation.countries
 import com.chaskifood.app.ui.theme.ChaskiBackground
 import com.chaskifood.app.ui.theme.ChaskiDimens
 import com.chaskifood.app.ui.theme.ChaskiStatusObservedBg
@@ -70,6 +83,11 @@ fun RegisterBusinessScreen(
     val category by viewModel.category.collectAsState()
     val uiState by viewModel.uiState.collectAsState()
 
+    var selectedCountry by remember { mutableStateOf(countries.first()) }
+    var expandedCountryDropdown by remember { mutableStateOf(false) }
+    var expandedCategoryDropdown by remember { mutableStateOf(false) }
+    val categoryOptions = listOf("Restaurante", "Tienda")
+
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -87,7 +105,7 @@ fun RegisterBusinessScreen(
                 .padding(horizontal = ChaskiDimens.ScreenPadding),
         ) {
             Text(
-                text = if (isResubmission) "Corregir Solicitud" else stringResource(R.string.register_business_screen_title),
+                text = if (isResubmission) stringResource(R.string.resubmit_request) else stringResource(R.string.register_business_screen_title),
                 fontSize = 28.sp,
                 fontWeight = FontWeight.Bold,
                 color = ChaskiTextPrimary,
@@ -115,7 +133,7 @@ fun RegisterBusinessScreen(
                                 tint = ChaskiStatusObservedFg,
                             )
                             Text(
-                                text = "Observaciones del Administrador",
+                                text = stringResource(R.string.admin_observations_title),
                                 fontWeight = FontWeight.Bold,
                                 color = ChaskiStatusObservedFg,
                                 modifier = Modifier.padding(start = ChaskiDimens.SpacingSm),
@@ -136,7 +154,7 @@ fun RegisterBusinessScreen(
             AuthTextField(
                 value = name,
                 onValueChange = { viewModel.businessName.value = it },
-                label = "Nombre del negocio / Razón Social",
+                label = stringResource(R.string.business_name_label),
                 placeholder = "Ej. Pollos & Parrillas Chaski",
                 leadingIcon = Icons.Filled.Business,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
@@ -147,7 +165,7 @@ fun RegisterBusinessScreen(
             AuthTextField(
                 value = ruc,
                 onValueChange = { viewModel.ruc.value = it.filter { char -> char.isDigit() }.take(11) },
-                label = "RUC (11 dígitos)",
+                label = stringResource(R.string.ruc_label),
                 placeholder = "20123456789",
                 leadingIcon = Icons.Filled.Numbers,
                 keyboardOptions = KeyboardOptions(
@@ -161,7 +179,7 @@ fun RegisterBusinessScreen(
             AuthTextField(
                 value = address,
                 onValueChange = { viewModel.legalAddress.value = it },
-                label = "Dirección legal / Sede principal",
+                label = stringResource(R.string.legal_address_label),
                 placeholder = "Av. Larco 123, Miraflores, Lima",
                 leadingIcon = Icons.Filled.Place,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
@@ -169,24 +187,91 @@ fun RegisterBusinessScreen(
 
             Spacer(Modifier.height(ChaskiDimens.SpacingMd))
 
-            AuthTextField(
-                value = phone,
-                onValueChange = { viewModel.phone.value = it },
-                label = "Teléfono de contacto",
-                placeholder = "+51 987654321",
-                leadingIcon = Icons.Filled.Phone,
-                keyboardOptions = KeyboardOptions(
-                    keyboardType = KeyboardType.Phone,
-                    imeAction = ImeAction.Next,
-                ),
+            Text(
+                text = stringResource(R.string.phone_label),
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Medium,
+                color = Color(0xFF424242),
             )
+            Spacer(Modifier.height(8.dp))
+
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .background(Color(0xFFEEEEEE), shape = RoundedCornerShape(8.dp))
+                            .clickable { expandedCountryDropdown = !expandedCountryDropdown }
+                            .padding(horizontal = 12.dp, vertical = 14.dp),
+                    ) {
+                        Text(
+                            text = "${selectedCountry.flag} ${selectedCountry.dialCode}",
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF212121),
+                        )
+                        Spacer(Modifier.width(4.dp))
+                        Icon(
+                            imageVector = Icons.Filled.ArrowDropDown,
+                            contentDescription = null,
+                            tint = Color(0xFF616161),
+                        )
+                    }
+
+                    DropdownMenu(
+                        expanded = expandedCountryDropdown,
+                        onDismissRequest = { expandedCountryDropdown = false },
+                    ) {
+                        countries.forEach { country ->
+                            DropdownMenuItem(
+                                text = {
+                                    Text(
+                                        text = "${country.flag} ${country.name} (${country.dialCode})",
+                                        fontSize = 14.sp,
+                                    )
+                                },
+                                onClick = {
+                                    selectedCountry = country
+                                    expandedCountryDropdown = false
+                                },
+                            )
+                        }
+                    }
+                }
+
+                Spacer(Modifier.width(8.dp))
+
+                OutlinedTextField(
+                    value = phone,
+                    onValueChange = { viewModel.phone.value = it.filter { char -> char.isDigit() }.take(12) },
+                    modifier = Modifier.weight(1f),
+                    placeholder = {
+                        Text(
+                            text = "987654321",
+                            color = Color(0xFF9E9E9E),
+                        )
+                    },
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Number,
+                        imeAction = ImeAction.Next,
+                    ),
+                    singleLine = true,
+                    shape = RoundedCornerShape(8.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedContainerColor = Color(0xFFEEEEEE),
+                        unfocusedContainerColor = Color(0xFFEEEEEE),
+                        focusedBorderColor = Color(0xFF388E3C),
+                        unfocusedBorderColor = Color.Transparent,
+                    ),
+                )
+            }
 
             Spacer(Modifier.height(ChaskiDimens.SpacingMd))
 
             AuthTextField(
                 value = email,
                 onValueChange = { viewModel.email.value = it },
-                label = "Correo comercial",
+                label = stringResource(R.string.business_email_label),
                 placeholder = "contacto@negocio.com",
                 leadingIcon = Icons.Filled.Email,
                 keyboardOptions = KeyboardOptions(
@@ -197,14 +282,74 @@ fun RegisterBusinessScreen(
 
             Spacer(Modifier.height(ChaskiDimens.SpacingMd))
 
-            AuthTextField(
-                value = category,
-                onValueChange = { viewModel.category.value = it },
-                label = "Categoría comercial",
-                placeholder = "Restaurante / Cafetería / Comida Rápida",
-                leadingIcon = Icons.Filled.Category,
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+            Text(
+                text = stringResource(R.string.category_label),
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Medium,
+                color = Color(0xFF424242),
             )
+            Spacer(Modifier.height(8.dp))
+
+            Box(modifier = Modifier.fillMaxWidth()) {
+                OutlinedTextField(
+                    value = category,
+                    onValueChange = {},
+                    readOnly = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    trailingIcon = {
+                        IconButton(onClick = { expandedCategoryDropdown = !expandedCategoryDropdown }) {
+                            Icon(
+                                imageVector = Icons.Filled.ArrowDropDown,
+                                contentDescription = null,
+                                tint = Color(0xFF616161),
+                            )
+                        }
+                    },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Filled.Category,
+                            contentDescription = null,
+                            tint = Color(0xFF757575),
+                        )
+                    },
+                    singleLine = true,
+                    shape = RoundedCornerShape(8.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedContainerColor = Color(0xFFEEEEEE),
+                        unfocusedContainerColor = Color(0xFFEEEEEE),
+                        focusedBorderColor = Color(0xFF388E3C),
+                        unfocusedBorderColor = Color.Transparent,
+                    ),
+                )
+
+                Box(
+                    modifier = Modifier
+                        .matchParentSize()
+                        .clickable { expandedCategoryDropdown = !expandedCategoryDropdown },
+                )
+
+                DropdownMenu(
+                    expanded = expandedCategoryDropdown,
+                    onDismissRequest = { expandedCategoryDropdown = false },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    categoryOptions.forEach { option ->
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    text = option,
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.Medium,
+                                )
+                            },
+                            onClick = {
+                                viewModel.category.value = option
+                                expandedCategoryDropdown = false
+                            },
+                        )
+                    }
+                }
+            }
 
             Spacer(Modifier.height(ChaskiDimens.SpacingLg))
 
@@ -220,13 +365,16 @@ fun RegisterBusinessScreen(
             if (uiState is UiState.Loading) {
                 CircularProgressIndicator(
                     modifier = Modifier.align(Alignment.CenterHorizontally),
-                    color = MaterialTheme.colorScheme.primary,
+                    color = Color(0xFF388E3C),
                 )
             } else {
                 AuthSubmitButton(
-                    text = if (isResubmission) "CORREGIR Y REENVIAR SOLICITUD" else "SOLICITAR HABILITACIÓN",
+                    text = stringResource(R.string.submit_business_request),
                     onClick = {
-                        viewModel.submitRequest(isResubmission = isResubmission, onSuccess = onSubmitted)
+                        viewModel.submitRequest(
+                            isResubmission = isResubmission,
+                            onSuccess = onSubmitted,
+                        )
                     },
                 )
             }

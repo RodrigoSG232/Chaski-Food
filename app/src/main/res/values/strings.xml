@@ -53,6 +53,8 @@
     <string name="business_email_label">Correo Comercial *</string>
     <string name="category_label">Categoría *</string>
     <string name="submit_business_request">SOLICITAR HABILITACIÓN</string>
+    <string name="resubmit_request">Corregir Solicitud</string>
+    <string name="admin_observations_title">Observaciones del Administrador</string>
     <string name="business_status_title">Estado del Negocio</string>
     <string name="business_status_subtitle">Consulta la información y el estado de habilitación de tu negocio.</string>
     <string name="no_business_registered">Aún no has registrado un negocio</string>

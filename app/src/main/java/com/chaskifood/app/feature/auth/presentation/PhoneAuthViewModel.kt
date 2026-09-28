@@ -34,6 +34,13 @@ class PhoneAuthViewModel @Inject constructor(
             return
         }
 
+        if (phone.length < 7 || phone.length > 12 || !phone.all { it.isDigit() }) {
+            _uiState.value = UiState.Error("El número de teléfono debe contener entre 7 y 12 dígitos numéricos.") {
+                _uiState.value = UiState.Success(null)
+            }
+            return
+        }
+
         _uiState.value = UiState.Loading
         viewModelScope.launch {
             when (val result = authRepository.sendPhoneVerificationCode(activity, phone)) {
