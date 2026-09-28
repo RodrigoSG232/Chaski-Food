@@ -27,9 +27,9 @@
     <string name="profile_info_subtitle">Cambia la información de tu cuenta</string>
     <string name="business_register_title">Registrar o Administrar Negocio</string>
     <string name="business_register_subtitle">Solicita la habilitación comercial de tu negocio</string>
-    <string name="admin_hu06_title">Panel Admin Chaski: Evaluar Solicitudes (HU06)</string>
+    <string name="admin_hu06_title">Panel Admin Chaski: Evaluar Solicitudes</string>
     <string name="admin_hu06_subtitle">Revisa, aprueba, observa o rechaza solicitudes de ingreso</string>
-    <string name="admin_hu07_title">Panel Admin Chaski: Supervisar Negocios (HU07)</string>
+    <string name="admin_hu07_title">Panel Admin Chaski: Supervisar Negocios</string>
     <string name="admin_hu07_subtitle">Monitorea, suspende o reactiva la operación de negocios</string>
     <string name="admin_audit_title">Panel Admin Chaski: Historial de Auditoría</string>
     <string name="admin_audit_subtitle">Registro cronológico inmutable de todas las acciones</string>
