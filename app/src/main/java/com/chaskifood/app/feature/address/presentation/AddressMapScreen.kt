@@ -2,9 +2,9 @@ package com.chaskifood.app.feature.address.presentation
 
 import android.Manifest
 import android.app.Activity
+import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.ContextWrapper
-import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -13,16 +13,19 @@ import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -51,9 +54,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.LiveRegionMode
-import androidx.compose.ui.semantics.liveRegion
-import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
@@ -64,8 +65,10 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.chaskifood.app.R
 import com.chaskifood.app.feature.address.domain.AddressCoordinates
+import com.chaskifood.app.ui.theme.ChaskiDimens
 import com.chaskifood.app.ui.theme.ChaskiPrimary
 import com.chaskifood.app.ui.theme.ChaskiSurface
+import com.chaskifood.app.ui.theme.ChaskiSurfaceVariant
 import com.chaskifood.app.ui.theme.ChaskiTextPrimary
 import com.chaskifood.app.ui.theme.ChaskiTextTertiary
 import kotlinx.coroutines.delay
@@ -99,7 +102,8 @@ fun AddressMapRoute(
         else {
             val activity = context.findActivity()
             val canAskAgain = activity != null && ActivityCompat.shouldShowRequestPermissionRationale(
-                activity, Manifest.permission.ACCESS_COARSE_LOCATION)
+                activity, Manifest.permission.ACCESS_COARSE_LOCATION,
+            )
             viewModel.permissionDenied(request.id, permanently = !canAskAgain)
         }
     }
@@ -109,21 +113,19 @@ fun AddressMapRoute(
             viewModel.mapLoad(request.id, state.retry, AddressMapLoad.ERROR)
         }
     }
-    LaunchedEffect(request.id, state.addressLookup, state.suggestedAddress) {
-        if (state.requestId == request.id && state.addressLookup == AddressLookupStatus.FOUND) {
-            val point = state.point
-            val suggestion = state.suggestedAddress
-            if (point != null && !suggestion.isNullOrBlank()) onConfirm(point, suggestion)
-        }
-    }
     if (state.requestId != request.id) return
-    AddressMapScreen(state, addressText, onCancel, onConfirm,
+    AddressMapScreen(
+        state, addressText, onCancel, onConfirm,
         onLocate = {
             when {
                 context.hasLocationPermission() -> viewModel.locate(request.id)
                 state.locationStatus == AddressLocationStatus.BLOCKED -> context.openLocationSettings(app = true)
-                else -> permissionLauncher.launch(arrayOf(Manifest.permission.ACCESS_COARSE_LOCATION,
-                    Manifest.permission.ACCESS_FINE_LOCATION))
+                else -> permissionLauncher.launch(
+                    arrayOf(
+                        Manifest.permission.ACCESS_COARSE_LOCATION,
+                        Manifest.permission.ACCESS_FINE_LOCATION,
+                    ),
+                )
             }
         },
         onCancelLocation = viewModel::cancelLocation,
@@ -156,81 +158,115 @@ private fun AddressMapScreen(
     Scaffold(containerColor = ChaskiSurface, contentColor = ChaskiTextPrimary, topBar = {
         CenterAlignedTopAppBar(
             title = { Text(stringResource(R.string.address_map_title), style = MaterialTheme.typography.headlineMedium) },
-            navigationIcon = { IconButton(onClick = onCancel) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.address_back))
-            } },
+            navigationIcon = {
+                IconButton(onClick = onCancel) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.address_back))
+                }
+            },
             colors = TopAppBarDefaults.topAppBarColors(containerColor = ChaskiSurface),
         )
     }) { padding ->
-        Column(Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text(stringResource(R.string.address_map_hint), color = ChaskiTextTertiary)
-            Box(Modifier.fillMaxWidth().height(300.dp).clip(RoundedCornerShape(8.dp))) {
+        Column(
+            Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .verticalScroll(rememberScrollState())
+                .padding(ChaskiDimens.ScreenPadding),
+            verticalArrangement = Arrangement.spacedBy(ChaskiDimens.SpacingLg),
+        ) {
+            Text(stringResource(R.string.address_map_hint), color = ChaskiTextTertiary, style = MaterialTheme.typography.bodyMedium)
+
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .height(350.dp)
+                    .clip(RoundedCornerShape(12.dp)),
+            ) {
                 key(state.requestId, state.retry) {
                     AddressMapView(state.point, state.centerRevision, onMapLoad, onMoveStarted, onPoint)
                 }
-                Icon(Icons.Default.LocationOn, stringResource(R.string.address_map_pin),
-                    Modifier.align(Alignment.Center).offset(y = (-20).dp).size(40.dp),
-                    tint = if (state.point == null) ChaskiTextTertiary else ChaskiPrimary)
+                Icon(
+                    Icons.Default.LocationOn, stringResource(R.string.address_map_pin),
+                    Modifier
+                        .align(Alignment.Center)
+                        .offset(y = (-20).dp)
+                        .size(40.dp),
+                    tint = if (state.point == null) ChaskiTextTertiary else ChaskiPrimary,
+                )
+
                 if (state.load != AddressMapLoad.READY) Surface(Modifier.fillMaxSize(), color = ChaskiSurface) {
-                    Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically),
-                        horizontalAlignment = Alignment.CenterHorizontally) {
+                    Column(
+                        Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
                         if (state.load == AddressMapLoad.LOADING) CircularProgressIndicator(color = ChaskiPrimary)
-                        Text(stringResource(if (state.load == AddressMapLoad.LOADING)
-                            R.string.address_map_loading else R.string.address_map_error))
+                        Text(
+                            stringResource(
+                                if (state.load == AddressMapLoad.LOADING)
+                                    R.string.address_map_loading else R.string.address_map_error,
+                            ),
+                        )
                         if (state.load == AddressMapLoad.ERROR) AddressButton(stringResource(R.string.address_retry), onRetry)
                     }
                 }
             }
+
+            // Tarjeta destacada de previsualización de la ubicación seleccionada
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                color = ChaskiSurfaceVariant,
+                shape = RoundedCornerShape(12.dp),
+                border = BorderStroke(1.dp, ChaskiPrimary),
+            ) {
+                Row(
+                    modifier = Modifier.padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.LocationOn,
+                        contentDescription = null,
+                        tint = ChaskiPrimary,
+                        modifier = Modifier.size(28.dp),
+                    )
+                    Spacer(Modifier.width(12.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Ubicación seleccionada en el mapa:",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = ChaskiTextTertiary,
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            text = when {
+                                !state.suggestedAddress.isNullOrBlank() -> state.suggestedAddress
+                                state.addressLookup == AddressLookupStatus.LOADING -> "Buscando dirección de la ubicación..."
+                                state.point != null -> "Coordenadas: ${state.point.latitude}, ${state.point.longitude}"
+                                else -> addressText.ifBlank { "Mueve el mapa para seleccionar el punto de entrega" }
+                            },
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = ChaskiTextPrimary,
+                        )
+                    }
+                }
+            }
+
+            AddressButton(
+                stringResource(
+                    if (state.locationStatus == AddressLocationStatus.BLOCKED)
+                        R.string.address_permission_settings else R.string.address_use_location,
+                ), onLocate,
+                enabled = state.locationStatus != AddressLocationStatus.LOCATING, outlined = true,
+            )
+
+            AddressButton(
+                stringResource(R.string.address_confirm_point),
+                { if (state.canConfirm && state.point != null) onConfirm(state.point, state.suggestedAddress) },
+                enabled = state.canConfirm,
+            )
+
             MapAttribution()
-            AddressButton(stringResource(if (state.locationStatus == AddressLocationStatus.BLOCKED)
-                R.string.address_permission_settings else R.string.address_use_location), onLocate,
-                enabled = state.locationStatus != AddressLocationStatus.LOCATING, outlined = true)
-            Column(Modifier.semantics { liveRegion = LiveRegionMode.Polite },
-                verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(stringResource(when (state.locationStatus) {
-                    AddressLocationStatus.IDLE -> R.string.address_location_explanation
-                    AddressLocationStatus.LOCATING -> R.string.address_location_loading
-                    AddressLocationStatus.FOUND -> R.string.address_location_found
-                    AddressLocationStatus.APPROXIMATE -> R.string.address_location_approximate
-                    AddressLocationStatus.DENIED -> R.string.address_location_denied
-                    AddressLocationStatus.BLOCKED -> R.string.address_location_blocked
-                    AddressLocationStatus.DISABLED -> R.string.address_location_disabled
-                    AddressLocationStatus.UNAVAILABLE -> R.string.address_location_unavailable
-                }), style = MaterialTheme.typography.bodySmall, color = ChaskiTextTertiary)
-                state.accuracyMeters?.let {
-                    Text(stringResource(R.string.address_location_accuracy, it.toInt()), style = MaterialTheme.typography.bodySmall)
-                }
-                if (state.locationStatus == AddressLocationStatus.LOCATING) {
-                    TextButton(onClick = onCancelLocation) { Text(stringResource(R.string.address_location_cancel)) }
-                }
-                if (state.locationStatus == AddressLocationStatus.DISABLED) {
-                    AddressButton(stringResource(R.string.address_location_settings), onLocationSettings, outlined = true)
-                }
-            }
-            Text(addressText.ifBlank { stringResource(R.string.address_map_review_text) },
-                style = MaterialTheme.typography.titleSmall)
-            Text(stringResource(if (state.point == null) R.string.address_point_required else R.string.address_map_review),
-                color = ChaskiTextTertiary, style = MaterialTheme.typography.bodySmall)
-            Text(stringResource(R.string.address_geocoding_notice),
-                color = ChaskiTextTertiary, style = MaterialTheme.typography.bodySmall)
-            when (state.addressLookup) {
-                AddressLookupStatus.LOADING -> Row(verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    CircularProgressIndicator(Modifier.size(20.dp), color = ChaskiPrimary, strokeWidth = 2.dp)
-                    Text(stringResource(R.string.address_geocoding_loading))
-                }
-                AddressLookupStatus.UNAVAILABLE -> {
-                    Text(stringResource(R.string.address_geocoding_unavailable),
-                        color = ChaskiTextTertiary, style = MaterialTheme.typography.bodySmall)
-                    AddressButton(stringResource(R.string.address_confirm_point_manual),
-                        { if (state.canConfirm) state.point?.let { onConfirm(it, null) } }, enabled = state.canConfirm)
-                }
-                AddressLookupStatus.IDLE, AddressLookupStatus.FOUND -> AddressButton(
-                    stringResource(R.string.address_confirm_point), onSuggestAddress, enabled = state.canConfirm)
-            }
-            Text(stringResource(R.string.address_map_not_saved), style = MaterialTheme.typography.bodySmall,
-                color = ChaskiTextTertiary)
         }
     }
 }
@@ -248,8 +284,10 @@ private fun MapAttribution() {
     }
 }
 
-private fun Context.hasLocationPermission() = listOf(Manifest.permission.ACCESS_COARSE_LOCATION,
-    Manifest.permission.ACCESS_FINE_LOCATION).any {
+private fun Context.hasLocationPermission() = listOf(
+    Manifest.permission.ACCESS_COARSE_LOCATION,
+    Manifest.permission.ACCESS_FINE_LOCATION,
+).any {
     ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED
 }
 

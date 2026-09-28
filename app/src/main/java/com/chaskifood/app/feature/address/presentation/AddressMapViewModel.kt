@@ -54,6 +54,7 @@ class AddressMapViewModel @Inject constructor(
             cancelLocation()
             cancelAddressLookup()
             _uiState.value = AddressMapState(requestId = request.id, point = request.initialPoint)
+            request.initialPoint?.let { if (it.isValid) suggestAddressForPoint(request.id, it) }
         } else _uiState.value = _uiState.value.copy(load = AddressMapLoad.LOADING, moving = false)
         active = true
     }
@@ -86,11 +87,14 @@ class AddressMapViewModel @Inject constructor(
             if (!accepts(requestId) || token != generation) return@launch
             val old = _uiState.value
             _uiState.value = when (result) {
-                is DeviceLocationResult.Available -> old.copy(
-                    point = result.coordinates, centerRevision = old.centerRevision + 1, moving = false,
-                    accuracyMeters = result.accuracyMeters,
-                    locationStatus = if (result.approximate) AddressLocationStatus.APPROXIMATE else AddressLocationStatus.FOUND,
-                )
+                is DeviceLocationResult.Available -> {
+                    if (result.coordinates.isValid) suggestAddressForPoint(requestId, result.coordinates)
+                    old.copy(
+                        point = result.coordinates, centerRevision = old.centerRevision + 1, moving = false,
+                        accuracyMeters = result.accuracyMeters,
+                        locationStatus = if (result.approximate) AddressLocationStatus.APPROXIMATE else AddressLocationStatus.FOUND,
+                    )
+                }
                 DeviceLocationResult.Disabled -> old.copy(locationStatus = AddressLocationStatus.DISABLED)
                 DeviceLocationResult.PermissionRequired -> old.copy(locationStatus = AddressLocationStatus.DENIED)
                 DeviceLocationResult.Unavailable -> old.copy(locationStatus = AddressLocationStatus.UNAVAILABLE)
@@ -106,7 +110,7 @@ class AddressMapViewModel @Inject constructor(
 
     fun moveStarted(requestId: String) {
         if (!accepts(requestId)) return
-        cancelLocation() // Un ajuste manual no debe ser sobrescrito por una respuesta GPS tardía.
+        cancelLocation()
         cancelAddressLookup()
         _uiState.value = _uiState.value.copy(moving = true)
     }
@@ -116,30 +120,37 @@ class AddressMapViewModel @Inject constructor(
         cancelLocation()
         cancelAddressLookup()
         val old = _uiState.value
-        _uiState.value = old.copy(point = point, moving = false, accuracyMeters = null,
+        _uiState.value = old.copy(
+            point = point, moving = false, accuracyMeters = null,
             locationStatus = AddressLocationStatus.IDLE,
-            addressLookup = AddressLookupStatus.IDLE, suggestedAddress = null,
-            centerRevision = old.centerRevision + if (recenter) 1 else 0)
+            addressLookup = AddressLookupStatus.LOADING, suggestedAddress = null,
+            centerRevision = old.centerRevision + if (recenter) 1 else 0,
+        )
+        suggestAddressForPoint(requestId, point)
     }
 
     fun suggestAddress(requestId: String) {
         if (!accepts(requestId)) return
         val point = _uiState.value.point?.takeIf { it.isValid } ?: return
+        suggestAddressForPoint(requestId, point)
+    }
+
+    private fun suggestAddressForPoint(requestId: String, point: AddressCoordinates) {
         cancelAddressLookup()
-        val token = addressGeneration
-        _uiState.value = _uiState.value.copy(addressLookup = AddressLookupStatus.LOADING,
-            suggestedAddress = null)
+        val token = ++addressGeneration
+        _uiState.value = _uiState.value.copy(addressLookup = AddressLookupStatus.LOADING)
         addressJob = viewModelScope.launch {
             val result = try { reverseGeocodingProvider.addressFor(point) }
             catch (cancelled: CancellationException) { throw cancelled }
             catch (_: Exception) { ReverseGeocodingResult.Unavailable }
-            if (!accepts(requestId) || token != addressGeneration || _uiState.value.point != point) return@launch
+            if (!accepts(requestId) || token != addressGeneration) return@launch
             _uiState.value = when (result) {
                 is ReverseGeocodingResult.Found -> _uiState.value.copy(
                     addressLookup = AddressLookupStatus.FOUND, suggestedAddress = result.address,
                 )
                 ReverseGeocodingResult.Unavailable -> _uiState.value.copy(
-                    addressLookup = AddressLookupStatus.UNAVAILABLE, suggestedAddress = null,
+                    addressLookup = AddressLookupStatus.UNAVAILABLE,
+                    suggestedAddress = "Coordenadas GPS: ${point.latitude}, ${point.longitude}",
                 )
             }
         }
@@ -150,7 +161,7 @@ class AddressMapViewModel @Inject constructor(
         addressJob?.cancel()
         addressJob = null
         if (_uiState.value.addressLookup == AddressLookupStatus.LOADING) {
-            _uiState.value = _uiState.value.copy(addressLookup = AddressLookupStatus.IDLE, suggestedAddress = null)
+            _uiState.value = _uiState.value.copy(addressLookup = AddressLookupStatus.IDLE)
         }
     }
 
