@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -28,14 +29,20 @@ import androidx.compose.material.icons.filled.DeliveryDining
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.chaskifood.app.R
@@ -106,6 +113,10 @@ private val popularCards = listOf(
 @Composable
 fun HomeScreen(
     modifier: Modifier = Modifier,
+    deliveryAddress: String? = null,
+    deliveryAddressUnavailable: Boolean = false,
+    deliveryNotice: String? = null,
+    onDismissDeliveryNotice: () -> Unit = {},
     onSeeAll: () -> Unit = {},
     onRestaurantClick: (String) -> Unit = {},
     onOpenLocations: () -> Unit = {},
@@ -116,7 +127,16 @@ fun HomeScreen(
             .background(ChaskiBackground),
         contentPadding = PaddingValues(bottom = ChaskiDimens.SpacingXxl),
     ) {
-        item(key = "appbar") { HomeAppBar(onLocationClick = onOpenLocations) }
+        item(key = "appbar") {
+            HomeAppBar(onLocationClick = onOpenLocations,
+                deliveryAddress = deliveryAddress, unavailable = deliveryAddressUnavailable)
+        }
+        if (deliveryNotice != null) item(key = "delivery-notice") {
+            Column(Modifier.fillMaxWidth().padding(16.dp).semantics { liveRegion = LiveRegionMode.Polite }) {
+                Text(deliveryNotice, color = ChaskiTextPrimary)
+                TextButton(onClick = onDismissDeliveryNotice) { Text(stringResource(R.string.address_understood)) }
+            }
+        }
 
         item(key = "offer") {
             OfferCard(
@@ -184,6 +204,8 @@ fun HomeScreen(
 private fun HomeAppBar(
     modifier: Modifier = Modifier,
     onLocationClick: () -> Unit = {},
+    deliveryAddress: String? = null,
+    unavailable: Boolean = false,
 ) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -195,7 +217,7 @@ private fun HomeAppBar(
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.clickable(onClick = onLocationClick),
+            modifier = Modifier.weight(1f).heightIn(min = 48.dp).clickable(onClick = onLocationClick),
         ) {
             Icon(
                 imageVector = HomeIcons.MapPin,
@@ -205,7 +227,12 @@ private fun HomeAppBar(
             )
             Spacer(Modifier.width(ChaskiDimens.SpacingSm))
             Text(
-                text = "Miraflores",
+                text = deliveryAddress ?: stringResource(
+                    if (unavailable) R.string.address_delivery_unavailable
+                    else R.string.address_choose_delivery),
+                modifier = Modifier.weight(1f, fill = false),
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Bold,
                 letterSpacing = 0.5.sp,
@@ -220,7 +247,7 @@ private fun HomeAppBar(
             )
         }
 
-        Spacer(Modifier.weight(1f))
+        Spacer(Modifier.width(16.dp))
 
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(

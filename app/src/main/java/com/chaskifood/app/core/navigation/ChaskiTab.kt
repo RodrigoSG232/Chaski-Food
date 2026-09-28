@@ -39,6 +39,7 @@ object ChaskiDestinations {
     const val SOCIAL_ACCOUNTS = "social_accounts"
     const val ADD_LOCATION = "add_location"
     const val LOCATIONS = "locations"
+    const val ADDRESS_BOOK = "address_book"
     const val PROFILE_INFO = "profile_info"
     const val REGISTER_BUSINESS = "register_business"
     const val BUSINESS_STATUS = "business_status"
