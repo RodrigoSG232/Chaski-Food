@@ -2,6 +2,7 @@ package com.chaskifood.app.feature.address.presentation
 
 import com.chaskifood.app.feature.address.domain.AddressBook
 import com.chaskifood.app.feature.address.domain.AddressBookState
+import com.chaskifood.app.feature.address.domain.AddressCoordinates
 import com.chaskifood.app.feature.address.domain.AddressDraft
 import com.chaskifood.app.feature.address.domain.AddressField
 import com.chaskifood.app.feature.address.domain.AddressValidationError
@@ -19,6 +20,8 @@ data class AddressEditorState(
 
 data class AddressDeleteState(val addressId: String, val replacementId: String? = null)
 
+data class AddressMapRequest(val id: String, val initialPoint: AddressCoordinates?)
+
 data class AddressUiState(
     val source: AddressBookState? = null,
     val choiceId: String? = null,
@@ -29,7 +32,7 @@ data class AddressUiState(
     val message: String? = null,
     val deliveryNotice: String? = null,
     val showDiscard: Boolean = false,
-    val showMapInfo: Boolean = false,
+    val mapRequest: AddressMapRequest? = null,
     val exitRequested: Boolean = false,
 ) {
     val book: AddressBook? get() = (source as? AddressBookState.Ready)?.book
@@ -51,6 +54,12 @@ sealed interface AddressAction {
     data object ConfirmDelete : AddressAction
     data object Back : AddressAction
     data object Discard : AddressAction
-    data object MapInfo : AddressAction
+    data object OpenMap : AddressAction
+    data class CloseMap(val requestId: String) : AddressAction
+    data class ConfirmMap(
+        val requestId: String,
+        val point: AddressCoordinates,
+        val suggestedAddress: String?,
+    ) : AddressAction
     data object DismissMessage : AddressAction
 }

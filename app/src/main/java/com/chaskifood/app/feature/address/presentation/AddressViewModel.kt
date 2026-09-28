@@ -76,16 +76,35 @@ class AddressViewModel @Inject constructor(
                 change(_uiState.value.copy(editor = null, showDiscard = false, message = null))
             }
             AddressAction.CloseDialog -> change(_uiState.value.copy(
-                optionsId = null, deletion = null, showDiscard = false, showMapInfo = false,
+                optionsId = null, deletion = null, showDiscard = false,
             ))
-            AddressAction.MapInfo -> change(_uiState.value.copy(showMapInfo = true))
+            AddressAction.OpenMap -> editableEditor()?.let { editor ->
+                change(_uiState.value.copy(mapRequest = AddressMapRequest(
+                    UUID.randomUUID().toString(), editor.draft.location)))
+            }
+            is AddressAction.CloseMap -> if (_uiState.value.mapRequest?.id == action.requestId) {
+                change(_uiState.value.copy(mapRequest = null))
+            }
+            is AddressAction.ConfirmMap -> {
+                val editor = editableEditor() ?: return
+                if (_uiState.value.mapRequest?.id != action.requestId || !action.point.isValid) return
+                val addressText = action.suggestedAddress?.takeIf(String::isNotBlank)
+                    ?: editor.draft.addressText
+                val draft = editor.draft.withLocation(action.point).confirmLocation()
+                    .copy(addressText = addressText)
+                change(_uiState.value.copy(mapRequest = null, editor = editor.copy(
+                    draft = draft, dirty = true, errors = AddressValidator.validate(draft).errors,
+                ), message = if (action.suggestedAddress.isNullOrBlank())
+                    "Punto confirmado. Escribe y revisa la dirección antes de guardar."
+                else "Se sugirió una dirección para el punto. Revísala y corrígela si hace falta."))
+            }
             AddressAction.DismissMessage -> Unit
         }
     }
 
     fun acknowledgeExit() { change(_uiState.value.copy(exitRequested = false)) }
 
-    /** Punto de integración del próximo selector. Cambiar punto siempre invalida confirmación. */
+    /** Cambiar un punto fuera del selector siempre invalida su confirmación. */
     internal fun changeLocation(location: AddressCoordinates?) {
         val editor = editableEditor() ?: return
         change(_uiState.value.copy(editor = editor.copy(
@@ -132,7 +151,7 @@ class AddressViewModel @Inject constructor(
                     previousBook = null
                     restoredEditor = null
                     change(AddressUiState(source = source))
-                } else change(old.copy(source = source, optionsId = null, deletion = null))
+                } else change(old.copy(source = source, optionsId = null, deletion = null, mapRequest = null))
             }
             is AddressBookState.Ready -> {
                 val book = source.book
@@ -161,6 +180,7 @@ class AddressViewModel @Inject constructor(
                     choiceId = base.choiceId?.takeIf { id -> book.addresses.any { it.id == id } }
                         ?: book.selectedAddressId,
                     editor = if (deletedEditor) null else editor,
+                    mapRequest = if (deletedEditor || editor == null) null else base.mapRequest,
                     optionsId = base.optionsId?.takeIf { id -> book.addresses.any { it.id == id } },
                     deletion = base.deletion?.takeIf { d -> book.addresses.any { it.id == d.addressId } }
                         ?.let { d -> d.copy(replacementId = d.replacementId?.takeIf { id ->
@@ -184,7 +204,7 @@ class AddressViewModel @Inject constructor(
                 ownerUid = book.ownerUid, addressId = addressId,
                 operationId = UUID.randomUUID().toString(),
                 draft = address?.toDraft() ?: com.chaskifood.app.feature.address.domain.AddressDraft(),
-            ), optionsId = null, deletion = null, message = null,
+            ), optionsId = null, deletion = null, message = null, mapRequest = null,
         ))
     }
 
@@ -259,6 +279,7 @@ class AddressViewModel @Inject constructor(
     private fun back() {
         val state = _uiState.value
         when {
+            state.mapRequest != null -> change(state.copy(mapRequest = null))
             state.editor?.pendingCreate == true -> change(state.copy(
                 message = "Reintenta el alta pendiente antes de cerrar el formulario. No cambiaremos su identificador.",
             ))

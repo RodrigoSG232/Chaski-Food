@@ -5,6 +5,8 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.preferencesDataStore
 import com.chaskifood.app.feature.address.domain.AddressRepository
+import com.chaskifood.app.feature.address.domain.DeviceLocationProvider
+import com.chaskifood.app.feature.address.domain.ReverseGeocodingProvider
 import com.google.firebase.firestore.FirebaseFirestore
 import dagger.Binds
 import dagger.Module
@@ -24,6 +26,14 @@ private val Context.addressDataStore by preferencesDataStore(name = "chaski_addr
 @Module
 @InstallIn(SingletonComponent::class)
 abstract class AddressDataModule {
+    @Binds
+    @Singleton
+    abstract fun bindDeviceLocationProvider(impl: AndroidDeviceLocationProvider): DeviceLocationProvider
+
+    @Binds
+    @Singleton
+    abstract fun bindReverseGeocodingProvider(impl: AndroidReverseGeocodingProvider): ReverseGeocodingProvider
+
     @Binds
     @Singleton
     abstract fun bindAddressRepository(impl: FirebaseAddressRepository): AddressRepository

@@ -45,6 +45,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -84,7 +85,16 @@ fun AddressRoute(viewModel: AddressViewModel, onBack: () -> Unit, onSignIn: () -
             onBack()
         }
     }
-    AddressScreen(state, viewModel::onAction, onSignIn)
+    val mapRequest = state.mapRequest
+    val editor = state.editor
+    if (mapRequest != null && editor != null) {
+        key(mapRequest.id) {
+            AddressMapRoute(mapRequest, editor.draft.addressText,
+                onCancel = { viewModel.onAction(AddressAction.CloseMap(mapRequest.id)) },
+            onConfirm = { point, suggestedAddress -> viewModel.onAction(
+                AddressAction.ConfirmMap(mapRequest.id, point, suggestedAddress)) })
+        }
+    } else AddressScreen(state, viewModel::onAction, onSignIn)
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -230,7 +240,7 @@ private fun AddressForm(state: AddressUiState, onAction: (AddressAction) -> Unit
             AddressField.ADDRESS_TEXT, editor, editable, onAction)
         Text(stringResource(R.string.address_point), style = MaterialTheme.typography.titleSmall)
         AddressButton(stringResource(if (draft.location == null) R.string.address_choose_point else R.string.address_change_point),
-            { onAction(AddressAction.MapInfo) }, enabled = editable, outlined = true)
+            { onAction(AddressAction.OpenMap) }, enabled = editable, outlined = true)
         Text(stringResource(if (draft.isLocationConfirmed) R.string.address_point_kept else R.string.address_map_pending),
             color = ChaskiTextTertiary, style = MaterialTheme.typography.bodySmall)
         editor.errors[AddressField.LOCATION]?.let {
@@ -265,6 +275,10 @@ private fun AddressInput(
     val labelText = stringResource(label)
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(stringResource(label), style = MaterialTheme.typography.titleSmall)
+        if (field == AddressField.ADDRESS_TEXT) {
+            Text(stringResource(R.string.address_map_address_help),
+                style = MaterialTheme.typography.bodySmall, color = ChaskiTextTertiary)
+        }
         TextField(
             value, { onAction(AddressAction.ChangeText(field, it)) }, Modifier.fillMaxWidth()
                 .semantics { contentDescription = labelText },
@@ -349,14 +363,14 @@ private fun AddressDialogs(state: AddressUiState, onAction: (AddressAction) -> U
             }
         }
     }
-    if (state.showDiscard || state.showMapInfo) {
+    if (state.showDiscard) {
         AlertDialog(
             onDismissRequest = { onAction(AddressAction.CloseDialog) }, containerColor = ChaskiSurface,
-            title = { Text(stringResource(if (state.showMapInfo) R.string.address_map_title else R.string.address_discard_title)) },
-            text = { Text(stringResource(if (state.showMapInfo) R.string.address_map_pending else R.string.address_discard_body)) },
+            title = { Text(stringResource(R.string.address_discard_title)) },
+            text = { Text(stringResource(R.string.address_discard_body)) },
             confirmButton = { TextButton(onClick = {
-                onAction(if (state.showMapInfo) AddressAction.CloseDialog else AddressAction.Discard)
-            }) { Text(stringResource(if (state.showMapInfo) R.string.address_understood else R.string.address_discard)) } },
+                onAction(AddressAction.Discard)
+            }) { Text(stringResource(R.string.address_discard)) } },
             dismissButton = { if (state.showDiscard) TextButton(onClick = { onAction(AddressAction.CloseDialog) }) {
                 Text(stringResource(R.string.address_keep_editing))
             } },
@@ -366,7 +380,7 @@ private fun AddressDialogs(state: AddressUiState, onAction: (AddressAction) -> U
 
 /** Variación HU04: radio de 8 dp, sin alterar botones de Auth/negocio. */
 @Composable
-private fun AddressButton(
+internal fun AddressButton(
     text: String, onClick: () -> Unit, enabled: Boolean = true,
     outlined: Boolean = false, destructive: Boolean = false,
 ) {
