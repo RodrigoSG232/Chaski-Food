@@ -149,10 +149,10 @@ fun AuthTitleBanner(
             modifier = Modifier.fillMaxWidth(),
         )
         if (text != null || linkText != null) {
-            Spacer(Modifier.height(6.dp))
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.Center,
+            Spacer(Modifier.height(8.dp))
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.fillMaxWidth(),
             ) {
                 if (text != null) {
                     Text(
@@ -160,15 +160,18 @@ fun AuthTitleBanner(
                         fontSize = 15.sp,
                         fontWeight = FontWeight.Medium,
                         color = ChaskiTextMuted,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth(),
                     )
                 }
                 if (linkText != null) {
-                    Spacer(Modifier.width(6.dp))
+                    Spacer(Modifier.height(6.dp))
                     Text(
                         text = linkText,
                         fontSize = 15.sp,
                         fontWeight = FontWeight.Bold,
                         color = ChaskiPrimary,
+                        textAlign = TextAlign.Center,
                         modifier = Modifier.clickable(onClick = onLinkClick),
                     )
                 }
