@@ -91,6 +91,7 @@ fun ManageStoresScreen(
     var showStoreDialog by remember { mutableStateOf(false) }
     var editingStore by remember { mutableStateOf<BusinessStore?>(null) }
     var showManagerDialog by remember { mutableStateOf(false) }
+    var editingManager by remember { mutableStateOf<StoreManager?>(null) }
 
     Column(
         modifier = modifier
@@ -213,6 +214,10 @@ fun ManageStoresScreen(
                             ManagersTabContent(
                                 managers = state.managers,
                                 stores = state.stores,
+                                onEditManager = { manager ->
+                                    editingManager = manager
+                                    showManagerDialog = true
+                                },
                             )
                         }
 
@@ -222,6 +227,7 @@ fun ManageStoresScreen(
                                     editingStore = null
                                     showStoreDialog = true
                                 } else {
+                                    editingManager = null
                                     showManagerDialog = true
                                 }
                             },
@@ -264,10 +270,11 @@ fun ManageStoresScreen(
                     ManagerDialog(
                         businessId = state.business.id,
                         availableStores = state.stores,
+                        managerToEdit = editingManager,
                         onDismiss = { showManagerDialog = false },
-                        onSave = { busId, email, name, phone, assignedIds ->
+                        onSave = { managerId, busId, email, name, phone, assignedIds ->
                             viewModel.assignManager(
-                                managerId = "",
+                                managerId = managerId,
                                 businessId = busId,
                                 email = email,
                                 fullName = name,
@@ -420,6 +427,7 @@ private fun StoresTabContent(
 private fun ManagersTabContent(
     managers: List<StoreManager>,
     stores: List<BusinessStore>,
+    onEditManager: (StoreManager) -> Unit,
 ) {
     if (managers.isEmpty()) {
         Box(
@@ -450,17 +458,31 @@ private fun ManagersTabContent(
                     modifier = Modifier.fillMaxWidth(),
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
-                        Text(
-                            text = manager.fullName,
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = ChaskiTextPrimary,
-                        )
-                        Text(
-                            text = manager.email,
-                            fontSize = 14.sp,
-                            color = ChaskiPrimary,
-                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                        ) {
+                            Column {
+                                Text(
+                                    text = manager.fullName,
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = ChaskiTextPrimary,
+                                )
+                                Text(
+                                    text = manager.email,
+                                    fontSize = 14.sp,
+                                    color = ChaskiPrimary,
+                                )
+                            }
+                            IconButton(onClick = { onEditManager(manager) }) {
+                                Icon(
+                                    imageVector = Icons.Filled.Edit,
+                                    contentDescription = "Editar Responsable",
+                                    tint = ChaskiPrimary,
+                                )
+                            }
+                        }
                         if (manager.phone.isNotBlank()) {
                             Text(
                                 text = "Teléfono: ${manager.phone}",
@@ -666,13 +688,18 @@ private fun StoreDialog(
 private fun ManagerDialog(
     businessId: String,
     availableStores: List<BusinessStore>,
+    managerToEdit: StoreManager?,
     onDismiss: () -> Unit,
-    onSave: (businessId: String, email: String, fullName: String, phone: String, assignedStoreIds: List<String>) -> Unit,
+    onSave: (managerId: String, businessId: String, email: String, fullName: String, phone: String, assignedStoreIds: List<String>) -> Unit,
 ) {
-    var email by remember { mutableStateOf("") }
-    var fullName by remember { mutableStateOf("") }
-    var phone by remember { mutableStateOf("") }
-    val selectedStoreIds = remember { mutableStateListOf<String>() }
+    var email by remember { mutableStateOf(managerToEdit?.email ?: "") }
+    var fullName by remember { mutableStateOf(managerToEdit?.fullName ?: "") }
+    var phone by remember { mutableStateOf(managerToEdit?.phone ?: "") }
+    val selectedStoreIds = remember {
+        mutableStateListOf<String>().apply {
+            managerToEdit?.assignedStoreIds?.let { addAll(it) }
+        }
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -750,9 +777,10 @@ private fun ManagerDialog(
         },
         confirmButton = {
             AuthSubmitButton(
-                text = "ASIGNAR",
+                text = "GUARDAR",
                 onClick = {
                     onSave(
+                        managerToEdit?.id ?: "",
                         businessId,
                         email,
                         fullName,

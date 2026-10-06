@@ -30,7 +30,7 @@ class FirebaseCatalogRepository @Inject constructor(
         val listener = categoriesRef.whereEqualTo("businessId", businessId)
             .addSnapshotListener { snapshot, error ->
                 if (error != null) {
-                    trySend(ApiResult.Success(emptyList()))
+                    trySend(ApiResult.Failure(error.localizedMessage ?: "Error al realizar consulta.", error))
                     return@addSnapshotListener
                 }
 
@@ -91,7 +91,7 @@ class FirebaseCatalogRepository @Inject constructor(
         val listener = productsRef.whereEqualTo("businessId", businessId)
             .addSnapshotListener { snapshot, error ->
                 if (error != null) {
-                    trySend(ApiResult.Success(emptyList()))
+                    trySend(ApiResult.Failure(error.localizedMessage ?: "Error al realizar consulta.", error))
                     return@addSnapshotListener
                 }
 

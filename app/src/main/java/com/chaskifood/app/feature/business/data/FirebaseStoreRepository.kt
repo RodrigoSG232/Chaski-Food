@@ -218,15 +218,7 @@ class FirebaseStoreRepository @Inject constructor(
                         trySend(ApiResult.Success(stores))
                     }
             } else {
-                // Si no hay asignación previa en store_managers, escucha en tiempo real todos los locales para que el usuario pueda operarlos
-                storeListener = storesRef.addSnapshotListener { storesSnapshot, storesError ->
-                    if (storesError != null) {
-                        trySend(ApiResult.Failure(storesError.localizedMessage ?: "Error al cargar locales.", storesError))
-                        return@addSnapshotListener
-                    }
-                    val stores = storesSnapshot?.documents?.mapNotNull { it.toBusinessStore() } ?: emptyList()
-                    trySend(ApiResult.Success(stores))
-                }
+                trySend(ApiResult.Success(emptyList()))
             }
         }
 

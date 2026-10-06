@@ -47,20 +47,7 @@ class ManageCatalogViewModel @Inject constructor(
     private val userBusinessFlow = authRepository.currentUserFlow.flatMapLatest { user ->
         val uid = user?.uid ?: ""
         if (uid.isBlank()) flowOf(ApiResult.Success(null))
-        else {
-            businessRepository.getBusinessRequest(uid).flatMapLatest { result ->
-                val request = (result as? ApiResult.Success)?.data
-                if (request != null) {
-                    flowOf(ApiResult.Success(request))
-                } else {
-                    businessRepository.getAllBusinessRequests().flatMapLatest { allResult ->
-                        val list = (allResult as? ApiResult.Success)?.data ?: emptyList()
-                        val approvedBiz = list.firstOrNull { it.status == BusinessStatus.APPROVED }
-                        flowOf(ApiResult.Success(approvedBiz))
-                    }
-                }
-            }
-        }
+        else businessRepository.getBusinessRequest(uid)
     }
 
     private val categoriesFlow = userBusinessFlow.flatMapLatest { result ->

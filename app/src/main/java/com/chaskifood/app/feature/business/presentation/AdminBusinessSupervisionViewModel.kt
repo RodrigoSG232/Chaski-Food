@@ -64,7 +64,7 @@ class AdminBusinessSupervisionViewModel @Inject constructor(
         reason: String,
         onSuccess: () -> Unit,
     ) {
-        val adminEmail = currentUser.value?.email ?: "admin@chaskifood.com"
+        val adminEmail = currentUser.value?.email ?: currentUser.value?.uid ?: "Desconocido"
 
         if (reason.isBlank()) {
             _actionState.value = UiState.Error("Debes ingresar obligatoriamente el motivo de la suspensión.") {
@@ -93,7 +93,7 @@ class AdminBusinessSupervisionViewModel @Inject constructor(
         request: BusinessRequest,
         onSuccess: () -> Unit,
     ) {
-        val adminEmail = currentUser.value?.email ?: "admin@chaskifood.com"
+        val adminEmail = currentUser.value?.email ?: currentUser.value?.uid ?: "Desconocido"
 
         _actionState.value = UiState.Loading
         viewModelScope.launch {

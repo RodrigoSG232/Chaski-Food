@@ -64,7 +64,7 @@ class AdminBusinessReviewViewModel @Inject constructor(
         observations: String? = null,
         onSuccess: () -> Unit,
     ) {
-        val reviewerEmail = currentUser.value?.email ?: "admin@chaskifood.com"
+        val reviewerEmail = currentUser.value?.email ?: currentUser.value?.uid ?: "Desconocido"
 
         if ((status == BusinessStatus.OBSERVED || status == BusinessStatus.REJECTED) && observations.isNullOrBlank()) {
             _actionState.value = UiState.Error("Debes ingresar obligatoriamente las observaciones o motivo.") {
