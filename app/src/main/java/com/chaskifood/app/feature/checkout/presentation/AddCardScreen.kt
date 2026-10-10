@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -33,7 +34,7 @@ import com.chaskifood.app.ui.theme.ChaskiSurface
 @Composable
 fun AddCardScreen(
     onBack: () -> Unit,
-    onHome: () -> Unit,
+    onTabSelected: (FlowTab) -> Unit,
     onAddCard: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -48,14 +49,14 @@ fun AddCardScreen(
         bottomBar = {
             ChaskiFlowBottomBar(
                 selected = FlowTab.Home,
-                onTabClick = { if (it == FlowTab.Home) onHome() },
+                onTabClick = onTabSelected,
             )
         },
     ) { innerPadding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding)
+                .padding(innerPadding).consumeWindowInsets(innerPadding)
                 .verticalScroll(rememberScrollState()),
         ) {
             ChaskiAppBar(

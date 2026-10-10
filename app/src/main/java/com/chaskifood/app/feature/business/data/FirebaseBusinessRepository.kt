@@ -5,8 +5,10 @@ import com.chaskifood.app.feature.business.domain.AuditLog
 import com.chaskifood.app.feature.business.domain.BusinessRepository
 import com.chaskifood.app.feature.business.domain.BusinessRequest
 import com.chaskifood.app.feature.business.domain.BusinessStatus
+import com.chaskifood.app.core.firebase.FirebaseAccessControl
+import kotlinx.coroutines.CancellationException
+import com.google.firebase.firestore.FieldValue
 import com.google.firebase.Timestamp
-import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
@@ -16,59 +18,44 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
-class FirebaseBusinessRepository @Inject constructor() : BusinessRepository {
-
-    private val firestore: FirebaseFirestore by lazy { FirebaseFirestore.getInstance() }
+class FirebaseBusinessRepository @Inject constructor(
+    private val firestore: FirebaseFirestore,
+    private val access: FirebaseAccessControl,
+) : BusinessRepository {
     private val collectionRef by lazy { firestore.collection("business_requests") }
     private val auditLogsRef by lazy { firestore.collection("audit_logs") }
 
-    private val currentAuthUid: String
-        get() = FirebaseAuth.getInstance().currentUser?.uid ?: ""
-
     override fun getBusinessRequest(ownerUid: String): Flow<ApiResult<BusinessRequest?>> = callbackFlow {
-        val targetUid = ownerUid.ifBlank { currentAuthUid }
-
-        if (targetUid.isBlank()) {
-            trySend(ApiResult.Success(null))
-            awaitClose { }
+        val targetUid = try { access.requireUser().uid } catch (error: Exception) {
+            trySend(ApiResult.Failure("Inicia sesión para consultar tu negocio.", error))
+            close()
             return@callbackFlow
         }
-
-        val listener = collectionRef.addSnapshotListener { snapshot, error ->
+        if (ownerUid.isNotBlank() && ownerUid != targetUid) {
+            trySend(ApiResult.Failure("No tienes permisos para consultar este negocio."))
+            close()
+            return@callbackFlow
+        }
+        val listener = collectionRef.document(targetUid).addSnapshotListener { doc, error ->
             if (error != null) {
-                trySend(ApiResult.Failure(error.localizedMessage ?: "Error al consultar estado de negocio.", error))
-                return@addSnapshotListener
-            }
-
-            if (snapshot != null && !snapshot.isEmpty) {
-                val doc = snapshot.documents.firstOrNull {
-                    it.id == targetUid || it.getString("ownerUid") == targetUid
-                }
-
-                if (doc != null && doc.exists()) {
-                    val data = doc.data ?: emptyMap<String, Any>()
-                    val statusStr = data["status"] as? String ?: "PENDING_REVIEW"
-                    val request = BusinessRequest(
-                        id = doc.id,
-                        ownerUid = data["ownerUid"] as? String ?: targetUid,
-                        businessName = data["businessName"] as? String ?: "",
-                        ruc = data["ruc"] as? String ?: "",
-                        legalAddress = data["legalAddress"] as? String ?: "",
-                        phone = data["phone"] as? String ?: "",
-                        email = data["email"] as? String ?: "",
-                        category = data["category"] as? String ?: "Restaurante",
-                        status = try { BusinessStatus.valueOf(statusStr) } catch (e: Exception) { BusinessStatus.PENDING_REVIEW },
-                        observations = data["observations"] as? String,
-                        suspensionReason = data["suspensionReason"] as? String,
-                        reviewedBy = data["reviewedBy"] as? String,
-                        reviewedAt = (data["reviewedAt"] as? Timestamp)?.toDate()?.time,
-                    )
-                    trySend(ApiResult.Success(request))
-                } else {
-                    trySend(ApiResult.Success(null))
-                }
+                trySend(ApiResult.Failure("No se pudo consultar el negocio.", error))
             } else {
-                trySend(ApiResult.Success(null))
+                trySend(ApiResult.Success(doc?.takeIf { it.exists() }?.let { snapshot ->
+                    val status = BusinessStatus.entries.find { it.name == snapshot.getString("status") }
+                    if (status == null) {
+                        trySend(ApiResult.Failure("El negocio tiene un estado no reconocido."))
+                        return@addSnapshotListener
+                    }
+                    BusinessRequest(
+                        id = snapshot.id, ownerUid = snapshot.getString("ownerUid").orEmpty(),
+                        businessName = snapshot.getString("businessName").orEmpty(), ruc = snapshot.getString("ruc").orEmpty(),
+                        legalAddress = snapshot.getString("legalAddress").orEmpty(), phone = snapshot.getString("phone").orEmpty(),
+                        email = snapshot.getString("email").orEmpty(), category = snapshot.getString("category") ?: "Restaurante",
+                        status = status, observations = snapshot.getString("observations"),
+                        suspensionReason = snapshot.getString("suspensionReason"), reviewedBy = snapshot.getString("reviewedBy"),
+                        reviewedAt = snapshot.getTimestamp("reviewedAt")?.toDate()?.time,
+                    )
+                }))
             }
         }
 
@@ -76,6 +63,8 @@ class FirebaseBusinessRepository @Inject constructor() : BusinessRepository {
     }
 
     override fun getAllBusinessRequests(): Flow<ApiResult<List<BusinessRequest>>> = callbackFlow {
+        try { access.requireAdmin() } catch (cancelled: CancellationException) { throw cancelled }
+        catch (_: Exception) { trySend(ApiResult.Failure("No tienes permisos administrativos.")); close(); return@callbackFlow }
         val listener = collectionRef.addSnapshotListener { snapshot, error ->
             if (error != null) {
                 trySend(ApiResult.Failure(error.localizedMessage ?: "Error al consultar solicitudes.", error))
@@ -109,150 +98,99 @@ class FirebaseBusinessRepository @Inject constructor() : BusinessRepository {
         awaitClose { listener.remove() }
     }
 
-    override suspend fun submitBusinessRequest(request: BusinessRequest): ApiResult<BusinessRequest> {
-        return try {
-            val targetUid = request.ownerUid.ifBlank { currentAuthUid }
-            val docId = targetUid.ifBlank { "biz_${System.currentTimeMillis()}" }
-            val payload = mapOf(
-                "ownerUid" to docId,
-                "businessName" to request.businessName,
-                "ruc" to request.ruc,
-                "legalAddress" to request.legalAddress,
-                "phone" to request.phone,
-                "email" to request.email,
-                "category" to request.category,
-                "status" to BusinessStatus.PENDING_REVIEW.name,
-                "observations" to null,
-                "suspensionReason" to null,
-                "updatedAt" to Timestamp.now(),
-            )
+    override suspend fun submitBusinessRequest(request: BusinessRequest) = saveRequest(request, false)
+    override suspend fun resubmitBusinessRequest(request: BusinessRequest) = saveRequest(request, true)
 
-            collectionRef.document(docId).set(payload).await()
-            val created = request.copy(
-                id = docId,
-                ownerUid = docId,
-                status = BusinessStatus.PENDING_REVIEW,
-                observations = null,
-            )
-            ApiResult.Success(created)
-        } catch (e: Exception) {
-            ApiResult.Failure(e.localizedMessage ?: "Error al guardar solicitud en Firestore.", e)
+    private suspend fun saveRequest(request: BusinessRequest, resubmission: Boolean): ApiResult<BusinessRequest> = operation {
+        val user = access.requireUser()
+        require(request.ownerUid == user.uid && (request.id.isBlank() || request.id == user.uid)) { "Propietario inválido." }
+        require(request.businessName.isNotBlank() && request.legalAddress.isNotBlank() &&
+            request.ruc.matches(Regex("[0-9]{11}")) && request.phone.isNotBlank() && request.email.isNotBlank()) {
+            "Completa los datos obligatorios del negocio."
         }
-    }
-
-    override suspend fun resubmitBusinessRequest(request: BusinessRequest): ApiResult<BusinessRequest> {
-        return submitBusinessRequest(request)
-    }
-
-    override suspend fun evaluateBusinessRequest(
-        requestId: String,
-        status: BusinessStatus,
-        observations: String?,
-        reviewerEmail: String,
-    ): ApiResult<Unit> {
-        return try {
-            val updates = mapOf(
-                "status" to status.name,
-                "observations" to observations,
-                "reviewedBy" to reviewerEmail,
-                "reviewedAt" to Timestamp.now(),
-                "updatedAt" to Timestamp.now(),
+        val reference = collectionRef.document(user.uid)
+        firestore.runTransaction { transaction ->
+            val existing = transaction.get(reference)
+            check(access.requireUser().uid == user.uid) { "La sesión cambió." }
+            if (resubmission) {
+                check(existing.getString("ownerUid") == user.uid && existing.getString("status") == "OBSERVED") {
+                    "Solo puedes reenviar una solicitud observada."
+                }
+            } else check(!existing.exists()) { "Ya tienes una solicitud registrada. Consulta su estado." }
+            val fields = mapOf(
+                "ownerUid" to user.uid, "businessName" to request.businessName.trim(), "ruc" to request.ruc,
+                "legalAddress" to request.legalAddress.trim(), "phone" to request.phone.trim(),
+                "email" to request.email.trim(), "category" to request.category,
+                "status" to BusinessStatus.PENDING_REVIEW.name, "observations" to null,
+                "suspensionReason" to null, "reviewedBy" to null, "reviewedAt" to null,
+                "updatedAt" to FieldValue.serverTimestamp(),
             )
-            collectionRef.document(requestId).update(updates).await()
+            if (resubmission) transaction.update(reference, fields)
+            else transaction.set(reference, fields + ("createdAt" to FieldValue.serverTimestamp()))
+        }.await()
+        request.copy(id = user.uid, ownerUid = user.uid, status = BusinessStatus.PENDING_REVIEW,
+            observations = null, reviewedBy = null, reviewedAt = null, suspensionReason = null)
+    }
 
-            val actionName = when (status) {
+    override suspend fun evaluateBusinessRequest(requestId: String, status: BusinessStatus,
+        observations: String?, reviewerEmail: String): ApiResult<Unit> = operation {
+        require(status in setOf(BusinessStatus.APPROVED, BusinessStatus.OBSERVED, BusinessStatus.REJECTED))
+        require(status == BusinessStatus.APPROVED || !observations.isNullOrBlank()) { "Indica el motivo de la decisión." }
+        auditedTransition(requestId, BusinessStatus.PENDING_REVIEW, status,
+            when (status) {
                 BusinessStatus.APPROVED -> "APROBAR_NEGOCIO"
                 BusinessStatus.OBSERVED -> "OBSERVAR_NEGOCIO"
-                BusinessStatus.REJECTED -> "RECHAZAR_NEGOCIO"
-                else -> "EVALUAR_NEGOCIO"
+                else -> "RECHAZAR_NEGOCIO"
+            }, observations?.trim(), mapOf("observations" to observations?.trim()))
+    }
+
+    override suspend fun suspendBusiness(requestId: String, reason: String, adminEmail: String,
+        businessName: String, ruc: String): ApiResult<Unit> = operation {
+        require(reason.isNotBlank()) { "Indica el motivo de suspensión." }
+        auditedTransition(requestId, BusinessStatus.APPROVED, BusinessStatus.SUSPENDED,
+            "SUSPENDER_NEGOCIO", reason.trim(), mapOf("suspensionReason" to reason.trim()))
+    }
+
+    override suspend fun reactivateBusiness(requestId: String, adminEmail: String,
+        businessName: String, ruc: String): ApiResult<Unit> = operation {
+        auditedTransition(requestId, BusinessStatus.SUSPENDED, BusinessStatus.APPROVED,
+            "REACTIVAR_NEGOCIO", "Negocio reactivado.", mapOf("suspensionReason" to null))
+    }
+
+    private suspend fun auditedTransition(id: String, previous: BusinessStatus, target: BusinessStatus,
+        action: String, details: String?, extra: Map<String, Any?>) {
+        val admin = access.requireAdmin()
+        val reference = collectionRef.document(id)
+        val audit = auditLogsRef.document()
+        firestore.runTransaction { transaction ->
+            val existing = transaction.get(reference)
+            check(existing.exists() && existing.getString("status") == previous.name) {
+                "El estado cambió. Actualiza la lista antes de continuar."
             }
-
-            val docSnapshot = collectionRef.document(requestId).get().await()
-            val bizName = docSnapshot.getString("businessName") ?: ""
-            val bizRuc = docSnapshot.getString("ruc") ?: ""
-
-            recordAuditLog(
-                AuditLog(
-                    adminEmail = reviewerEmail,
-                    action = actionName,
-                    targetBusinessName = bizName,
-                    targetRuc = bizRuc,
-                    details = observations,
-                ),
-            )
-
-            ApiResult.Success(Unit)
-        } catch (e: Exception) {
-            ApiResult.Failure(e.localizedMessage ?: "Error al evaluar la solicitud de negocio.", e)
-        }
+            check(access.requireUser().uid == admin.uid) { "La sesión cambió." }
+            transaction.update(reference, extra + mapOf(
+                "status" to target.name, "reviewedBy" to (admin.email ?: admin.uid),
+                "reviewedAt" to FieldValue.serverTimestamp(), "updatedAt" to FieldValue.serverTimestamp(),
+                "lastAuditId" to audit.id,
+            ))
+            transaction.set(audit, mapOf(
+                "adminUid" to admin.uid, "adminEmail" to (admin.email ?: admin.uid), "action" to action,
+                "targetBusinessId" to id, "targetBusinessName" to existing.getString("businessName").orEmpty(),
+                "targetRuc" to existing.getString("ruc").orEmpty(), "details" to details,
+                "previousStatus" to previous.name, "newStatus" to target.name,
+                "timestamp" to FieldValue.serverTimestamp(),
+            ))
+        }.await()
     }
 
-    override suspend fun suspendBusiness(
-        requestId: String,
-        reason: String,
-        adminEmail: String,
-        businessName: String,
-        ruc: String,
-    ): ApiResult<Unit> {
-        return try {
-            val updates = mapOf(
-                "status" to BusinessStatus.SUSPENDED.name,
-                "suspensionReason" to reason,
-                "reviewedBy" to adminEmail,
-                "reviewedAt" to Timestamp.now(),
-                "updatedAt" to Timestamp.now(),
-            )
-            collectionRef.document(requestId).update(updates).await()
-
-            recordAuditLog(
-                AuditLog(
-                    adminEmail = adminEmail,
-                    action = "SUSPENDER_NEGOCIO",
-                    targetBusinessName = businessName,
-                    targetRuc = ruc,
-                    details = "Motivo: $reason",
-                ),
-            )
-
-            ApiResult.Success(Unit)
-        } catch (e: Exception) {
-            ApiResult.Failure(e.localizedMessage ?: "Error al suspender el negocio.", e)
-        }
-    }
-
-    override suspend fun reactivateBusiness(
-        requestId: String,
-        adminEmail: String,
-        businessName: String,
-        ruc: String,
-    ): ApiResult<Unit> {
-        return try {
-            val updates = mapOf(
-                "status" to BusinessStatus.APPROVED.name,
-                "suspensionReason" to null,
-                "reviewedBy" to adminEmail,
-                "reviewedAt" to Timestamp.now(),
-                "updatedAt" to Timestamp.now(),
-            )
-            collectionRef.document(requestId).update(updates).await()
-
-            recordAuditLog(
-                AuditLog(
-                    adminEmail = adminEmail,
-                    action = "REACTIVAR_NEGOCIO",
-                    targetBusinessName = businessName,
-                    targetRuc = ruc,
-                    details = "Negocio reactivado y habilitado para ventas.",
-                ),
-            )
-
-            ApiResult.Success(Unit)
-        } catch (e: Exception) {
-            ApiResult.Failure(e.localizedMessage ?: "Error al reactivar el negocio.", e)
-        }
-    }
+    private suspend fun <T> operation(block: suspend () -> T): ApiResult<T> = try {
+        ApiResult.Success(block())
+    } catch (cancelled: CancellationException) { throw cancelled }
+    catch (error: Exception) { ApiResult.Failure(error.message ?: "No se pudo completar la operación.", error) }
 
     override fun getAuditLogs(): Flow<ApiResult<List<AuditLog>>> = callbackFlow {
+        try { access.requireAdmin() } catch (cancelled: CancellationException) { throw cancelled }
+        catch (_: Exception) { trySend(ApiResult.Failure("No tienes permisos administrativos.")); close(); return@callbackFlow }
         val listener = auditLogsRef.addSnapshotListener { snapshot, error ->
             if (error != null) {
                 trySend(ApiResult.Failure(error.localizedMessage ?: "Error al consultar auditoría.", error))
@@ -279,21 +217,4 @@ class FirebaseBusinessRepository @Inject constructor() : BusinessRepository {
         awaitClose { listener.remove() }
     }
 
-    override suspend fun recordAuditLog(log: AuditLog): ApiResult<Unit> {
-        return try {
-            val docId = "audit_${System.currentTimeMillis()}"
-            val payload = mapOf(
-                "adminEmail" to log.adminEmail,
-                "action" to log.action,
-                "targetBusinessName" to log.targetBusinessName,
-                "targetRuc" to log.targetRuc,
-                "details" to log.details,
-                "timestamp" to Timestamp.now(),
-            )
-            auditLogsRef.document(docId).set(payload).await()
-            ApiResult.Success(Unit)
-        } catch (e: Exception) {
-            ApiResult.Failure(e.localizedMessage ?: "Error al registrar auditoría.", e)
-        }
-    }
 }

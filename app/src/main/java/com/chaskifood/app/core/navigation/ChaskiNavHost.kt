@@ -1,7 +1,12 @@
 package com.chaskifood.app.core.navigation
 
 import android.net.Uri
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.consumeWindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -65,10 +70,15 @@ import com.chaskifood.app.ui.components.FlowTab
 @Composable
 fun ChaskiNavHost() {
     val navController = rememberNavController()
+    val onTabSelected: (FlowTab) -> Unit = { navController.openMainTab(it) }
 
     NavHost(
         navController = navController,
         startDestination = ChaskiDestinations.SPLASH,
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+            .safeDrawingPadding(),
     ) {
         composable(ChaskiDestinations.SPLASH) {
             SplashScreen(
@@ -133,8 +143,12 @@ fun ChaskiNavHost() {
             SignUpPhoneScreen(
                 viewModel = phoneViewModel,
                 onGetCode = { verificationId ->
-                    val encodedId = Uri.encode(verificationId)
-                    navController.navigate("verify_phone/$encodedId")
+                    if (verificationId.isBlank()) {
+                        navController.navigate(ChaskiDestinations.MAIN) { popUpTo(0) { inclusive = true } }
+                    } else {
+                        val encodedId = Uri.encode(verificationId)
+                        navController.navigate("verify_phone/$encodedId")
+                    }
                 },
                 onBack = {
                     navController.popBackStack()
@@ -146,9 +160,12 @@ fun ChaskiNavHost() {
             arguments = listOf(navArgument("verificationId") { type = NavType.StringType }),
         ) { backStackEntry ->
             val verificationId = backStackEntry.arguments?.getString("verificationId") ?: ""
-            val phoneViewModel: PhoneAuthViewModel = hiltViewModel()
+            val phoneEntry = remember(backStackEntry) {
+                navController.getBackStackEntry(ChaskiDestinations.SIGN_UP_PHONE)
+            }
+            val phoneViewModel: PhoneAuthViewModel = hiltViewModel(phoneEntry)
             LaunchedEffect(verificationId) {
-                phoneViewModel.verificationId.value = verificationId
+                if (phoneViewModel.verificationId.value == null) phoneViewModel.verificationId.value = verificationId
             }
             VerifyPhoneScreen(
                 viewModel = phoneViewModel,
@@ -158,6 +175,7 @@ fun ChaskiNavHost() {
                     }
                 },
                 onBack = {
+                    phoneViewModel.clearFeedback()
                     navController.popBackStack()
                 },
             )
@@ -210,10 +228,14 @@ fun ChaskiNavHost() {
                 },
             )
         }
-        composable(ChaskiDestinations.MAIN) {
+        composable(ChaskiDestinations.MAIN) { mainEntry ->
+            val requestedRoute by mainEntry.savedStateHandle
+                .getStateFlow<String?>(MAIN_TAB_REQUEST, null).collectAsStateWithLifecycle()
             val addressViewModel: AddressViewModel = hiltViewModel()
             val addressState by addressViewModel.uiState.collectAsStateWithLifecycle()
             MainScreen(
+                requestedTab = ChaskiTab.entries.find { it.route == requestedRoute },
+                onTabRequestHandled = { mainEntry.savedStateHandle[MAIN_TAB_REQUEST] = null },
                 deliveryAddress = addressState.book?.let { book ->
                     book.addresses.find { it.id == book.selectedAddressId }?.addressText
                 },
@@ -298,11 +320,15 @@ fun ChaskiNavHost() {
                 },
             )
         }
-        composable(ChaskiDestinations.REGISTER_BUSINESS) {
+        composable(
+            route = ChaskiDestinations.REGISTER_BUSINESS + "?resubmit={resubmit}",
+            arguments = listOf(navArgument("resubmit") { type = NavType.BoolType; defaultValue = false }),
+        ) { entry ->
             RegisterBusinessScreen(
+                isResubmission = entry.arguments?.getBoolean("resubmit") == true,
                 onSubmitted = {
                     navController.navigate(ChaskiDestinations.BUSINESS_STATUS) {
-                        popUpTo(ChaskiDestinations.REGISTER_BUSINESS) { inclusive = true }
+                        popUpTo(entry.destination.id) { inclusive = true }
                     }
                 },
                 onBack = { navController.popBackStack() },
@@ -314,7 +340,7 @@ fun ChaskiNavHost() {
                     navController.navigate(ChaskiDestinations.REGISTER_BUSINESS)
                 },
                 onEditAndResubmit = {
-                    navController.navigate(ChaskiDestinations.REGISTER_BUSINESS)
+                    navController.navigate(ChaskiDestinations.REGISTER_BUSINESS + "?resubmit=true")
                 },
                 onManageStores = {
                     navController.navigate(ChaskiDestinations.MANAGE_STORES)
@@ -358,14 +384,7 @@ fun ChaskiNavHost() {
                 bottomBar = {
                     ChaskiFlowBottomBar(
                         selected = FlowTab.Account,
-                        onTabClick = { tab ->
-                            if (tab == FlowTab.Home) {
-                                navController.popBackStack(
-                                    ChaskiDestinations.MAIN,
-                                    inclusive = false,
-                                )
-                            }
-                        },
+                        onTabClick = onTabSelected,
                     )
                 },
             ) { innerPadding ->
@@ -377,7 +396,7 @@ fun ChaskiNavHost() {
                             popUpTo(0) { inclusive = true }
                         }
                     },
-                    modifier = Modifier.padding(innerPadding),
+                    modifier = Modifier.padding(innerPadding).consumeWindowInsets(innerPadding),
                 )
             }
         }
@@ -387,14 +406,7 @@ fun ChaskiNavHost() {
                 bottomBar = {
                     com.chaskifood.app.ui.components.ChaskiFlowBottomBar(
                         selected = com.chaskifood.app.ui.components.FlowTab.Home,
-                        onTabClick = { tab ->
-                            if (tab == com.chaskifood.app.ui.components.FlowTab.Home) {
-                                navController.popBackStack(
-                                    ChaskiDestinations.MAIN,
-                                    inclusive = false,
-                                )
-                            }
-                        },
+                        onTabClick = onTabSelected,
                     )
                 },
             ) { innerPadding ->
@@ -408,14 +420,14 @@ fun ChaskiNavHost() {
                             ),
                         )
                     },
-                    modifier = Modifier.padding(innerPadding),
+                    modifier = Modifier.padding(innerPadding).consumeWindowInsets(innerPadding),
                 )
             }
         }
         composable(ChaskiDestinations.RESTAURANTS) {
             RestaurantsScreen(
                 onBack = { navController.popBackStack() },
-                onHome = { navController.popBackStack(ChaskiDestinations.MAIN, inclusive = false) },
+                onTabSelected = onTabSelected,
                 onRestaurantClick = {
                     navController.navigate(ChaskiDestinations.RESTAURANT_DETAIL)
                 },
@@ -425,7 +437,7 @@ fun ChaskiNavHost() {
             RestaurantDetailScreen(
                 restaurantName = "Garden Dining Room",
                 onBack = { navController.popBackStack() },
-                onHome = { navController.popBackStack(ChaskiDestinations.MAIN, inclusive = false) },
+                onTabSelected = onTabSelected,
                 onFoodClick = {
                     navController.navigate(ChaskiDestinations.MENU_TOPPING)
                 },
@@ -444,7 +456,7 @@ fun ChaskiNavHost() {
             FoodsPerCategoryScreen(
                 categoryName = category,
                 onBack = { navController.popBackStack() },
-                onHome = { navController.popBackStack(ChaskiDestinations.MAIN, inclusive = false) },
+                onTabSelected = onTabSelected,
                 onFoodClick = {
                     navController.navigate(ChaskiDestinations.MENU_TOPPING)
                 },
@@ -453,14 +465,14 @@ fun ChaskiNavHost() {
         composable(ChaskiDestinations.FILTER) {
             FilterScreen(
                 onBack = { navController.popBackStack() },
-                onHome = { navController.popBackStack(ChaskiDestinations.MAIN, inclusive = false) },
+                onTabSelected = onTabSelected,
                 onShowResults = { navController.popBackStack() },
             )
         }
         composable(ChaskiDestinations.MENU_TOPPING) {
             MenuToppingScreen(
                 onBack = { navController.popBackStack() },
-                onHome = { navController.popBackStack(ChaskiDestinations.MAIN, inclusive = false) },
+                onTabSelected = onTabSelected,
                 onAddToOrder = {
                     navController.navigate(ChaskiDestinations.YOUR_ORDER)
                 },
@@ -469,7 +481,7 @@ fun ChaskiNavHost() {
         composable(ChaskiDestinations.YOUR_ORDER) {
             YourOrderScreen(
                 onBack = { navController.popBackStack() },
-                onHome = { navController.popBackStack(ChaskiDestinations.MAIN, inclusive = false) },
+                onTabSelected = onTabSelected,
                 onCheckout = {
                     navController.navigate(ChaskiDestinations.CHECKOUT)
                 },
@@ -481,7 +493,7 @@ fun ChaskiNavHost() {
         composable(ChaskiDestinations.CHECKOUT) {
             CheckoutScreen(
                 onBack = { navController.popBackStack() },
-                onHome = { navController.popBackStack(ChaskiDestinations.MAIN, inclusive = false) },
+                onTabSelected = onTabSelected,
                 onContinueToPayment = {
                     navController.navigate(ChaskiDestinations.PAYMENT)
                 },
@@ -490,7 +502,7 @@ fun ChaskiNavHost() {
         composable(ChaskiDestinations.PAYMENT) {
             PaymentScreen(
                 onBack = { navController.popBackStack() },
-                onHome = { navController.popBackStack(ChaskiDestinations.MAIN, inclusive = false) },
+                onTabSelected = onTabSelected,
                 onCompletePurchase = {
                     navController.navigate(ChaskiDestinations.ORDER_PLACED)
                 },
@@ -502,7 +514,7 @@ fun ChaskiNavHost() {
         composable(ChaskiDestinations.ADD_CARD) {
             AddCardScreen(
                 onBack = { navController.popBackStack() },
-                onHome = { navController.popBackStack(ChaskiDestinations.MAIN, inclusive = false) },
+                onTabSelected = onTabSelected,
                 onAddCard = {
                     navController.popBackStack()
                 },
@@ -510,6 +522,7 @@ fun ChaskiNavHost() {
         }
         composable(ChaskiDestinations.ORDER_PLACED) {
             OrderPlacedScreen(
+                onTabSelected = onTabSelected,
                 onTrackOrder = {
                     navController.navigate(ChaskiDestinations.ORDER_TRACKING) {
                         popUpTo(ChaskiDestinations.ORDER_PLACED) { inclusive = true }
@@ -555,14 +568,7 @@ fun ChaskiNavHost() {
                 bottomBar = {
                     com.chaskifood.app.ui.components.ChaskiFlowBottomBar(
                         selected = com.chaskifood.app.ui.components.FlowTab.Account,
-                        onTabClick = { tab ->
-                            if (tab == com.chaskifood.app.ui.components.FlowTab.Home) {
-                                navController.popBackStack(
-                                    ChaskiDestinations.MAIN,
-                                    inclusive = false,
-                                )
-                            }
-                        },
+                        onTabClick = onTabSelected,
                     )
                 },
             ) { innerPadding ->
@@ -574,7 +580,7 @@ fun ChaskiNavHost() {
                         navController.navigate(ChaskiDestinations.ADD_CARD)
                     },
                     onBack = { navController.popBackStack() },
-                    modifier = Modifier.padding(innerPadding),
+                    modifier = Modifier.padding(innerPadding).consumeWindowInsets(innerPadding),
                 )
             }
         }
@@ -584,21 +590,14 @@ fun ChaskiNavHost() {
                 bottomBar = {
                     com.chaskifood.app.ui.components.ChaskiFlowBottomBar(
                         selected = com.chaskifood.app.ui.components.FlowTab.Account,
-                        onTabClick = { tab ->
-                            if (tab == com.chaskifood.app.ui.components.FlowTab.Home) {
-                                navController.popBackStack(
-                                    ChaskiDestinations.MAIN,
-                                    inclusive = false,
-                                )
-                            }
-                        },
+                        onTabClick = onTabSelected,
                     )
                 },
             ) { innerPadding ->
                 ReferFriendScreen(
                     onBack = { navController.popBackStack() },
                     onMore = { navController.navigate(ChaskiDestinations.SOCIAL_ACCOUNTS) },
-                    modifier = Modifier.padding(innerPadding),
+                    modifier = Modifier.padding(innerPadding).consumeWindowInsets(innerPadding),
                 )
             }
         }
@@ -608,20 +607,13 @@ fun ChaskiNavHost() {
                 bottomBar = {
                     com.chaskifood.app.ui.components.ChaskiFlowBottomBar(
                         selected = com.chaskifood.app.ui.components.FlowTab.Account,
-                        onTabClick = { tab ->
-                            if (tab == com.chaskifood.app.ui.components.FlowTab.Home) {
-                                navController.popBackStack(
-                                    ChaskiDestinations.MAIN,
-                                    inclusive = false,
-                                )
-                            }
-                        },
+                        onTabClick = onTabSelected,
                     )
                 },
             ) { innerPadding ->
                 LinkSocialAccountsScreen(
                     onBack = { navController.popBackStack() },
-                    modifier = Modifier.padding(innerPadding),
+                    modifier = Modifier.padding(innerPadding).consumeWindowInsets(innerPadding),
                 )
             }
         }
@@ -631,14 +623,7 @@ fun ChaskiNavHost() {
                 bottomBar = {
                     com.chaskifood.app.ui.components.ChaskiFlowBottomBar(
                         selected = com.chaskifood.app.ui.components.FlowTab.Home,
-                        onTabClick = { tab ->
-                            if (tab == com.chaskifood.app.ui.components.FlowTab.Home) {
-                                navController.popBackStack(
-                                    ChaskiDestinations.MAIN,
-                                    inclusive = false,
-                                )
-                            }
-                        },
+                        onTabClick = onTabSelected,
                     )
                 },
             ) { innerPadding ->
@@ -647,7 +632,7 @@ fun ChaskiNavHost() {
                         navController.navigate(ChaskiDestinations.LOCATIONS)
                     },
                     onBack = { navController.popBackStack() },
-                    modifier = Modifier.padding(innerPadding),
+                    modifier = Modifier.padding(innerPadding).consumeWindowInsets(innerPadding),
                 )
             }
         }
@@ -657,14 +642,7 @@ fun ChaskiNavHost() {
                 bottomBar = {
                     com.chaskifood.app.ui.components.ChaskiFlowBottomBar(
                         selected = com.chaskifood.app.ui.components.FlowTab.Home,
-                        onTabClick = { tab ->
-                            if (tab == com.chaskifood.app.ui.components.FlowTab.Home) {
-                                navController.popBackStack(
-                                    ChaskiDestinations.MAIN,
-                                    inclusive = false,
-                                )
-                            }
-                        },
+                        onTabClick = onTabSelected,
                     )
                 },
             ) { innerPadding ->
@@ -673,7 +651,7 @@ fun ChaskiNavHost() {
                         navController.popBackStack(ChaskiDestinations.MAIN, inclusive = false)
                     },
                     onBack = { navController.popBackStack() },
-                    modifier = Modifier.padding(innerPadding),
+                    modifier = Modifier.padding(innerPadding).consumeWindowInsets(innerPadding),
                 )
             }
         }

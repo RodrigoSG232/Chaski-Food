@@ -3,6 +3,8 @@ package com.chaskifood.app.feature.business.presentation
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -24,6 +26,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -33,6 +36,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -74,8 +78,11 @@ fun AdminBusinessReviewScreen(
     val filteredResult by viewModel.filteredRequests.collectAsState()
     val actionState by viewModel.actionState.collectAsState()
 
-    var activeDialogRequest by remember { mutableStateOf<Pair<BusinessRequest, BusinessStatus>?>(null) }
-    var dialogObservationInput by remember { mutableStateOf("") }
+    var dialogRequestId by rememberSaveable { mutableStateOf<String?>(null) }
+    var dialogTargetStatus by rememberSaveable { mutableStateOf(BusinessStatus.OBSERVED.name) }
+    var dialogObservationInput by rememberSaveable { mutableStateOf("") }
+    val activeDialogRequest = (filteredResult as? ApiResult.Success)?.data
+        ?.find { it.id == dialogRequestId }?.let { it to BusinessStatus.valueOf(dialogTargetStatus) }
 
     Column(
         modifier = modifier
@@ -141,7 +148,7 @@ fun AdminBusinessReviewScreen(
 
             Spacer(Modifier.height(ChaskiDimens.SpacingLg))
 
-            if (actionState is UiState.Error) {
+            if (actionState is UiState.Error && dialogRequestId == null) {
                 Text(
                     text = (actionState as UiState.Error).message ?: "Error al procesar evaluación",
                     color = MaterialTheme.colorScheme.error,
@@ -181,17 +188,25 @@ fun AdminBusinessReviewScreen(
                                     )
                                 },
                                 onObserve = {
+                                    viewModel.clearActionError()
                                     dialogObservationInput = request.observations ?: ""
-                                    activeDialogRequest = request to BusinessStatus.OBSERVED
+                                    dialogRequestId = request.id
+                                    dialogTargetStatus = BusinessStatus.OBSERVED.name
                                 },
                                 onReject = {
+                                    viewModel.clearActionError()
                                     dialogObservationInput = request.observations ?: ""
-                                    activeDialogRequest = request to BusinessStatus.REJECTED
+                                    dialogRequestId = request.id
+                                    dialogTargetStatus = BusinessStatus.REJECTED.name
                                 },
                             )
                         }
                     }
                 }
+            } else if (filteredResult is ApiResult.Failure) {
+                Text((filteredResult as ApiResult.Failure).message ?: "No se pudieron cargar las solicitudes.",
+                    color = MaterialTheme.colorScheme.error)
+                TextButton(onClick = viewModel::retryLoading) { Text("REINTENTAR") }
             }
         }
     }
@@ -200,12 +215,12 @@ fun AdminBusinessReviewScreen(
     activeDialogRequest?.let { (request, targetStatus) ->
         val isObserve = targetStatus == BusinessStatus.OBSERVED
         AlertDialog(
-            onDismissRequest = { activeDialogRequest = null },
+            onDismissRequest = { if (actionState !is UiState.Loading) { dialogRequestId = null; viewModel.clearActionError() } },
             title = {
                 Text(text = if (isObserve) "Observar Solicitud" else "Rechazar Solicitud")
             },
             text = {
-                Column {
+                Column(Modifier.verticalScroll(rememberScrollState())) {
                     Text(
                         text = "Ingresa el motivo u observaciones para '${request.businessName}':",
                         fontSize = 14.sp,
@@ -225,7 +240,13 @@ fun AdminBusinessReviewScreen(
                         },
                         modifier = Modifier.fillMaxWidth(),
                         minLines = 3,
+                        enabled = actionState !is UiState.Loading,
                     )
+                    if (actionState is UiState.Error) {
+                        Text((actionState as UiState.Error).message ?: "No se pudo completar la evaluación. Intenta nuevamente.",
+                            color = MaterialTheme.colorScheme.error)
+                    }
+                    if (actionState is UiState.Loading) LinearProgressIndicator(Modifier.fillMaxWidth())
                 }
             },
             confirmButton = {
@@ -237,10 +258,11 @@ fun AdminBusinessReviewScreen(
                             status = targetStatus,
                             observations = obs,
                             onSuccess = {
-                                activeDialogRequest = null
+                                dialogRequestId = null
                             },
                         )
                     },
+                    enabled = dialogObservationInput.isNotBlank() && actionState !is UiState.Loading,
                     colors = ButtonDefaults.buttonColors(
                         containerColor = if (isObserve) Color(0xFFE65100) else Color(0xFFC62828),
                     ),
@@ -249,7 +271,8 @@ fun AdminBusinessReviewScreen(
                 }
             },
             dismissButton = {
-                TextButton(onClick = { activeDialogRequest = null }) {
+                TextButton(enabled = actionState !is UiState.Loading,
+                    onClick = { dialogRequestId = null; viewModel.clearActionError() }) {
                     Text(text = "CANCELAR")
                 }
             },

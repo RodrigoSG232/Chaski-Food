@@ -21,6 +21,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -44,69 +45,61 @@ class ManageCatalogViewModel @Inject constructor(
     private val authRepository: AuthRepository,
 ) : ViewModel() {
 
-    private val userBusinessFlow = authRepository.currentUserFlow.flatMapLatest { user ->
-        val uid = user?.uid ?: ""
-        if (uid.isBlank()) flowOf(ApiResult.Success(null))
-        else businessRepository.getBusinessRequest(uid)
-    }
+    private val reloads = MutableStateFlow(0)
+    fun retryLoading() { reloads.value += 1 }
 
-    private val categoriesFlow = userBusinessFlow.flatMapLatest { result ->
-        val bizId = (result as? ApiResult.Success)?.data?.id ?: ""
-        if (bizId.isBlank()) flowOf(ApiResult.Success(emptyList()))
-        else catalogRepository.getCategories(bizId)
-    }
-
-    private val productsFlow = userBusinessFlow.flatMapLatest { result ->
-        val bizId = (result as? ApiResult.Success)?.data?.id ?: ""
-        if (bizId.isBlank()) flowOf(ApiResult.Success(emptyList()))
-        else catalogRepository.getProducts(bizId)
-    }
-
-    val uiState: StateFlow<ManageCatalogUiState> = combine(
-        userBusinessFlow,
-        categoriesFlow,
-        productsFlow,
-    ) { bizResult, catResult, prodResult ->
-        when (bizResult) {
-            is ApiResult.Success -> {
-                val biz = bizResult.data
-                if (biz == null) {
-                    ManageCatalogUiState.NoBusinessFound
-                } else if (biz.status != BusinessStatus.APPROVED) {
-                    ManageCatalogUiState.NotApproved
-                } else {
-                    val cats = (catResult as? ApiResult.Success)?.data ?: emptyList()
-                    val prods = (prodResult as? ApiResult.Success)?.data ?: emptyList()
-                    ManageCatalogUiState.Success(
-                        businessId = biz.id,
-                        businessName = biz.businessName,
-                        categories = cats,
-                        products = prods,
-                    )
+    val uiState: StateFlow<ManageCatalogUiState> = reloads.flatMapLatest {
+        authRepository.currentUserFlow.flatMapLatest { user ->
+            if (user == null) flowOf<ManageCatalogUiState>(ManageCatalogUiState.NoBusinessFound)
+            else businessRepository.getBusinessRequest(user.uid).flatMapLatest { result ->
+                when (result) {
+                    is ApiResult.Failure -> flowOf<ManageCatalogUiState>(ManageCatalogUiState.Error(result.message ?: "No se pudo cargar el negocio."))
+                    is ApiResult.Success -> {
+                        val business = result.data
+                        when {
+                            business == null -> flowOf<ManageCatalogUiState>(ManageCatalogUiState.NoBusinessFound)
+                            business.status != BusinessStatus.APPROVED -> flowOf<ManageCatalogUiState>(ManageCatalogUiState.NotApproved)
+                            else -> combine(catalogRepository.getCategories(business.id), catalogRepository.getProducts(business.id)) { categories, products ->
+                                when {
+                                    categories is ApiResult.Failure -> ManageCatalogUiState.Error(categories.message ?: "No se pudieron cargar las categorías.")
+                                    products is ApiResult.Failure -> ManageCatalogUiState.Error(products.message ?: "No se pudieron cargar los productos.")
+                                    else -> ManageCatalogUiState.Success(business.id, business.businessName,
+                                        (categories as ApiResult.Success).data, (products as ApiResult.Success).data)
+                                }
+                            }
+                        }
+                    }
                 }
-            }
-            is ApiResult.Failure -> ManageCatalogUiState.Error(bizResult.message ?: "Error al cargar datos del negocio.")
-            null -> ManageCatalogUiState.Loading
+            }.onStart { emit(ManageCatalogUiState.Loading) }
         }
-    }.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = ManageCatalogUiState.Loading,
-    )
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), ManageCatalogUiState.Loading)
 
     private val _actionMessage = MutableStateFlow<String?>(null)
     val actionMessage: StateFlow<String?> = _actionMessage.asStateFlow()
+    private val _saving = MutableStateFlow(false)
+    val saving = _saving.asStateFlow()
+    private val _saveError = MutableStateFlow<String?>(null)
+    val saveError = _saveError.asStateFlow()
 
     fun clearActionMessage() {
         _actionMessage.value = null
     }
 
-    fun saveCategory(category: ProductCategory) {
+    fun clearSaveError() {
+        if (!_saving.value) _saveError.value = null
+    }
+
+    fun saveCategory(category: ProductCategory, onSuccess: () -> Unit = {}) {
+        if (_saving.value) return
+        _saving.value = true
+        _saveError.value = null
         viewModelScope.launch {
-            when (val result = catalogRepository.saveCategory(category)) {
-                is ApiResult.Success -> _actionMessage.value = "Categoría guardada con éxito."
-                is ApiResult.Failure -> _actionMessage.value = result.message
-            }
+            try {
+                when (val result = catalogRepository.saveCategory(category)) {
+                    is ApiResult.Success -> { _actionMessage.value = "Categoría guardada con éxito."; onSuccess() }
+                    is ApiResult.Failure -> { _actionMessage.value = result.message; _saveError.value = result.message }
+                }
+            } finally { _saving.value = false }
         }
     }
 
@@ -119,25 +112,38 @@ class ManageCatalogViewModel @Inject constructor(
         }
     }
 
-    fun saveProduct(product: Product) {
+    fun saveProduct(product: Product, onSuccess: () -> Unit = {}) {
+        if (_saving.value) return
+        _saving.value = true
+        _saveError.value = null
         viewModelScope.launch {
-            if (product.name.isBlank()) {
-                _actionMessage.value = "Ingresa el nombre del producto."
-                return@launch
-            }
-            if (product.price <= 0.0) {
-                _actionMessage.value = "El precio del producto debe ser mayor a 0."
-                return@launch
-            }
-            if (product.categoryId.isBlank()) {
-                _actionMessage.value = "Selecciona una categoría para el producto."
-                return@launch
-            }
+            try {
+                if (product.name.isBlank()) {
+                    _actionMessage.value = "Ingresa el nombre del producto."
+                    _saveError.value = _actionMessage.value
+                    return@launch
+                }
+                if (!product.price.isFinite() || product.price <= 0.0) {
+                    _actionMessage.value = "El precio del producto debe ser mayor a 0."
+                    _saveError.value = _actionMessage.value
+                    return@launch
+                }
+                if (product.prepTimeMinutes !in 1..1440) {
+                    _actionMessage.value = "Indica una preparación de 1 a 1440 minutos."
+                    _saveError.value = _actionMessage.value
+                    return@launch
+                }
+                if (product.categoryId.isBlank()) {
+                    _actionMessage.value = "Selecciona una categoría para el producto."
+                    _saveError.value = _actionMessage.value
+                    return@launch
+                }
 
-            when (val result = catalogRepository.saveProduct(product)) {
-                is ApiResult.Success -> _actionMessage.value = "Producto guardado con éxito."
-                is ApiResult.Failure -> _actionMessage.value = result.message
-            }
+                when (val result = catalogRepository.saveProduct(product)) {
+                    is ApiResult.Success -> { _actionMessage.value = "Producto guardado con éxito."; onSuccess() }
+                    is ApiResult.Failure -> { _actionMessage.value = result.message; _saveError.value = result.message }
+                }
+            } finally { _saving.value = false }
         }
     }
 

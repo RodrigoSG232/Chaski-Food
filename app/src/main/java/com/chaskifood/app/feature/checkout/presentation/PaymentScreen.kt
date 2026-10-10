@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -60,7 +61,7 @@ private val paymentMethods = listOf(
 @Composable
 fun PaymentScreen(
     onBack: () -> Unit,
-    onHome: () -> Unit,
+    onTabSelected: (FlowTab) -> Unit,
     onCompletePurchase: () -> Unit,
     onAddCard: () -> Unit,
     modifier: Modifier = Modifier,
@@ -73,14 +74,14 @@ fun PaymentScreen(
         bottomBar = {
             ChaskiFlowBottomBar(
                 selected = FlowTab.Home,
-                onTabClick = { if (it == FlowTab.Home) onHome() },
+                onTabClick = onTabSelected,
             )
         },
     ) { innerPadding ->
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding),
+                .padding(innerPadding).consumeWindowInsets(innerPadding),
             contentPadding = PaddingValues(bottom = ChaskiDimens.SpacingXl),
         ) {
             item(key = "appbar") {

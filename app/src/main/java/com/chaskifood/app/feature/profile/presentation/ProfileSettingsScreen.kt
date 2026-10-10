@@ -26,6 +26,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -57,14 +58,16 @@ fun ProfileSettingsScreen(
     val currentUser by viewModel.currentUser.collectAsState()
     val uiState by viewModel.uiState.collectAsState()
 
-    var name by remember { mutableStateOf("") }
+    var name by rememberSaveable { mutableStateOf("") }
+    var draftUserId by rememberSaveable { mutableStateOf<String?>(null) }
     var email by remember { mutableStateOf("") }
     var phone by remember { mutableStateOf("") }
 
     LaunchedEffect(currentUser) {
         currentUser?.let { user ->
-            if (!user.displayName.isNullOrBlank()) {
-                name = user.displayName
+            if (draftUserId != user.uid) {
+                name = user.displayName.orEmpty()
+                draftUserId = user.uid
             }
             if (!user.email.isNullOrBlank()) {
                 email = user.email

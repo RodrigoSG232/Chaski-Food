@@ -10,7 +10,9 @@ import com.chaskifood.app.feature.business.domain.BusinessStore
 import com.chaskifood.app.feature.business.domain.StoreManager
 import com.chaskifood.app.feature.business.domain.StoreRepository
 import com.chaskifood.app.feature.business.domain.StoreStatus
-import com.google.firebase.auth.FirebaseAuth
+import com.chaskifood.app.feature.auth.domain.AuthRepository
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.combine
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -35,6 +37,7 @@ sealed interface ManageStoresUiState {
 class ManageStoresViewModel @Inject constructor(
     private val storeRepository: StoreRepository,
     private val businessRepository: BusinessRepository,
+    private val authRepository: AuthRepository,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<ManageStoresUiState>(ManageStoresUiState.Loading)
@@ -43,65 +46,42 @@ class ManageStoresViewModel @Inject constructor(
     private val _actionMessage = MutableStateFlow<String?>(null)
     val actionMessage: StateFlow<String?> = _actionMessage.asStateFlow()
 
-    private val currentAuthUid: String
-        get() = FirebaseAuth.getInstance().currentUser?.uid ?: ""
+    private val _saving = MutableStateFlow(false)
+    val saving = _saving.asStateFlow()
 
-    init {
-        loadData()
-    }
+    private var observation: Job? = null
 
-    fun clearActionMessage() {
-        _actionMessage.value = null
-    }
+    init { loadData() }
+
+    fun clearActionMessage() { _actionMessage.value = null }
 
     fun loadData() {
-        viewModelScope.launch {
+        observation?.cancel()
+        observation = viewModelScope.launch {
             _uiState.value = ManageStoresUiState.Loading
-            val uid = currentAuthUid
-            if (uid.isBlank()) {
-                _uiState.value = ManageStoresUiState.Error("Usuario no autenticado.")
-                return@launch
-            }
-
-            businessRepository.getBusinessRequest(uid).collectLatest { businessResult ->
-                when (businessResult) {
-                    is ApiResult.Success -> {
-                        val business = businessResult.data
-                        if (business == null) {
-                            _uiState.value = ManageStoresUiState.NoBusinessFound
-                        } else if (business.status != BusinessStatus.APPROVED) {
-                            _uiState.value = ManageStoresUiState.NotApproved
-                        } else {
-                            observeStoresAndManagers(business)
+            authRepository.currentUserFlow.collectLatest { user ->
+                if (user == null) {
+                    _uiState.value = ManageStoresUiState.Error("Usuario no autenticado.")
+                } else businessRepository.getBusinessRequest(user.uid).collectLatest { businessResult ->
+                    when (businessResult) {
+                        is ApiResult.Failure -> _uiState.value = ManageStoresUiState.Error(businessResult.message ?: "No se pudo cargar el negocio.")
+                        is ApiResult.Success -> {
+                            val business = businessResult.data
+                            when {
+                                business == null -> _uiState.value = ManageStoresUiState.NoBusinessFound
+                                business.status != BusinessStatus.APPROVED -> _uiState.value = ManageStoresUiState.NotApproved
+                                else -> combine(storeRepository.getStoresByBusiness(business.id),
+                                    storeRepository.getManagersByBusiness(business.id)) { stores, managers ->
+                                    when {
+                                        stores is ApiResult.Failure -> ManageStoresUiState.Error(stores.message ?: "No se pudieron cargar los locales.")
+                                        managers is ApiResult.Failure -> ManageStoresUiState.Error(managers.message ?: "No se pudieron cargar los responsables.")
+                                        else -> ManageStoresUiState.Success(business,
+                                            (stores as ApiResult.Success).data, (managers as ApiResult.Success).data)
+                                    }
+                                }.collect { _uiState.value = it }
+                            }
                         }
                     }
-                    is ApiResult.Failure -> {
-                        _uiState.value = ManageStoresUiState.Error(businessResult.message ?: "Error al cargar la información del negocio.")
-                    }
-                }
-            }
-        }
-    }
-
-    private fun observeStoresAndManagers(business: BusinessRequest) {
-        viewModelScope.launch {
-            storeRepository.getStoresByBusiness(business.id).collectLatest { storesResult ->
-                val currentStores = when (storesResult) {
-                    is ApiResult.Success -> storesResult.data
-                    is ApiResult.Failure -> emptyList()
-                }
-
-                storeRepository.getManagersByBusiness(business.id).collectLatest { managersResult ->
-                    val currentManagers = when (managersResult) {
-                        is ApiResult.Success -> managersResult.data
-                        is ApiResult.Failure -> emptyList()
-                    }
-
-                    _uiState.value = ManageStoresUiState.Success(
-                        business = business,
-                        stores = currentStores,
-                        managers = currentManagers,
-                    )
                 }
             }
         }
@@ -118,6 +98,7 @@ class ManageStoresViewModel @Inject constructor(
         status: StoreStatus,
         onComplete: () -> Unit,
     ) {
+        if (_saving.value) return
         val trimmedName = name.trim()
         val trimmedAddress = address.trim()
         val trimmedPhone = phone.trim()
@@ -129,7 +110,8 @@ class ManageStoresViewModel @Inject constructor(
             return
         }
 
-        if (latitude == null || longitude == null) {
+        if (latitude == null || longitude == null || !latitude.isFinite() || !longitude.isFinite() ||
+            latitude !in -90.0..90.0 || longitude !in -180.0..180.0) {
             _actionMessage.value = "Ingresa coordenadas de latitud y longitud válidas."
             return
         }
@@ -139,33 +121,40 @@ class ManageStoresViewModel @Inject constructor(
             return
         }
 
+        val state = _uiState.value as? ManageStoresUiState.Success ?: return
+        if (state.business.id != businessId) { _actionMessage.value = "Negocio no autorizado."; return }
+        val existing = state.stores.find { it.id == id }
+        if (id.isNotBlank() && existing == null) { _actionMessage.value = "El local ya no está disponible."; return }
+        _saving.value = true
         viewModelScope.launch {
-            val store = BusinessStore(
-                id = id,
-                businessId = businessId,
-                name = trimmedName,
-                address = trimmedAddress,
-                latitude = latitude,
-                longitude = longitude,
-                phone = trimmedPhone,
-                status = status,
-            )
+            try {
+                val store = (existing ?: BusinessStore(businessId = businessId)).copy(
+                    id = id,
+                    businessId = businessId,
+                    name = trimmedName,
+                    address = trimmedAddress,
+                    latitude = latitude,
+                    longitude = longitude,
+                    phone = trimmedPhone,
+                    status = if (existing?.status == StoreStatus.SUSPENDED) StoreStatus.SUSPENDED else status,
+                )
 
-            val result = if (id.isBlank()) {
-                storeRepository.createStore(store)
-            } else {
-                storeRepository.updateStore(store)
-            }
+                val result = if (id.isBlank()) {
+                    storeRepository.createStore(store)
+                } else {
+                    storeRepository.updateStore(store)
+                }
 
-            when (result) {
-                is ApiResult.Success -> {
-                    _actionMessage.value = if (id.isBlank()) "Local registrado con éxito." else "Local actualizado con éxito."
-                    onComplete()
+                when (result) {
+                    is ApiResult.Success -> {
+                        _actionMessage.value = if (id.isBlank()) "Local registrado con éxito." else "Local actualizado con éxito."
+                        onComplete()
+                    }
+                    is ApiResult.Failure -> {
+                        _actionMessage.value = result.message
+                    }
                 }
-                is ApiResult.Failure -> {
-                    _actionMessage.value = result.message
-                }
-            }
+            } finally { _saving.value = false }
         }
     }
 
@@ -178,7 +167,8 @@ class ManageStoresViewModel @Inject constructor(
         assignedStoreIds: List<String>,
         onComplete: () -> Unit,
     ) {
-        val trimmedEmail = email.trim()
+        if (_saving.value) return
+        val trimmedEmail = email.trim().lowercase()
         val trimmedName = fullName.trim()
 
         if (trimmedEmail.isBlank() || trimmedName.isBlank()) {
@@ -186,30 +176,42 @@ class ManageStoresViewModel @Inject constructor(
             return
         }
 
+        val state = _uiState.value as? ManageStoresUiState.Success ?: return
+        if (state.business.id != businessId || assignedStoreIds.any { id -> state.stores.none { it.id == id } }) {
+            _actionMessage.value = "Selecciona únicamente locales de tu negocio."
+            return
+        }
+        if (!android.util.Patterns.EMAIL_ADDRESS.matcher(trimmedEmail).matches()) {
+            _actionMessage.value = "Ingresa un correo válido."
+            return
+        }
         if (assignedStoreIds.isEmpty()) {
             _actionMessage.value = "Selecciona al menos un local para asignar al responsable."
             return
         }
 
+        _saving.value = true
         viewModelScope.launch {
-            val manager = StoreManager(
-                id = managerId,
-                businessId = businessId,
-                email = trimmedEmail,
-                fullName = trimmedName,
-                phone = phone.trim(),
-                assignedStoreIds = assignedStoreIds,
-            )
+            try {
+                val manager = StoreManager(
+                    id = managerId,
+                    businessId = businessId,
+                    email = trimmedEmail,
+                    fullName = trimmedName,
+                    phone = phone.trim(),
+                    assignedStoreIds = assignedStoreIds,
+                )
 
-            when (val result = storeRepository.assignManager(manager)) {
-                is ApiResult.Success -> {
-                    _actionMessage.value = "Responsable asignado con éxito."
-                    onComplete()
+                when (val result = storeRepository.assignManager(manager)) {
+                    is ApiResult.Success -> {
+                        _actionMessage.value = "Responsable asignado con éxito."
+                        onComplete()
+                    }
+                    is ApiResult.Failure -> {
+                        _actionMessage.value = result.message
+                    }
                 }
-                is ApiResult.Failure -> {
-                    _actionMessage.value = result.message
-                }
-            }
+            } finally { _saving.value = false }
         }
     }
 }

@@ -1,6 +1,9 @@
 package com.chaskifood.app.feature.address.data
 
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
+import androidx.datastore.preferences.core.PreferencesSerializer
+import androidx.datastore.core.okio.OkioStorage
+import okio.FileSystem
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -14,6 +17,7 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import java.io.File
+import okio.Path.Companion.toPath
 
 class DataStoreAddressSelectionStoreTest {
     @get:Rule val temporaryFolder = TemporaryFolder()
@@ -84,7 +88,12 @@ class DataStoreAddressSelectionStoreTest {
         block: suspend (DataStoreAddressSelectionStore) -> Unit,
     ) {
         val job = SupervisorJob()
-        val dataStore = PreferenceDataStoreFactory.create(scope = CoroutineScope(job + Dispatchers.IO)) { file }
+        // El backend FileStorage de Android usa renameTo, que no reemplaza en Windows.
+        // Okio mantiene las mismas preferencias protobuf y hace el reemplazo atómico en JVM.
+        val dataStore = PreferenceDataStoreFactory.create(
+            storage = OkioStorage(FileSystem.SYSTEM, PreferencesSerializer) { file.absolutePath.toPath() },
+            scope = CoroutineScope(job + Dispatchers.IO),
+        )
         try {
             block(DataStoreAddressSelectionStore(dataStore))
         } finally {

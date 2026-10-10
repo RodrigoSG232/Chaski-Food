@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.chaskifood.app.core.common.ApiResult
 import com.chaskifood.app.core.common.UiState
+import com.chaskifood.app.core.common.retryableQuery
 import com.chaskifood.app.feature.auth.domain.AuthRepository
 import com.chaskifood.app.feature.business.domain.BusinessRepository
 import com.chaskifood.app.feature.business.domain.BusinessRequest
@@ -32,13 +33,16 @@ class AdminBusinessReviewViewModel @Inject constructor(
         initialValue = null,
     )
 
-    private val allRequestsFlow = businessRepository.getAllBusinessRequests()
+    private val retries = MutableStateFlow(0)
+    private val allRequestsFlow = retryableQuery(retries, businessRepository::getAllBusinessRequests)
+    fun retryLoading() { retries.value += 1 }
 
     val filteredRequests: StateFlow<ApiResult<List<BusinessRequest>>?> = combine(
         allRequestsFlow,
         selectedFilter,
     ) { result, filter ->
         when (result) {
+            null -> null
             is ApiResult.Success -> {
                 val list = if (filter == null) {
                     result.data
@@ -58,12 +62,17 @@ class AdminBusinessReviewViewModel @Inject constructor(
     private val _actionState = MutableStateFlow<UiState<Unit?>>(UiState.Success(null))
     val actionState: StateFlow<UiState<Unit?>> = _actionState.asStateFlow()
 
+    fun clearActionError() {
+        if (_actionState.value !is UiState.Loading) _actionState.value = UiState.Success(null)
+    }
+
     fun evaluateRequest(
         requestId: String,
         status: BusinessStatus,
         observations: String? = null,
         onSuccess: () -> Unit,
     ) {
+        if (_actionState.value is UiState.Loading) return
         val reviewerEmail = currentUser.value?.email ?: currentUser.value?.uid ?: "Desconocido"
 
         if ((status == BusinessStatus.OBSERVED || status == BusinessStatus.REJECTED) && observations.isNullOrBlank()) {

@@ -43,7 +43,10 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
+import androidx.compose.material3.PrimaryTabRow
+import androidx.compose.material3.Switch
+import androidx.compose.material3.LinearProgressIndicator
+import java.util.UUID
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -53,6 +56,9 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
+import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -86,12 +92,17 @@ fun ManageStoresScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val actionMessage by viewModel.actionMessage.collectAsState()
+    val saving by viewModel.saving.collectAsState()
 
-    var selectedTabIndex by remember { mutableIntStateOf(0) }
-    var showStoreDialog by remember { mutableStateOf(false) }
-    var editingStore by remember { mutableStateOf<BusinessStore?>(null) }
-    var showManagerDialog by remember { mutableStateOf(false) }
-    var editingManager by remember { mutableStateOf<StoreManager?>(null) }
+    var selectedTabIndex by rememberSaveable { mutableIntStateOf(0) }
+    var showStoreDialog by rememberSaveable { mutableStateOf(false) }
+    var editingStoreId by rememberSaveable { mutableStateOf<String?>(null) }
+    var showManagerDialog by rememberSaveable { mutableStateOf(false) }
+    var editingManagerId by rememberSaveable { mutableStateOf<String?>(null) }
+    val loaded = uiState as? ManageStoresUiState.Success
+    val editingStore = loaded?.stores?.find { it.id == editingStoreId }
+    val editingManager = loaded?.managers?.find { it.id == editingManagerId }
+    val draftStates = rememberSaveableStateHolder()
 
     Column(
         modifier = modifier
@@ -146,18 +157,21 @@ fun ManageStoresScreen(
                         .padding(ChaskiDimens.ScreenPadding),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Text(
-                        text = state.message,
-                        color = MaterialTheme.colorScheme.error,
-                        style = MaterialTheme.typography.bodyLarge,
-                    )
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(
+                            text = state.message,
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodyLarge,
+                        )
+                        TextButton(onClick = viewModel::loadData) { Text("REINTENTAR") }
+                    }
                 }
             }
             is ManageStoresUiState.Success -> {
                 Column(
                     modifier = Modifier.fillMaxSize(),
                 ) {
-                    TabRow(selectedTabIndex = selectedTabIndex) {
+                    PrimaryTabRow(selectedTabIndex = selectedTabIndex) {
                         Tab(
                             selected = selectedTabIndex == 0,
                             onClick = { selectedTabIndex = 0 },
@@ -206,7 +220,9 @@ fun ManageStoresScreen(
                             StoresTabContent(
                                 stores = state.stores,
                                 onEditStore = { store ->
-                                    editingStore = store
+                                    viewModel.clearActionMessage()
+                                    editingStoreId = store.id
+                                    draftStates.removeState("store")
                                     showStoreDialog = true
                                 },
                             )
@@ -215,7 +231,9 @@ fun ManageStoresScreen(
                                 managers = state.managers,
                                 stores = state.stores,
                                 onEditManager = { manager ->
-                                    editingManager = manager
+                                    viewModel.clearActionMessage()
+                                    editingManagerId = manager.id
+                                    draftStates.removeState("manager")
                                     showManagerDialog = true
                                 },
                             )
@@ -223,11 +241,14 @@ fun ManageStoresScreen(
 
                         FloatingActionButton(
                             onClick = {
+                                viewModel.clearActionMessage()
                                 if (selectedTabIndex == 0) {
-                                    editingStore = null
+                                    editingStoreId = null
+                                    draftStates.removeState("store")
                                     showStoreDialog = true
                                 } else {
-                                    editingManager = null
+                                    editingManagerId = null
+                                    draftStates.removeState("manager")
                                     showManagerDialog = true
                                 }
                             },
@@ -245,45 +266,53 @@ fun ManageStoresScreen(
                     }
                 }
 
-                if (showStoreDialog) {
-                    StoreDialog(
-                        businessId = state.business.id,
-                        storeToEdit = editingStore,
-                        onDismiss = { showStoreDialog = false },
-                        onSave = { id, busId, name, address, lat, lng, phone, status ->
-                            viewModel.saveStore(
-                                id = id,
-                                businessId = busId,
-                                name = name,
-                                address = address,
-                                latitudeStr = lat,
-                                longitudeStr = lng,
-                                phone = phone,
-                                status = status,
-                                onComplete = { showStoreDialog = false },
-                            )
-                        },
-                    )
+                if (showStoreDialog && (editingStoreId == null || editingStore != null)) {
+                    draftStates.SaveableStateProvider("store") {
+                        StoreDialog(
+                            businessId = state.business.id,
+                            storeToEdit = editingStore,
+                            saving = saving,
+                            message = actionMessage,
+                            onDismiss = { if (!saving) { showStoreDialog = false; draftStates.removeState("store") } },
+                            onSave = { id, busId, name, address, lat, lng, phone, status ->
+                                viewModel.saveStore(
+                                    id = id,
+                                    businessId = busId,
+                                    name = name,
+                                    address = address,
+                                    latitudeStr = lat,
+                                    longitudeStr = lng,
+                                    phone = phone,
+                                    status = status,
+                                    onComplete = { showStoreDialog = false; draftStates.removeState("store") },
+                                )
+                            },
+                        )
+                    }
                 }
 
-                if (showManagerDialog) {
-                    ManagerDialog(
-                        businessId = state.business.id,
-                        availableStores = state.stores,
-                        managerToEdit = editingManager,
-                        onDismiss = { showManagerDialog = false },
-                        onSave = { managerId, busId, email, name, phone, assignedIds ->
-                            viewModel.assignManager(
-                                managerId = managerId,
-                                businessId = busId,
-                                email = email,
-                                fullName = name,
-                                phone = phone,
-                                assignedStoreIds = assignedIds,
-                                onComplete = { showManagerDialog = false },
-                            )
-                        },
-                    )
+                if (showManagerDialog && (editingManagerId == null || editingManager != null)) {
+                    draftStates.SaveableStateProvider("manager") {
+                        ManagerDialog(
+                            businessId = state.business.id,
+                            availableStores = state.stores,
+                            managerToEdit = editingManager,
+                            saving = saving,
+                            message = actionMessage,
+                            onDismiss = { if (!saving) { showManagerDialog = false; draftStates.removeState("manager") } },
+                            onSave = { managerId, busId, email, name, phone, assignedIds ->
+                                viewModel.assignManager(
+                                    managerId = managerId,
+                                    businessId = busId,
+                                    email = email,
+                                    fullName = name,
+                                    phone = phone,
+                                    assignedStoreIds = assignedIds,
+                                    onComplete = { showManagerDialog = false; draftStates.removeState("manager") },
+                                )
+                            },
+                        )
+                    }
                 }
             }
         }
@@ -353,7 +382,11 @@ private fun StoresTabContent(
                                     .padding(horizontal = 10.dp, vertical = 4.dp),
                             ) {
                                 Text(
-                                    text = if (store.status == StoreStatus.ACTIVE) "ACTIVO" else "INACTIVO",
+                                    text = when (store.status) {
+                                        StoreStatus.ACTIVE -> "ACTIVO"
+                                        StoreStatus.INACTIVE -> "INACTIVO"
+                                        StoreStatus.SUSPENDED -> "SUSPENDIDO"
+                                    },
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = if (store.status == StoreStatus.ACTIVE) ChaskiStatusApprovedFg else ChaskiStatusRejectedFg,
@@ -528,40 +561,39 @@ private fun ManagersTabContent(
 }
 
 @Composable
-private fun StoreDialog(
+internal fun StoreDialog(
     businessId: String,
     storeToEdit: BusinessStore?,
+    saving: Boolean,
+    message: String?,
     onDismiss: () -> Unit,
     onSave: (id: String, businessId: String, name: String, address: String, lat: String, lng: String, phone: String, status: StoreStatus) -> Unit,
 ) {
-    var name by remember { mutableStateOf(storeToEdit?.name ?: "") }
-    var address by remember { mutableStateOf(storeToEdit?.address ?: "") }
-    var latitude by remember { mutableStateOf(storeToEdit?.latitude?.takeIf { it != 0.0 }?.toString() ?: "") }
-    var longitude by remember { mutableStateOf(storeToEdit?.longitude?.takeIf { it != 0.0 }?.toString() ?: "") }
-    var phone by remember { mutableStateOf(storeToEdit?.phone ?: "") }
-    var isActive by remember { mutableStateOf(storeToEdit?.status == StoreStatus.ACTIVE || storeToEdit == null) }
+    var name by rememberSaveable(storeToEdit?.id) { mutableStateOf(storeToEdit?.name ?: "") }
+    var address by rememberSaveable(storeToEdit?.id) { mutableStateOf(storeToEdit?.address ?: "") }
+    var latitude by rememberSaveable(storeToEdit?.id) { mutableStateOf(storeToEdit?.latitude?.toString() ?: "") }
+    var longitude by rememberSaveable(storeToEdit?.id) { mutableStateOf(storeToEdit?.longitude?.toString() ?: "") }
+    var phone by rememberSaveable(storeToEdit?.id) { mutableStateOf(storeToEdit?.phone ?: "") }
+    var isActive by rememberSaveable(storeToEdit?.id) { mutableStateOf(storeToEdit?.status == StoreStatus.ACTIVE || storeToEdit == null) }
 
-    var showMapPicker by remember { mutableStateOf(false) }
+    var showMapPicker by rememberSaveable { mutableStateOf(false) }
 
     if (showMapPicker) {
+        val mapRequestId = rememberSaveable { "store_map_${UUID.randomUUID()}" }
         Dialog(
             onDismissRequest = { showMapPicker = false },
             properties = DialogProperties(usePlatformDefaultWidth = false),
         ) {
             Surface(modifier = Modifier.fillMaxSize()) {
-                val initialCoords = if (latitude.isNotBlank() && longitude.isNotBlank()) {
-                    try {
-                        AddressCoordinates(latitude.toDouble(), longitude.toDouble())
-                    } catch (e: Exception) {
-                        AddressCoordinates(-12.046374, -77.042793)
-                    }
-                } else {
-                    AddressCoordinates(-12.046374, -77.042793)
-                }
+                val initialCoords = remember(latitude, longitude) {
+                    val lat = latitude.toDoubleOrNull()
+                    val lng = longitude.toDoubleOrNull()
+                    if (lat != null && lng != null) AddressCoordinates(lat, lng).takeIf { it.isValid } else null
+                } ?: AddressCoordinates(-12.046374, -77.042793)
 
                 AddressMapRoute(
                     request = AddressMapRequest(
-                        id = "store_map_${System.currentTimeMillis()}",
+                        id = mapRequestId,
                         initialPoint = initialCoords,
                     ),
                     addressText = address,
@@ -582,7 +614,11 @@ private fun StoreDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
-            Text(text = if (storeToEdit == null) "Agregar Local" else "Editar Local")
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(text = if (storeToEdit == null) "Agregar Local" else "Editar Local")
+                message?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                if (saving) LinearProgressIndicator(Modifier.fillMaxWidth())
+            }
         },
         text = {
             Column(
@@ -657,6 +693,12 @@ private fun StoreDialog(
                     placeholder = { Text("Ej. 987654321") },
                     modifier = Modifier.fillMaxWidth(),
                 )
+                if (storeToEdit?.status == StoreStatus.SUSPENDED) {
+                    Text("Local suspendido por administración.", color = MaterialTheme.colorScheme.error)
+                } else Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Local activo", modifier = Modifier.weight(1f))
+                    Switch(checked = isActive, onCheckedChange = { isActive = it }, enabled = !saving)
+                }
             }
         },
         confirmButton = {
@@ -689,22 +731,27 @@ private fun ManagerDialog(
     businessId: String,
     availableStores: List<BusinessStore>,
     managerToEdit: StoreManager?,
+    saving: Boolean,
+    message: String?,
     onDismiss: () -> Unit,
     onSave: (managerId: String, businessId: String, email: String, fullName: String, phone: String, assignedStoreIds: List<String>) -> Unit,
 ) {
-    var email by remember { mutableStateOf(managerToEdit?.email ?: "") }
-    var fullName by remember { mutableStateOf(managerToEdit?.fullName ?: "") }
-    var phone by remember { mutableStateOf(managerToEdit?.phone ?: "") }
-    val selectedStoreIds = remember {
-        mutableStateListOf<String>().apply {
-            managerToEdit?.assignedStoreIds?.let { addAll(it) }
-        }
+    var email by rememberSaveable(managerToEdit?.id) { mutableStateOf(managerToEdit?.email ?: "") }
+    var fullName by rememberSaveable(managerToEdit?.id) { mutableStateOf(managerToEdit?.fullName ?: "") }
+    var phone by rememberSaveable(managerToEdit?.id) { mutableStateOf(managerToEdit?.phone ?: "") }
+    var selectedStoreIds by rememberSaveable(managerToEdit?.id,
+        stateSaver = listSaver<List<String>, String>(save = { it }, restore = { it })) {
+        mutableStateOf(managerToEdit?.assignedStoreIds.orEmpty().toList())
     }
 
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
-            Text(text = "Asignar Responsable")
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(text = "Asignar Responsable")
+                message?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                if (saving) LinearProgressIndicator(Modifier.fillMaxWidth())
+            }
         },
         text = {
             Column(
@@ -760,9 +807,9 @@ private fun ManagerDialog(
                                 checked = isChecked,
                                 onCheckedChange = { checked ->
                                     if (checked) {
-                                        selectedStoreIds.add(store.id)
+                                        selectedStoreIds = (selectedStoreIds + store.id).distinct()
                                     } else {
-                                        selectedStoreIds.remove(store.id)
+                                        selectedStoreIds = selectedStoreIds - store.id
                                     }
                                 },
                             )

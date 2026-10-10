@@ -46,6 +46,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.key
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.listSaver
+import com.chaskifood.app.feature.business.domain.DayOfWeekEnum
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -79,7 +83,8 @@ fun StoreOperationsScreen(
     val uiState by viewModel.uiState.collectAsState()
     val actionMessage by viewModel.actionMessage.collectAsState()
 
-    var storeToPause by remember { mutableStateOf<BusinessStore?>(null) }
+    var pauseStoreId by rememberSaveable { mutableStateOf<String?>(null) }
+    val storeToPause = (uiState as? StoreOperationsUiState.Success)?.stores?.find { it.id == pauseStoreId }
 
     Column(
         modifier = modifier
@@ -172,29 +177,34 @@ fun StoreOperationsScreen(
                             .padding(24.dp),
                         contentAlignment = Alignment.Center,
                     ) {
-                        Text(
-                            text = state.message,
-                            color = MaterialTheme.colorScheme.error,
-                            style = MaterialTheme.typography.bodyLarge,
-                        )
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(
+                                text = state.message,
+                                color = MaterialTheme.colorScheme.error,
+                                style = MaterialTheme.typography.bodyLarge,
+                            )
+                            TextButton(onClick = viewModel::loadAssignedStores) { Text("REINTENTAR") }
+                        }
                     }
                 }
                 is StoreOperationsUiState.Success -> {
                     state.stores.forEach { store ->
-                        StoreOperationCard(
-                            store = store,
-                            onStatusChange = { newStatus ->
-                                if (newStatus == OperationalStatus.PAUSED) {
-                                    storeToPause = store
-                                } else {
-                                    viewModel.updateStatus(store.id, newStatus, null)
-                                }
-                            },
-                            onSaveHours = { newHours ->
-                                viewModel.updateHours(store.id, newHours)
-                            },
-                        )
-                        Spacer(Modifier.height(16.dp))
+                        key(store.id) {
+                            StoreOperationCard(
+                                store = store,
+                                onStatusChange = { newStatus ->
+                                    if (newStatus == OperationalStatus.PAUSED) {
+                                        pauseStoreId = store.id
+                                    } else {
+                                        viewModel.updateStatus(store.id, newStatus, null)
+                                    }
+                                },
+                                onSaveHours = { newHours ->
+                                    viewModel.updateHours(store.id, newHours)
+                                },
+                            )
+                            Spacer(Modifier.height(16.dp))
+                        }
                     }
                 }
             }
@@ -206,12 +216,12 @@ fun StoreOperationsScreen(
     if (storeToPause != null) {
         PauseReasonDialog(
             storeName = storeToPause?.name ?: "",
-            onDismiss = { storeToPause = null },
+            onDismiss = { pauseStoreId = null },
             onConfirm = { reason ->
                 storeToPause?.let { store ->
                     viewModel.updateStatus(store.id, OperationalStatus.PAUSED, reason)
                 }
-                storeToPause = null
+                pauseStoreId = null
             },
         )
     }
@@ -224,7 +234,10 @@ private fun StoreOperationCard(
     onSaveHours: (List<DayOperatingHours>) -> Unit,
 ) {
     val isAvailable = store.isAvailableForOrders()
-    var expandedHours by remember { mutableStateOf(false) }
+    var expandedHours by rememberSaveable(store.id) { mutableStateOf(false) }
+    var draftHours by rememberSaveable(store.id, stateSaver = OperatingHoursSaver) {
+        mutableStateOf(store.operatingHours)
+    }
 
     Card(
         colors = CardDefaults.cardColors(containerColor = Color.White),
@@ -386,7 +399,8 @@ private fun StoreOperationCard(
 
             AnimatedVisibility(visible = expandedHours) {
                 HoursEditor(
-                    initialHours = store.operatingHours,
+                    editableHours = draftHours,
+                    onChange = { draftHours = it },
                     onSave = onSaveHours,
                 )
             }
@@ -421,12 +435,10 @@ private fun StatusButton(
 
 @Composable
 private fun HoursEditor(
-    initialHours: List<DayOperatingHours>,
+    editableHours: List<DayOperatingHours>,
+    onChange: (List<DayOperatingHours>) -> Unit,
     onSave: (List<DayOperatingHours>) -> Unit,
 ) {
-    val editableHours = remember(initialHours) {
-        mutableStateListOf(*initialHours.toTypedArray())
-    }
 
     Column(
         modifier = Modifier
@@ -450,7 +462,7 @@ private fun HoursEditor(
                 Switch(
                     checked = item.enabled,
                     onCheckedChange = { enabled ->
-                        editableHours[index] = item.copy(enabled = enabled)
+                        onChange(editableHours.mapIndexed { i, day -> if (i == index) item.copy(enabled = enabled) else day })
                     },
                 )
 
@@ -458,7 +470,7 @@ private fun HoursEditor(
                     OutlinedTextField(
                         value = item.openTime,
                         onValueChange = { open ->
-                            editableHours[index] = item.copy(openTime = open)
+                            onChange(editableHours.mapIndexed { i, day -> if (i == index) item.copy(openTime = open) else day })
                         },
                         label = { Text("Abre", fontSize = 10.sp) },
                         modifier = Modifier.width(80.dp),
@@ -468,7 +480,7 @@ private fun HoursEditor(
                     OutlinedTextField(
                         value = item.closeTime,
                         onValueChange = { close ->
-                            editableHours[index] = item.copy(closeTime = close)
+                            onChange(editableHours.mapIndexed { i, day -> if (i == index) item.copy(closeTime = close) else day })
                         },
                         label = { Text("Cierra", fontSize = 10.sp) },
                         modifier = Modifier.width(80.dp),
@@ -504,7 +516,7 @@ private fun PauseReasonDialog(
     onDismiss: () -> Unit,
     onConfirm: (reason: String?) -> Unit,
 ) {
-    var reason by remember { mutableStateOf("") }
+    var reason by rememberSaveable { mutableStateOf("") }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -538,3 +550,10 @@ private fun PauseReasonDialog(
         },
     )
 }
+
+private val OperatingHoursSaver = listSaver<List<DayOperatingHours>, Any>(
+    save = { hours -> hours.flatMap { listOf(it.dayOfWeek.name, it.openTime, it.closeTime, it.enabled) } },
+    restore = { values -> values.chunked(4).map {
+        DayOperatingHours(DayOfWeekEnum.valueOf(it[0] as String), it[1] as String, it[2] as String, it[3] as Boolean)
+    } },
+)

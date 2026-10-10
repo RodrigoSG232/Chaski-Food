@@ -1,13 +1,16 @@
 package com.chaskifood.app.feature.main.presentation
 
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.chaskifood.app.core.navigation.ChaskiTab
+import com.chaskifood.app.core.navigation.selectMainTab
 import com.chaskifood.app.feature.home.presentation.HomeScreen
 import com.chaskifood.app.feature.orders.presentation.OrdersScreen
 import com.chaskifood.app.feature.profile.presentation.AccountScreen
@@ -18,6 +21,8 @@ import com.chaskifood.app.ui.theme.ChaskiSurface
 @Composable
 fun MainScreen(
     modifier: Modifier = Modifier,
+    requestedTab: ChaskiTab? = null,
+    onTabRequestHandled: () -> Unit = {},
     deliveryAddress: String? = null,
     deliveryAddressUnavailable: Boolean = false,
     deliveryNotice: String? = null,
@@ -45,6 +50,13 @@ fun MainScreen(
 ) {
     val navController = rememberNavController()
 
+    LaunchedEffect(requestedTab) {
+        if (requestedTab != null) {
+            navController.selectMainTab(requestedTab)
+            onTabRequestHandled()
+        }
+    }
+
     Scaffold(
         modifier = modifier,
         containerColor = ChaskiSurface,
@@ -53,7 +65,7 @@ fun MainScreen(
         NavHost(
             navController = navController,
             startDestination = ChaskiTab.HOME.route,
-            modifier = Modifier.padding(innerPadding),
+            modifier = Modifier.padding(innerPadding).consumeWindowInsets(innerPadding),
         ) {
             composable(ChaskiTab.HOME.route) {
                 HomeScreen(

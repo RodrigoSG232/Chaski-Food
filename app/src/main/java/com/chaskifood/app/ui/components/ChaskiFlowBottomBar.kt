@@ -1,6 +1,8 @@
 package com.chaskifood.app.ui.components
 
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Person
@@ -32,18 +34,19 @@ enum class FlowTab(val label: String, val icon: ImageVector) {
  * Mantiene la misma estética (NavigationBar Material 3, colores e indicadores)
  * que ChaskiBottomNav para una experiencia de usuario uniforme.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun ChaskiFlowBottomBar(
     selected: FlowTab,
-    onTabClick: (FlowTab) -> Unit = {},
+    onTabClick: (FlowTab) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    if (WindowInsets.isImeVisible) return
     NavigationBar(
         modifier = modifier,
         containerColor = MaterialTheme.colorScheme.surface,
         contentColor = MaterialTheme.colorScheme.onSurface,
         tonalElevation = 0.dp,
-        windowInsets = WindowInsets(0.dp),
     ) {
         FlowTab.entries.forEach { tab ->
             val selectedTab = tab == selected

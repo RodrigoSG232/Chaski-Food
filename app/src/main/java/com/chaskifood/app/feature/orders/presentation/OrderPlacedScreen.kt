@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
@@ -34,6 +35,7 @@ import com.chaskifood.app.ui.theme.ChaskiSurface
 
 @Composable
 fun OrderPlacedScreen(
+    onTabSelected: (FlowTab) -> Unit,
     onTrackOrder: () -> Unit,
     onAddMoreOrders: () -> Unit,
     modifier: Modifier = Modifier,
@@ -42,13 +44,13 @@ fun OrderPlacedScreen(
         modifier = modifier,
         containerColor = ChaskiBackground,
         bottomBar = {
-            ChaskiFlowBottomBar(selected = FlowTab.Search)
+            ChaskiFlowBottomBar(selected = FlowTab.Orders, onTabClick = onTabSelected)
         },
     ) { innerPadding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding),
+                .padding(innerPadding).consumeWindowInsets(innerPadding),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             ChaskiAppBar(

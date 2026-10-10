@@ -1,6 +1,6 @@
 package com.chaskifood.app.feature.auth.presentation
 
-import android.app.Activity
+import androidx.activity.compose.LocalActivity
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -39,7 +39,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -76,11 +75,11 @@ fun SignUpPhoneScreen(
     onBack: () -> Unit = {},
     viewModel: PhoneAuthViewModel = hiltViewModel(),
 ) {
-    val context = LocalContext.current
-    val activity = context as? Activity
+    val activity = LocalActivity.current
     val uiState by viewModel.uiState.collectAsState()
 
-    var selectedCountry by remember { mutableStateOf(countries.first()) }
+    var countryDialCode by rememberSaveable { mutableStateOf(countries.first().dialCode) }
+    val selectedCountry = countries.first { it.dialCode == countryDialCode }
     var expanded by remember { mutableStateOf(false) }
     var phoneInput by rememberSaveable { mutableStateOf("") }
 
@@ -159,7 +158,7 @@ fun SignUpPhoneScreen(
                                     )
                                 },
                                 onClick = {
-                                    selectedCountry = country
+                                    countryDialCode = country.dialCode
                                     expanded = false
                                 },
                             )

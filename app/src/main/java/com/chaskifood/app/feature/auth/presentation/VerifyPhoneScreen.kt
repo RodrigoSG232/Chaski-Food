@@ -1,5 +1,7 @@
 package com.chaskifood.app.feature.auth.presentation
 
+import androidx.activity.compose.LocalActivity
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -16,7 +18,12 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -38,6 +45,14 @@ fun VerifyPhoneScreen(
 ) {
     val smsCode by viewModel.smsCode.collectAsState()
     val uiState by viewModel.uiState.collectAsState()
+    val phoneVerified by viewModel.phoneVerified.collectAsState()
+    val resendSeconds by viewModel.resendSeconds.collectAsState()
+    val smsNotice by viewModel.smsNotice.collectAsState()
+    val phoneNumber by viewModel.phoneNumber.collectAsState()
+    val activity = LocalActivity.current
+    var continued by remember { mutableStateOf(false) }
+    val continueOnce: () -> Unit = { if (!continued) { continued = true; onVerify() } }
+    LaunchedEffect(phoneVerified) { if (phoneVerified) continueOnce() }
 
     Column(
         modifier = modifier
@@ -52,8 +67,7 @@ fun VerifyPhoneScreen(
 
         AuthTitleBanner(
             title = "Verifica tu número de teléfono",
-            text = "Ingresa el código de 6 dígitos que enviamos por SMS.",
-            linkText = "¿No recibiste el código?",
+            text = "Ingresa el código de 6 dígitos que enviamos por SMS a $phoneNumber.",
         )
 
         Spacer(Modifier.height(28.dp))
@@ -76,6 +90,19 @@ fun VerifyPhoneScreen(
 
             Spacer(Modifier.height(30.dp))
 
+            smsNotice?.let {
+                Text(it, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(bottom = 8.dp))
+            }
+            TextButton(
+                enabled = resendSeconds == 0 && uiState !is UiState.Loading && activity != null,
+                onClick = { activity?.let { viewModel.resendCode(it, continueOnce) } },
+            ) {
+                Text(if (resendSeconds > 0) "Reenviar SMS en ${resendSeconds}s" else "Reenviar código SMS")
+            }
+            TextButton(enabled = uiState !is UiState.Loading, onClick = onBack) {
+                Text("Corregir número de teléfono")
+            }
+
             if (uiState is UiState.Error) {
                 Text(
                     text = (uiState as UiState.Error).message ?: "Código SMS incorrecto",
@@ -93,7 +120,7 @@ fun VerifyPhoneScreen(
             } else {
                 AuthSubmitButton(
                     text = "REGISTRARME",
-                    onClick = { viewModel.verifyCode(onSuccess = onVerify) },
+                    onClick = { viewModel.verifyCode(onSuccess = continueOnce) },
                     containerColor = ChaskiTextPrimary,
                 )
             }

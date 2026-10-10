@@ -2,10 +2,12 @@ package com.chaskifood.app.feature.business.domain
 
 import java.util.Calendar
 import java.util.Locale
+import java.util.TimeZone
 
 enum class StoreStatus {
     ACTIVE,
     INACTIVE,
+    SUSPENDED,
 }
 
 enum class OperationalStatus {
@@ -50,6 +52,7 @@ data class BusinessStore(
     val pauseReason: String? = null,
     val operatingHours: List<DayOperatingHours> = defaultWeeklyOperatingHours(),
     val createdAt: Long = System.currentTimeMillis(),
+    val suspensionReason: String? = null,
 ) {
     fun isAvailableForOrders(
         currentTime: String = getCurrentFormattedTime(),
@@ -58,10 +61,20 @@ data class BusinessStore(
         if (status != StoreStatus.ACTIVE) return false
         if (operationalStatus != OperationalStatus.OPEN) return false
 
-        val todayHours = operatingHours.firstOrNull { it.dayOfWeek == currentDay } ?: return false
-        if (!todayHours.enabled) return false
-
-        return isTimeBetween(currentTime, todayHours.openTime, todayHours.closeTime)
+        val target = timeInMinutes(currentTime) ?: return false
+        val today = operatingHours.singleOrNull { it.dayOfWeek == currentDay }
+        val previousDay = DayOfWeekEnum.entries[(currentDay.ordinal + 6) % 7]
+        val previous = operatingHours.singleOrNull { it.dayOfWeek == previousDay }
+        // Una jornada nocturna pertenece al día en el que abre.
+        fun covers(hours: DayOperatingHours?, previousDay: Boolean): Boolean {
+            if (hours == null || !hours.enabled) return false
+            val start = timeInMinutes(hours.openTime) ?: return false
+            val end = timeInMinutes(hours.closeTime) ?: return false
+            return if (previousDay) start > end && target < end
+            else if (start < end) target >= start && target < end
+            else start > end && target >= start
+        }
+        return covers(today, false) || covers(previous, true)
     }
 }
 
@@ -76,14 +89,14 @@ data class StoreManager(
 )
 
 fun getCurrentFormattedTime(): String {
-    val calendar = Calendar.getInstance()
+    val calendar = Calendar.getInstance(TimeZone.getTimeZone("America/Lima"))
     val hour = calendar.get(Calendar.HOUR_OF_DAY)
     val minute = calendar.get(Calendar.MINUTE)
     return String.format(Locale.ROOT, "%02d:%02d", hour, minute)
 }
 
 fun getCurrentDayOfWeek(): DayOfWeekEnum {
-    return when (Calendar.getInstance().get(Calendar.DAY_OF_WEEK)) {
+    return when (Calendar.getInstance(TimeZone.getTimeZone("America/Lima")).get(Calendar.DAY_OF_WEEK)) {
         Calendar.MONDAY -> DayOfWeekEnum.MONDAY
         Calendar.TUESDAY -> DayOfWeekEnum.TUESDAY
         Calendar.WEDNESDAY -> DayOfWeekEnum.WEDNESDAY
@@ -96,12 +109,23 @@ fun getCurrentDayOfWeek(): DayOfWeekEnum {
 }
 
 fun isTimeBetween(targetTime: String, startTime: String, endTime: String): Boolean {
-    return try {
-        val target = targetTime.replace(":", "").toInt()
-        val start = startTime.replace(":", "").toInt()
-        val end = endTime.replace(":", "").toInt()
-        target in start..end
-    } catch (e: Exception) {
-        true
+    val target = timeInMinutes(targetTime) ?: return false
+    val start = timeInMinutes(startTime) ?: return false
+    val end = timeInMinutes(endTime) ?: return false
+    return when {
+        start < end -> target >= start && target < end
+        start > end -> target >= start || target < end
+        else -> false
     }
 }
+
+internal fun timeInMinutes(value: String): Int? {
+    if (!Regex("(?:[01][0-9]|2[0-3]):[0-5][0-9]").matches(value)) return null
+    return value.substring(0, 2).toInt() * 60 + value.substring(3, 5).toInt()
+}
+
+fun validOperatingHours(hours: List<DayOperatingHours>): Boolean =
+    hours.size == 7 && hours.map { it.dayOfWeek }.toSet().size == 7 && hours.all {
+        timeInMinutes(it.openTime) != null && timeInMinutes(it.closeTime) != null &&
+            (!it.enabled || it.openTime != it.closeTime)
+    }

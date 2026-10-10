@@ -10,7 +10,6 @@ import android.util.Base64
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.Image
 import androidx.compose.ui.platform.LocalContext
 import java.io.ByteArrayOutputStream
 import androidx.compose.foundation.background
@@ -59,6 +58,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
@@ -71,12 +71,17 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
+import androidx.core.net.toUri
+import androidx.compose.runtime.LaunchedEffect
+import android.content.Intent
+import java.io.File
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -99,6 +104,9 @@ import com.chaskifood.app.ui.theme.ChaskiStatusRejectedFg
 import com.chaskifood.app.ui.theme.ChaskiTextMuted
 import com.chaskifood.app.ui.theme.ChaskiTextPrimary
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import java.util.Locale
 
 @Composable
 fun ManageCatalogScreen(
@@ -108,13 +116,19 @@ fun ManageCatalogScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val actionMessage by viewModel.actionMessage.collectAsState()
+    val saving by viewModel.saving.collectAsState()
+    val saveError by viewModel.saveError.collectAsState()
 
-    var selectedTabIndex by remember { mutableIntStateOf(0) }
-    var showCategoryDialog by remember { mutableStateOf(false) }
-    var editingCategory by remember { mutableStateOf<ProductCategory?>(null) }
+    var selectedTabIndex by rememberSaveable { mutableIntStateOf(0) }
+    var showCategoryDialog by rememberSaveable { mutableStateOf(false) }
+    var editingCategoryId by rememberSaveable { mutableStateOf<String?>(null) }
 
-    var showProductDialog by remember { mutableStateOf(false) }
-    var editingProduct by remember { mutableStateOf<Product?>(null) }
+    var showProductDialog by rememberSaveable { mutableStateOf(false) }
+    var editingProductId by rememberSaveable { mutableStateOf<String?>(null) }
+    val loaded = uiState as? ManageCatalogUiState.Success
+    val editingCategory = loaded?.categories?.find { it.id == editingCategoryId }
+    val editingProduct = loaded?.products?.find { it.id == editingProductId }
+    val draftStates = rememberSaveableStateHolder()
 
     Column(
         modifier = modifier
@@ -169,10 +183,13 @@ fun ManageCatalogScreen(
                         .padding(ChaskiDimens.ScreenPadding),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Text(
-                        text = state.message,
-                        color = MaterialTheme.colorScheme.error,
-                    )
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(
+                            text = state.message,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                        TextButton(onClick = viewModel::retryLoading) { Text("REINTENTAR") }
+                    }
                 }
             }
             is ManageCatalogUiState.Success -> {
@@ -235,7 +252,9 @@ fun ManageCatalogScreen(
                             CategoriesTabContent(
                                 categories = state.categories,
                                 onEditCategory = { cat ->
-                                    editingCategory = cat
+                                    viewModel.clearSaveError()
+                                    editingCategoryId = cat.id
+                                    draftStates.removeState("category")
                                     showCategoryDialog = true
                                 },
                                 onToggleStatus = { id, active ->
@@ -247,7 +266,9 @@ fun ManageCatalogScreen(
                             ProductsTabContent(
                                 products = state.products,
                                 onEditProduct = { prod ->
-                                    editingProduct = prod
+                                    viewModel.clearSaveError()
+                                    editingProductId = prod.id
+                                    draftStates.removeState("product")
                                     showProductDialog = true
                                 },
                                 onToggleStatus = { id, active ->
@@ -258,11 +279,14 @@ fun ManageCatalogScreen(
 
                         FloatingActionButton(
                             onClick = {
+                                viewModel.clearSaveError()
                                 if (selectedTabIndex == 0) {
-                                    editingCategory = null
+                                    editingCategoryId = null
+                                    draftStates.removeState("category")
                                     showCategoryDialog = true
                                 } else {
-                                    editingProduct = null
+                                    editingProductId = null
+                                    draftStates.removeState("product")
                                     showProductDialog = true
                                 }
                             },
@@ -276,29 +300,33 @@ fun ManageCatalogScreen(
                         }
                     }
 
-                    if (showCategoryDialog) {
-                        CategoryDialog(
-                            businessId = state.businessId,
-                            categoryToEdit = editingCategory,
-                            onDismiss = { showCategoryDialog = false },
-                            onSave = { cat ->
-                                viewModel.saveCategory(cat)
-                                showCategoryDialog = false
-                            },
-                        )
+                    if (showCategoryDialog && (editingCategoryId == null || editingCategory != null)) {
+                        draftStates.SaveableStateProvider("category") {
+                            CategoryDialog(
+                                businessId = state.businessId,
+                                categoryToEdit = editingCategory,
+                                saving = saving, saveError = saveError,
+                                onDismiss = { if (!saving) { showCategoryDialog = false; draftStates.removeState("category") } },
+                                onSave = { cat ->
+                                    viewModel.saveCategory(cat) { showCategoryDialog = false; draftStates.removeState("category") }
+                                },
+                            )
+                        }
                     }
 
-                    if (showProductDialog) {
-                        ProductDialog(
-                            businessId = state.businessId,
-                            categories = state.categories,
-                            productToEdit = editingProduct,
-                            onDismiss = { showProductDialog = false },
-                            onSave = { prod ->
-                                viewModel.saveProduct(prod)
-                                showProductDialog = false
-                            },
-                        )
+                    if (showProductDialog && (editingProductId == null || editingProduct != null)) {
+                        draftStates.SaveableStateProvider("product") {
+                            ProductDialog(
+                                businessId = state.businessId,
+                                categories = state.categories,
+                                productToEdit = editingProduct,
+                                saving = saving, saveError = saveError,
+                                onDismiss = { if (!saving) { showProductDialog = false; draftStates.removeState("product") } },
+                                onSave = { prod ->
+                                    viewModel.saveProduct(prod) { showProductDialog = false; draftStates.removeState("product") }
+                                },
+                            )
+                        }
                     }
                 }
             }
@@ -446,7 +474,7 @@ private fun ProductsTabContent(
                                     modifier = Modifier.weight(1f),
                                 )
                                 Text(
-                                    text = "S/ ${String.format("%.2f", product.price)}",
+                                    text = "S/ ${String.format(Locale.forLanguageTag("es-PE"), "%.2f", product.price)}",
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 16.sp,
                                     color = ChaskiPrimary,
@@ -523,13 +551,19 @@ private fun CategoryDialog(
     categoryToEdit: ProductCategory?,
     onDismiss: () -> Unit,
     onSave: (ProductCategory) -> Unit,
+    saving: Boolean,
+    saveError: String?,
 ) {
-    var name by remember { mutableStateOf(categoryToEdit?.name ?: "") }
+    var name by rememberSaveable(categoryToEdit?.id) { mutableStateOf(categoryToEdit?.name ?: "") }
 
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
-            Text(text = if (categoryToEdit == null) "Agregar Categoría" else "Editar Categoría")
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                saveError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                if (saving) LinearProgressIndicator(Modifier.fillMaxWidth())
+                Text(text = if (categoryToEdit == null) "Agregar Categoría" else "Editar Categoría")
+            }
         },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -546,6 +580,7 @@ private fun CategoryDialog(
             AuthSubmitButton(
                 text = "GUARDAR",
                 onClick = {
+                    if (saving) return@AuthSubmitButton
                     if (name.isNotBlank()) {
                         val category = categoryToEdit?.copy(name = name.trim())
                             ?: ProductCategory(businessId = businessId, name = name.trim())
@@ -563,34 +598,52 @@ private fun CategoryDialog(
 }
 
 @Composable
-private fun ProductDialog(
+internal fun ProductDialog(
     businessId: String,
     categories: List<ProductCategory>,
     productToEdit: Product?,
     onDismiss: () -> Unit,
     onSave: (Product) -> Unit,
+    saving: Boolean,
+    saveError: String?,
 ) {
     val context = LocalContext.current
-    var name by remember { mutableStateOf(productToEdit?.name ?: "") }
-    var description by remember { mutableStateOf(productToEdit?.description ?: "") }
-    var priceInput by remember { mutableStateOf(productToEdit?.price?.toString() ?: "") }
-    var prepTimeInput by remember { mutableStateOf(productToEdit?.prepTimeMinutes?.toString() ?: "15") }
-    var selectedCategoryId by remember { mutableStateOf(productToEdit?.categoryId ?: categories.firstOrNull()?.id ?: "") }
-    var selectedCategoryName by remember { mutableStateOf(productToEdit?.categoryName ?: categories.firstOrNull()?.name ?: "") }
+    var name by rememberSaveable(productToEdit?.id) { mutableStateOf(productToEdit?.name ?: "") }
+    var description by rememberSaveable(productToEdit?.id) { mutableStateOf(productToEdit?.description ?: "") }
+    var priceInput by rememberSaveable(productToEdit?.id) { mutableStateOf(productToEdit?.price?.toString() ?: "") }
+    var prepTimeInput by rememberSaveable(productToEdit?.id) { mutableStateOf(productToEdit?.prepTimeMinutes?.toString() ?: "15") }
+    var selectedCategoryId by rememberSaveable(productToEdit?.id) { mutableStateOf(productToEdit?.categoryId ?: categories.firstOrNull()?.id ?: "") }
+    var selectedCategoryName by rememberSaveable(productToEdit?.id) { mutableStateOf(productToEdit?.categoryName ?: categories.firstOrNull()?.name ?: "") }
+    // Save only the source URI. The bitmap/base64 stays out of the activity Bundle.
+    var photoSource by rememberSaveable(productToEdit?.id) { mutableStateOf<String?>(null) }
+    var photoRevision by rememberSaveable(productToEdit?.id) { mutableIntStateOf(0) }
     var imageUrl by remember { mutableStateOf(productToEdit?.imageUrl ?: "") }
-    var capturedBitmap by remember { mutableStateOf<Bitmap?>(null) }
+    var imageLoading by remember { mutableStateOf(photoSource != null) }
+    var imageError by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(photoSource, photoRevision) {
+        val source = photoSource ?: return@LaunchedEffect
+        imageLoading = true
+        imageError = null
+        try {
+            val encoded = withContext(Dispatchers.IO) { source.toUri().toBase64DataUri(context) }
+            if (!encoded.isNullOrBlank()) imageUrl = encoded
+            else imageError = "No se pudo leer la foto del borrador. Selecciona otra fotografía."
+        } finally { imageLoading = false }
+    }
 
     var expandedCategoryDropdown by remember { mutableStateOf(false) }
 
     val photoPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia(),
     ) { uri: Uri? ->
-        uri?.let {
-            val base64Str = it.toBase64DataUri(context)
-            if (!base64Str.isNullOrBlank()) {
-                imageUrl = base64Str
-                capturedBitmap = null
-            }
+        uri?.let { selectedUri ->
+            imageLoading = true
+            imageError = null
+            try { context.contentResolver.takePersistableUriPermission(selectedUri, Intent.FLAG_GRANT_READ_URI_PERMISSION) }
+            catch (_: SecurityException) { /* The current grant still allows reading this selection. */ }
+            photoSource = selectedUri.toString()
+            photoRevision += 1
         }
     }
 
@@ -598,15 +651,26 @@ private fun ProductDialog(
         contract = ActivityResultContracts.TakePicturePreview(),
     ) { bitmap: Bitmap? ->
         bitmap?.let {
-            capturedBitmap = it
-            imageUrl = it.toBase64DataUri()
+            try {
+                val photo = File.createTempFile("product-draft-", ".jpg", context.cacheDir)
+                photo.outputStream().use { output -> check(it.compress(Bitmap.CompressFormat.JPEG, 90, output)) }
+                imageLoading = true
+                photoSource = Uri.fromFile(photo).toString()
+                photoRevision += 1
+                imageError = null
+            } catch (_: Exception) { imageError = "No se pudo conservar la foto. Intenta tomarla nuevamente." }
         }
     }
 
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
-            Text(text = if (productToEdit == null) "Agregar Producto" else "Editar Producto")
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                saveError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                Text(text = if (productToEdit == null) "Agregar Producto" else "Editar Producto")
+                imageError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                if (saving || imageLoading) LinearProgressIndicator(Modifier.fillMaxWidth())
+            }
         },
         text = {
             Column(
@@ -631,14 +695,7 @@ private fun ProductDialog(
                         .background(Color(0xFFEEEEEE)),
                     contentAlignment = Alignment.Center,
                 ) {
-                    if (capturedBitmap != null) {
-                        Image(
-                            bitmap = capturedBitmap!!.asImageBitmap(),
-                            contentDescription = "Foto capturada",
-                            modifier = Modifier.fillMaxSize(),
-                            contentScale = ContentScale.Crop,
-                        )
-                    } else if (imageUrl.isNotBlank()) {
+                    if (imageUrl.isNotBlank()) {
                         AsyncImage(
                             model = rememberImageModel(imageUrl),
                             contentDescription = "Foto seleccionada",
@@ -668,6 +725,7 @@ private fun ProductDialog(
                 ) {
                     OutlinedButton(
                         onClick = { cameraLauncher.launch(null) },
+                        enabled = !saving && !imageLoading,
                         modifier = Modifier.weight(1f),
                     ) {
                         Icon(imageVector = Icons.Default.CameraAlt, contentDescription = null, modifier = Modifier.size(16.dp))
@@ -676,7 +734,9 @@ private fun ProductDialog(
                     }
 
                     OutlinedButton(
+                        enabled = !saving && !imageLoading,
                         onClick = {
+                            if (saving) return@OutlinedButton
                             photoPickerLauncher.launch(
                                 PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
                             )
@@ -771,6 +831,7 @@ private fun ProductDialog(
                                 DropdownMenuItem(
                                     text = { Text(cat.name) },
                                     onClick = {
+                                        if (saving) return@DropdownMenuItem
                                         selectedCategoryId = cat.id
                                         selectedCategoryName = cat.name
                                         expandedCategoryDropdown = false
@@ -786,8 +847,9 @@ private fun ProductDialog(
             AuthSubmitButton(
                 text = "GUARDAR",
                 onClick = {
+                    if (saving || imageLoading || imageError != null) return@AuthSubmitButton
                     val price = priceInput.toDoubleOrNull() ?: 0.0
-                    val prepTime = prepTimeInput.toIntOrNull() ?: 15
+                    val prepTime = prepTimeInput.toIntOrNull() ?: 0
                     val product = productToEdit?.copy(
                         name = name.trim(),
                         description = description.trim(),
@@ -828,18 +890,29 @@ private fun Bitmap.toBase64DataUri(quality: Int = 70): String {
 
 private fun Uri.toBase64DataUri(context: Context, quality: Int = 70): String? {
     return try {
-        val inputStream = context.contentResolver.openInputStream(this) ?: return null
-        val bitmap = BitmapFactory.decodeStream(inputStream) ?: return null
         val maxDimension = 500
+        val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        val boundsStream = context.contentResolver.openInputStream(this) ?: return null
+        boundsStream.use { BitmapFactory.decodeStream(it, null, options) }
+        if (options.outWidth <= 0 || options.outHeight <= 0) return null
+        var sampleSize = 1
+        while (maxOf(options.outWidth, options.outHeight) / sampleSize > maxDimension * 2) sampleSize *= 2
+        options.inSampleSize = sampleSize
+        options.inJustDecodeBounds = false
+        val bitmap = context.contentResolver.openInputStream(this)?.use { BitmapFactory.decodeStream(it, null, options) }
+            ?: return null
         val width = bitmap.width
         val height = bitmap.height
         val resizedBitmap = if (width > maxDimension || height > maxDimension) {
             val scale = maxDimension.toFloat() / maxOf(width, height)
-            Bitmap.createScaledBitmap(bitmap, (width * scale).toInt(), (height * scale).toInt(), true)
+            Bitmap.createScaledBitmap(bitmap, (width * scale).toInt().coerceAtLeast(1), (height * scale).toInt().coerceAtLeast(1), true)
         } else {
             bitmap
         }
-        resizedBitmap.toBase64DataUri(quality)
+        try { resizedBitmap.toBase64DataUri(quality) } finally {
+            if (resizedBitmap !== bitmap) resizedBitmap.recycle()
+            bitmap.recycle()
+        }
     } catch (e: Exception) {
         null
     }

@@ -1,6 +1,9 @@
 package com.chaskifood.app.feature.business.data
 
 import com.chaskifood.app.core.common.ApiResult
+import com.chaskifood.app.core.firebase.FirebaseAccessControl
+import com.chaskifood.app.feature.business.domain.validOperatingHours
+import kotlinx.coroutines.CancellationException
 import com.chaskifood.app.feature.business.domain.BusinessStore
 import com.chaskifood.app.feature.business.domain.DayOfWeekEnum
 import com.chaskifood.app.feature.business.domain.DayOperatingHours
@@ -8,7 +11,6 @@ import com.chaskifood.app.feature.business.domain.OperationalStatus
 import com.chaskifood.app.feature.business.domain.StoreManager
 import com.chaskifood.app.feature.business.domain.StoreRepository
 import com.chaskifood.app.feature.business.domain.StoreStatus
-import com.chaskifood.app.feature.business.domain.defaultWeeklyOperatingHours
 import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FieldPath
 import com.google.firebase.firestore.FirebaseFirestore
@@ -23,6 +25,7 @@ import javax.inject.Singleton
 @Singleton
 class FirebaseStoreRepository @Inject constructor(
     private val firestore: FirebaseFirestore,
+    private val access: FirebaseAccessControl,
 ) : StoreRepository {
 
     private val storesRef by lazy { firestore.collection("stores") }
@@ -54,6 +57,7 @@ class FirebaseStoreRepository @Inject constructor(
 
     override suspend fun createStore(store: BusinessStore): ApiResult<BusinessStore> {
         return try {
+            access.requireBusinessOwner(store.businessId)
             val docRef = storesRef.document()
             val storeId = docRef.id
             val newStore = store.copy(id = storeId)
@@ -83,6 +87,8 @@ class FirebaseStoreRepository @Inject constructor(
 
             docRef.set(data).await()
             ApiResult.Success(newStore)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
         } catch (e: Exception) {
             ApiResult.Failure(e.localizedMessage ?: "Error al registrar el local.", e)
         }
@@ -94,30 +100,22 @@ class FirebaseStoreRepository @Inject constructor(
                 return ApiResult.Failure("El ID del local no puede estar vacío.")
             }
 
-            val hoursData = store.operatingHours.map { h ->
-                mapOf(
-                    "dayOfWeek" to h.dayOfWeek.name,
-                    "openTime" to h.openTime,
-                    "closeTime" to h.closeTime,
-                    "enabled" to h.enabled,
-                )
-            }
-
+            access.requireBusinessOwner(store.businessId)
+            val existing = storesRef.document(store.id).get().await()
+            check(existing.getString("businessId") == store.businessId) { "Local no autorizado." }
             val data = mapOf(
-                "businessId" to store.businessId,
                 "name" to store.name,
                 "address" to store.address,
                 "latitude" to store.latitude,
                 "longitude" to store.longitude,
                 "phone" to store.phone,
-                "status" to store.status.name,
-                "operationalStatus" to store.operationalStatus.name,
-                "pauseReason" to (store.pauseReason ?: ""),
-                "operatingHours" to hoursData,
+                "status" to if (existing.getString("status") == "SUSPENDED") "SUSPENDED" else store.status.name,
             )
 
             storesRef.document(store.id).update(data).await()
             ApiResult.Success(store)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
         } catch (e: Exception) {
             ApiResult.Failure(e.localizedMessage ?: "Error al actualizar la información del local.", e)
         }
@@ -162,21 +160,35 @@ class FirebaseStoreRepository @Inject constructor(
 
     override suspend fun assignManager(manager: StoreManager): ApiResult<StoreManager> {
         return try {
-            val docRef = if (manager.id.isNotBlank()) managersRef.document(manager.id) else managersRef.document()
+            access.requireBusinessOwner(manager.businessId)
+            require(manager.assignedStoreIds.isNotEmpty()) { "Selecciona al menos un local." }
+            for (id in manager.assignedStoreIds) {
+                check(storesRef.document(id).get().await().getString("businessId") == manager.businessId) { "Local ajeno al negocio." }
+            }
+            if (manager.id.isNotBlank()) {
+                check(managersRef.document(manager.id).get().await().getString("businessId") == manager.businessId) { "Responsable ajeno al negocio." }
+            }
+            val email = manager.email.trim().lowercase()
+            require(email.contains('@') && !email.contains('/')) { "Correo de responsable inválido." }
+            val docRef = managersRef.document(manager.businessId + "_" + email)
             val managerId = docRef.id
             val updatedManager = manager.copy(id = managerId)
 
             val data = mapOf(
                 "businessId" to updatedManager.businessId,
-                "email" to updatedManager.email,
+                "email" to updatedManager.email.trim().lowercase(),
                 "fullName" to updatedManager.fullName,
                 "phone" to updatedManager.phone,
                 "assignedStoreIds" to updatedManager.assignedStoreIds,
                 "createdAt" to updatedManager.createdAt,
             )
 
-            docRef.set(data).await()
+            val batch = firestore.batch().set(docRef, data)
+            if (manager.id.isNotBlank() && manager.id != managerId) batch.delete(managersRef.document(manager.id))
+            batch.commit().await()
             ApiResult.Success(updatedManager)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
         } catch (e: Exception) {
             ApiResult.Failure(e.localizedMessage ?: "Error al asignar el responsable.", e)
         }
@@ -189,43 +201,50 @@ class FirebaseStoreRepository @Inject constructor(
             return@callbackFlow
         }
 
-        var storeListener: ListenerRegistration? = null
-
-        val managerListener = managersRef.addSnapshotListener { snapshot, error ->
-            if (error != null) {
-                trySend(ApiResult.Failure(error.localizedMessage ?: "Error al consultar permisos de responsable.", error))
-                return@addSnapshotListener
+        val user = try {
+            access.requireUser().also { user ->
+                if (!user.isEmailVerified) {
+                    user.reload().await()
+                    if (user.isEmailVerified) user.getIdToken(true).await()
+                }
             }
-
-            val managerDoc = snapshot?.documents?.firstOrNull { doc ->
-                val email = doc.getString("email") ?: ""
-                doc.id == managerEmailOrUid || email.equals(managerEmailOrUid, ignoreCase = true)
-            }
-
-            @Suppress("UNCHECKED_CAST")
-            val assignedStoreIds = (managerDoc?.get("assignedStoreIds") as? List<*>)?.mapNotNull { it as? String } ?: emptyList()
-
-            storeListener?.remove()
-
-            if (assignedStoreIds.isNotEmpty()) {
-                storeListener = storesRef.whereIn(FieldPath.documentId(), assignedStoreIds)
-                    .addSnapshotListener { storesSnapshot, storesError ->
-                        if (storesError != null) {
-                            trySend(ApiResult.Failure(storesError.localizedMessage ?: "Error al cargar locales.", storesError))
-                            return@addSnapshotListener
-                        }
-                        val stores = storesSnapshot?.documents?.mapNotNull { it.toBusinessStore() } ?: emptyList()
-                        trySend(ApiResult.Success(stores))
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: Exception) {
+            trySend(ApiResult.Failure("No se pudo comprobar tu cuenta. Vuelve a intentarlo.", error))
+            close()
+            return@callbackFlow
+        }
+        val email = user.email?.lowercase()
+        if (email.isNullOrBlank() || !user.isEmailVerified || !email.equals(managerEmailOrUid, ignoreCase = true)) {
+            trySend(ApiResult.Failure("Verifica tu correo para consultar los locales asignados."))
+            close()
+            return@callbackFlow
+        }
+        val storeListeners = mutableListOf<ListenerRegistration>()
+        var generation = 0
+        val managerListener = managersRef.whereEqualTo("email", email).addSnapshotListener { snapshot, error ->
+            if (error != null) { trySend(ApiResult.Failure("No se pudieron consultar tus asignaciones.", error)); return@addSnapshotListener }
+            storeListeners.forEach { it.remove() }; storeListeners.clear()
+            val currentGeneration = ++generation
+            val ids = snapshot?.documents.orEmpty().flatMap { doc ->
+                (doc.get("assignedStoreIds") as? List<*>)?.filterIsInstance<String>().orEmpty()
+            }.distinct()
+            if (ids.isEmpty()) { trySend(ApiResult.Success(emptyList())); return@addSnapshotListener }
+            val chunks = ids.chunked(10)
+            val results = mutableMapOf<Int, List<BusinessStore>>()
+            chunks.forEachIndexed { index, chunk ->
+                storeListeners += storesRef.whereIn(FieldPath.documentId(), chunk).addSnapshotListener { stores, failure ->
+                    if (currentGeneration != generation) return@addSnapshotListener
+                    if (failure != null) trySend(ApiResult.Failure("No se pudieron cargar tus locales.", failure))
+                    else {
+                        results[index] = stores?.documents?.mapNotNull { it.toBusinessStore() }.orEmpty()
+                        if (results.size == chunks.size) trySend(ApiResult.Success(results.toSortedMap().values.flatten()))
                     }
-            } else {
-                trySend(ApiResult.Success(emptyList()))
+                }
             }
         }
-
-        awaitClose {
-            managerListener.remove()
-            storeListener?.remove()
-        }
+        awaitClose { managerListener.remove(); storeListeners.forEach { it.remove() } }
     }
 
     override suspend fun updateOperationalStatus(
@@ -234,12 +253,15 @@ class FirebaseStoreRepository @Inject constructor(
         pauseReason: String?,
     ): ApiResult<Unit> {
         return try {
+            access.requireStoreOperator(storeId)
             val data = mutableMapOf<String, Any>(
                 "operationalStatus" to status.name,
                 "pauseReason" to (pauseReason ?: ""),
             )
             storesRef.document(storeId).update(data).await()
             ApiResult.Success(Unit)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
         } catch (e: Exception) {
             ApiResult.Failure(e.localizedMessage ?: "Error al actualizar el estado operativo del local.", e)
         }
@@ -250,6 +272,8 @@ class FirebaseStoreRepository @Inject constructor(
         hours: List<DayOperatingHours>,
     ): ApiResult<Unit> {
         return try {
+            require(validOperatingHours(hours)) { "Usa siete días distintos y horas HH:mm válidas; apertura y cierre deben diferir." }
+            access.requireStoreOperator(storeId)
             val hoursData = hours.map { h ->
                 mapOf(
                     "dayOfWeek" to h.dayOfWeek.name,
@@ -260,6 +284,8 @@ class FirebaseStoreRepository @Inject constructor(
             }
             storesRef.document(storeId).update("operatingHours", hoursData).await()
             ApiResult.Success(Unit)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
         } catch (e: Exception) {
             ApiResult.Failure(e.localizedMessage ?: "Error al actualizar los horarios del local.", e)
         }
@@ -268,21 +294,21 @@ class FirebaseStoreRepository @Inject constructor(
     private fun DocumentSnapshot.toBusinessStore(): BusinessStore? {
         if (!exists()) return null
         val data = data ?: return null
-        val statusStr = data["status"] as? String ?: "ACTIVE"
-        val opStatusStr = data["operationalStatus"] as? String ?: "OPEN"
+        val statusStr = data["status"] as? String ?: "INACTIVE"
+        val opStatusStr = data["operationalStatus"] as? String ?: "CLOSED"
         val rawHours = data["operatingHours"] as? List<*>
 
         val parsedHours = rawHours?.mapNotNull { h ->
             val map = h as? Map<*, *> ?: return@mapNotNull null
             val dayName = map["dayOfWeek"] as? String ?: return@mapNotNull null
-            val dayEnum = try { DayOfWeekEnum.valueOf(dayName) } catch (e: Exception) { DayOfWeekEnum.MONDAY }
+            val dayEnum = DayOfWeekEnum.entries.find { it.name == dayName } ?: return@mapNotNull null
             DayOperatingHours(
                 dayOfWeek = dayEnum,
                 openTime = map["openTime"] as? String ?: "08:00",
                 closeTime = map["closeTime"] as? String ?: "22:00",
                 enabled = map["enabled"] as? Boolean ?: true,
             )
-        } ?: defaultWeeklyOperatingHours()
+        } ?: emptyList()
 
         return BusinessStore(
             id = id,
@@ -292,11 +318,45 @@ class FirebaseStoreRepository @Inject constructor(
             latitude = (data["latitude"] as? Number)?.toDouble() ?: 0.0,
             longitude = (data["longitude"] as? Number)?.toDouble() ?: 0.0,
             phone = data["phone"] as? String ?: "",
-            status = try { StoreStatus.valueOf(statusStr) } catch (e: Exception) { StoreStatus.ACTIVE },
-            operationalStatus = try { OperationalStatus.valueOf(opStatusStr) } catch (e: Exception) { OperationalStatus.OPEN },
+            status = StoreStatus.entries.find { it.name == statusStr } ?: StoreStatus.INACTIVE,
+            operationalStatus = OperationalStatus.entries.find { it.name == opStatusStr } ?: OperationalStatus.CLOSED,
             pauseReason = data["pauseReason"] as? String,
             operatingHours = parsedHours,
             createdAt = (data["createdAt"] as? Number)?.toLong() ?: System.currentTimeMillis(),
+            suspensionReason = data["suspensionReason"] as? String,
         )
+    }
+
+    override suspend fun setAdministrativeStatus(storeId: String, status: StoreStatus, reason: String?): ApiResult<Unit> {
+        return try {
+            val admin = access.requireAdmin()
+            require(status == StoreStatus.SUSPENDED || status == StoreStatus.ACTIVE)
+            require(status != StoreStatus.SUSPENDED || !reason.isNullOrBlank()) { "Indica el motivo de suspensión." }
+            val reference = storesRef.document(storeId)
+            val audit = firestore.collection("audit_logs").document()
+            firestore.runTransaction { transaction ->
+                val existing = transaction.get(reference)
+                check(existing.exists()) { "El local ya no existe." }
+                val previous = existing.getString("status")
+                check(if (status == StoreStatus.ACTIVE) previous == "SUSPENDED" else previous in listOf("ACTIVE", "INACTIVE")) {
+                    "El estado del local cambió. Actualiza la lista."
+                }
+                check(access.requireUser().uid == admin.uid) { "La sesión cambió." }
+                transaction.update(reference, mapOf(
+                    "status" to status.name, "suspensionReason" to if (status == StoreStatus.SUSPENDED) reason?.trim() else null,
+                    "lastAuditId" to audit.id, "updatedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp(),
+                ))
+                transaction.set(audit, mapOf(
+                    "adminUid" to admin.uid, "adminEmail" to (admin.email ?: admin.uid),
+                    "action" to if (status == StoreStatus.SUSPENDED) "SUSPENDER_LOCAL" else "REACTIVAR_LOCAL",
+                    "targetStoreId" to storeId, "targetBusinessId" to existing.getString("businessId"),
+                    "targetBusinessName" to existing.getString("name"), "targetRuc" to "", "details" to reason?.trim(),
+                    "previousStatus" to previous, "newStatus" to status.name,
+                    "timestamp" to com.google.firebase.firestore.FieldValue.serverTimestamp(),
+                ))
+            }.await()
+            ApiResult.Success(Unit)
+        } catch (cancelled: CancellationException) { throw cancelled }
+        catch (error: Exception) { ApiResult.Failure(error.message ?: "No se pudo actualizar el local.", error) }
     }
 }

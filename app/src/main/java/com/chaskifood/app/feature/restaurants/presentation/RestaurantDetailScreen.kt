@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -64,7 +65,7 @@ private val categories = listOf("Entrantes", "Bebidas", "Postres", "Mariscos", "
 fun RestaurantDetailScreen(
     restaurantName: String,
     onBack: () -> Unit,
-    onHome: () -> Unit,
+    onTabSelected: (FlowTab) -> Unit,
     onFoodClick: (String) -> Unit,
     onOpenFilter: () -> Unit = {},
     modifier: Modifier = Modifier,
@@ -75,14 +76,14 @@ fun RestaurantDetailScreen(
         bottomBar = {
             ChaskiFlowBottomBar(
                 selected = FlowTab.Home,
-                onTabClick = { if (it == FlowTab.Home) onHome() },
+                onTabClick = onTabSelected,
             )
         },
     ) { innerPadding ->
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding),
+                .padding(innerPadding).consumeWindowInsets(innerPadding),
             contentPadding = PaddingValues(bottom = ChaskiDimens.SpacingXxl),
         ) {
             item(key = "header") {

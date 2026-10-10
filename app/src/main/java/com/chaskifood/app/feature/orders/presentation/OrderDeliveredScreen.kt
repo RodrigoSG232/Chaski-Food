@@ -2,6 +2,8 @@ package com.chaskifood.app.feature.orders.presentation
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -40,7 +42,8 @@ fun OrderDeliveredScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(Color(0xFF616161)),
+            .background(Color(0xFF616161))
+            .verticalScroll(rememberScrollState()),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Row(
@@ -113,6 +116,5 @@ fun OrderDeliveredScreen(
             }
         }
 
-        Spacer(Modifier.weight(1f))
     }
 }

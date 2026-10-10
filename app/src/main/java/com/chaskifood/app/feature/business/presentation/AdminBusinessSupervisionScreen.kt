@@ -3,6 +3,8 @@ package com.chaskifood.app.feature.business.presentation
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -24,6 +26,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -33,6 +36,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -59,9 +63,12 @@ fun AdminBusinessSupervisionScreen(
     val selectedFilter by viewModel.selectedFilter.collectAsState()
     val filteredResult by viewModel.filteredRequests.collectAsState()
     val actionState by viewModel.actionState.collectAsState()
+    val selectedBusiness by viewModel.selectedBusiness.collectAsState()
+    val stores by viewModel.stores.collectAsState()
 
-    var activeSuspendRequest by remember { mutableStateOf<BusinessRequest?>(null) }
-    var suspendReasonInput by remember { mutableStateOf("") }
+    var suspendRequestId by rememberSaveable { mutableStateOf<String?>(null) }
+    var suspendReasonInput by rememberSaveable { mutableStateOf("") }
+    val activeSuspendRequest = (filteredResult as? ApiResult.Success)?.data?.find { it.id == suspendRequestId }
 
     Column(
         modifier = modifier
@@ -125,7 +132,7 @@ fun AdminBusinessSupervisionScreen(
 
             Spacer(Modifier.height(ChaskiDimens.SpacingLg))
 
-            if (actionState is UiState.Error) {
+            if (actionState is UiState.Error && suspendRequestId == null && selectedBusiness == null) {
                 Text(
                     text = (actionState as UiState.Error).message ?: "Error al procesar acción",
                     color = MaterialTheme.colorScheme.error,
@@ -158,8 +165,9 @@ fun AdminBusinessSupervisionScreen(
                             SupervisionBusinessCard(
                                 request = request,
                                 onSuspend = {
+                                    viewModel.clearActionError()
                                     suspendReasonInput = ""
-                                    activeSuspendRequest = request
+                                    suspendRequestId = request.id
                                 },
                                 onReactivate = {
                                     viewModel.reactivateBusiness(
@@ -167,23 +175,34 @@ fun AdminBusinessSupervisionScreen(
                                         onSuccess = {},
                                     )
                                 },
+                                onManageStores = { viewModel.superviseStores(request) },
                             )
                         }
                     }
                 }
+            } else if (filteredResult is ApiResult.Failure) {
+                Text((filteredResult as ApiResult.Failure).message ?: "No se pudieron cargar los negocios.",
+                    color = MaterialTheme.colorScheme.error)
+                TextButton(onClick = viewModel::retryLoading) { Text("REINTENTAR") }
             }
         }
     }
 
     // Modal de Suspensión
+    selectedBusiness?.let { business ->
+        AdminStoreSupervisionDialog(
+            businessName = business.businessName, stores = stores, actionState = actionState,
+            onDismiss = { viewModel.superviseStores(null) }, onChange = viewModel::changeStoreStatus,
+        )
+    }
     activeSuspendRequest?.let { request ->
         AlertDialog(
-            onDismissRequest = { activeSuspendRequest = null },
+            onDismissRequest = { if (actionState !is UiState.Loading) { suspendRequestId = null; viewModel.clearActionError() } },
             title = {
                 Text(text = "Suspender Negocio")
             },
             text = {
-                Column {
+                Column(Modifier.verticalScroll(rememberScrollState())) {
                     Text(
                         text = "Ingresa el motivo obligatorio para suspender la operación de '${request.businessName}':",
                         fontSize = 14.sp,
@@ -198,7 +217,13 @@ fun AdminBusinessSupervisionScreen(
                         },
                         modifier = Modifier.fillMaxWidth(),
                         minLines = 3,
+                        enabled = actionState !is UiState.Loading,
                     )
+                    if (actionState is UiState.Error) {
+                        Text((actionState as UiState.Error).message ?: "No se pudo suspender el negocio. Intenta nuevamente.",
+                            color = MaterialTheme.colorScheme.error)
+                    }
+                    if (actionState is UiState.Loading) LinearProgressIndicator(Modifier.fillMaxWidth())
                 }
             },
             confirmButton = {
@@ -208,17 +233,19 @@ fun AdminBusinessSupervisionScreen(
                             request = request,
                             reason = suspendReasonInput,
                             onSuccess = {
-                                activeSuspendRequest = null
+                                suspendRequestId = null
                             },
                         )
                     },
+                    enabled = suspendReasonInput.isNotBlank() && actionState !is UiState.Loading,
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD32F2F)),
                 ) {
                     Text(text = "SUSPENDER")
                 }
             },
             dismissButton = {
-                TextButton(onClick = { activeSuspendRequest = null }) {
+                TextButton(enabled = actionState !is UiState.Loading,
+                    onClick = { suspendRequestId = null; viewModel.clearActionError() }) {
                     Text(text = "CANCELAR")
                 }
             },
@@ -231,6 +258,7 @@ private fun SupervisionBusinessCard(
     request: BusinessRequest,
     onSuspend: () -> Unit,
     onReactivate: () -> Unit,
+    onManageStores: () -> Unit,
 ) {
     val isSuspended = request.status == BusinessStatus.SUSPENDED
 
@@ -288,6 +316,7 @@ private fun SupervisionBusinessCard(
                 modifier = Modifier.padding(vertical = ChaskiDimens.SpacingMd),
                 color = Color(0xFFEEEEEE),
             )
+            TextButton(onClick = onManageStores) { Text("SUPERVISAR LOCALES") }
 
             if (isSuspended) {
                 Row(

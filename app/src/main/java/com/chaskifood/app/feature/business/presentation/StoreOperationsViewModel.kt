@@ -7,7 +7,9 @@ import com.chaskifood.app.feature.business.domain.BusinessStore
 import com.chaskifood.app.feature.business.domain.DayOperatingHours
 import com.chaskifood.app.feature.business.domain.OperationalStatus
 import com.chaskifood.app.feature.business.domain.StoreRepository
-import com.google.firebase.auth.FirebaseAuth
+import com.chaskifood.app.feature.auth.domain.AuthRepository
+import com.chaskifood.app.feature.business.domain.validOperatingHours
+import kotlinx.coroutines.Job
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -26,6 +28,7 @@ sealed interface StoreOperationsUiState {
 @HiltViewModel
 class StoreOperationsViewModel @Inject constructor(
     private val storeRepository: StoreRepository,
+    private val authRepository: AuthRepository,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<StoreOperationsUiState>(StoreOperationsUiState.Loading)
@@ -34,48 +37,34 @@ class StoreOperationsViewModel @Inject constructor(
     private val _actionMessage = MutableStateFlow<String?>(null)
     val actionMessage: StateFlow<String?> = _actionMessage.asStateFlow()
 
-    private val currentUserEmailOrUid: String
-        get() {
-            val user = FirebaseAuth.getInstance().currentUser
-            return user?.email?.ifBlank { user.uid } ?: user?.uid ?: ""
-        }
-
-    init {
-        loadAssignedStores()
-    }
-
-    fun clearActionMessage() {
-        _actionMessage.value = null
-    }
+    private var observation: Job? = null
+    init { loadAssignedStores() }
+    fun clearActionMessage() { _actionMessage.value = null }
 
     fun loadAssignedStores() {
-        viewModelScope.launch {
+        observation?.cancel()
+        observation = viewModelScope.launch {
             _uiState.value = StoreOperationsUiState.Loading
-            val identifier = currentUserEmailOrUid
-            if (identifier.isBlank()) {
-                _uiState.value = StoreOperationsUiState.Error("Usuario no autenticado.")
-                return@launch
-            }
-
-            storeRepository.getStoresForManager(identifier).collectLatest { result ->
-                when (result) {
-                    is ApiResult.Success -> {
-                        val stores = result.data
-                        if (stores.isEmpty()) {
-                            _uiState.value = StoreOperationsUiState.NoStoresAssigned
-                        } else {
-                            _uiState.value = StoreOperationsUiState.Success(stores)
-                        }
-                    }
-                    is ApiResult.Failure -> {
-                        _uiState.value = StoreOperationsUiState.Error(result.message ?: "Error al cargar los locales asignados.")
+            authRepository.currentUserFlow.collectLatest { user ->
+                val identifier = user?.email?.lowercase()
+                if (identifier.isNullOrBlank()) {
+                    _uiState.value = StoreOperationsUiState.Error("Inicia sesión con la cuenta asignada.")
+                } else storeRepository.getStoresForManager(identifier).collectLatest { result ->
+                    _uiState.value = when (result) {
+                        is ApiResult.Success -> if (result.data.isEmpty()) StoreOperationsUiState.NoStoresAssigned
+                            else StoreOperationsUiState.Success(result.data)
+                        is ApiResult.Failure -> StoreOperationsUiState.Error(result.message ?: "No se pudieron cargar los locales.")
                     }
                 }
             }
         }
     }
 
+    private fun assigned(storeId: String): Boolean =
+        (_uiState.value as? StoreOperationsUiState.Success)?.stores?.any { it.id == storeId } == true
+
     fun updateStatus(storeId: String, status: OperationalStatus, pauseReason: String? = null) {
+        if (!assigned(storeId)) { _actionMessage.value = "Local no autorizado."; return }
         viewModelScope.launch {
             when (val result = storeRepository.updateOperationalStatus(storeId, status, pauseReason)) {
                 is ApiResult.Success -> {
@@ -94,6 +83,11 @@ class StoreOperationsViewModel @Inject constructor(
     }
 
     fun updateHours(storeId: String, hours: List<DayOperatingHours>) {
+        if (!assigned(storeId)) { _actionMessage.value = "Local no autorizado."; return }
+        if (!validOperatingHours(hours)) {
+            _actionMessage.value = "Usa horas HH:mm válidas; apertura y cierre deben diferir."
+            return
+        }
         viewModelScope.launch {
             when (val result = storeRepository.updateOperatingHours(storeId, hours)) {
                 is ApiResult.Success -> {

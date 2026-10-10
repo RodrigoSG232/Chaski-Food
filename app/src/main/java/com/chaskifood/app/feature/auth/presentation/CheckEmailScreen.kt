@@ -58,6 +58,10 @@ fun CheckEmailScreen(
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp),
         ) {
+            if ((uiState as? UiState.Success)?.data == Unit) {
+                Text("Si el correo está registrado, recibirás un nuevo enlace de recuperación.",
+                    style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(bottom = 12.dp))
+            }
             if (uiState is UiState.Error) {
                 Text(
                     text = (uiState as UiState.Error).message ?: "Error al reenviar el correo",

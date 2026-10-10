@@ -31,6 +31,7 @@ class ProfileViewModel @Inject constructor(
     val uiState: StateFlow<UiState<Unit?>> = _uiState.asStateFlow()
 
     fun updateProfile(displayName: String, onSuccess: () -> Unit) {
+        if (_uiState.value is UiState.Loading) return
         val trimmedName = displayName.trim()
         if (trimmedName.isBlank()) {
             _uiState.value = UiState.Error("El nombre completo no puede estar vacío.") {

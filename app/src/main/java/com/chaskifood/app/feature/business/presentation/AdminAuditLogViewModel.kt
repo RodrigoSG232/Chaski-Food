@@ -3,6 +3,8 @@ package com.chaskifood.app.feature.business.presentation
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.chaskifood.app.core.common.ApiResult
+import com.chaskifood.app.core.common.retryableQuery
+import kotlinx.coroutines.flow.MutableStateFlow
 import com.chaskifood.app.feature.business.domain.AuditLog
 import com.chaskifood.app.feature.business.domain.BusinessRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -16,7 +18,9 @@ class AdminAuditLogViewModel @Inject constructor(
     private val businessRepository: BusinessRepository,
 ) : ViewModel() {
 
-    val auditLogs: StateFlow<ApiResult<List<AuditLog>>?> = businessRepository.getAuditLogs()
+    private val retries = MutableStateFlow(0)
+    fun retryLoading() { retries.value += 1 }
+    val auditLogs: StateFlow<ApiResult<List<AuditLog>>?> = retryableQuery(retries, businessRepository::getAuditLogs)
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),

@@ -37,11 +37,13 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -75,6 +77,9 @@ fun RegisterBusinessScreen(
     isResubmission: Boolean = false,
     viewModel: RegisterBusinessViewModel = hiltViewModel(),
 ) {
+    LaunchedEffect(isResubmission) { if (isResubmission) viewModel.loadExistingForResubmission() }
+    val loadedObservations by viewModel.observations.collectAsState()
+    val canResubmit by viewModel.readyToResubmit.collectAsState()
     val name by viewModel.businessName.collectAsState()
     val ruc by viewModel.ruc.collectAsState()
     val address by viewModel.legalAddress.collectAsState()
@@ -83,7 +88,8 @@ fun RegisterBusinessScreen(
     val category by viewModel.category.collectAsState()
     val uiState by viewModel.uiState.collectAsState()
 
-    var selectedCountry by remember { mutableStateOf(countries.first()) }
+    var countryDialCode by rememberSaveable { mutableStateOf(countries.first().dialCode) }
+    val selectedCountry = countries.first { it.dialCode == countryDialCode }
     var expandedCountryDropdown by remember { mutableStateOf(false) }
     var expandedCategoryDropdown by remember { mutableStateOf(false) }
     val categoryOptions = listOf("Restaurante", "Tienda")
@@ -119,7 +125,7 @@ fun RegisterBusinessScreen(
                 color = ChaskiTextMuted,
             )
 
-            if (!observations.isNullOrBlank()) {
+            if (!(loadedObservations ?: observations).isNullOrBlank()) {
                 Spacer(Modifier.height(ChaskiDimens.SpacingLg))
                 Card(
                     colors = CardDefaults.cardColors(containerColor = ChaskiStatusObservedBg),
@@ -141,7 +147,7 @@ fun RegisterBusinessScreen(
                         }
                         Spacer(Modifier.height(ChaskiDimens.SpacingXs))
                         Text(
-                            text = observations,
+                            text = (loadedObservations ?: observations).orEmpty(),
                             fontSize = 14.sp,
                             color = Color(0xFFBF360C),
                         )
@@ -231,7 +237,7 @@ fun RegisterBusinessScreen(
                                     )
                                 },
                                 onClick = {
-                                    selectedCountry = country
+                                    countryDialCode = country.dialCode
                                     expandedCountryDropdown = false
                                 },
                             )
@@ -371,7 +377,8 @@ fun RegisterBusinessScreen(
                 AuthSubmitButton(
                     text = stringResource(R.string.submit_business_request),
                     onClick = {
-                        viewModel.submitRequest(
+                        if (isResubmission && !canResubmit) viewModel.loadExistingForResubmission()
+                        else viewModel.submitRequest(
                             isResubmission = isResubmission,
                             onSuccess = onSubmitted,
                         )

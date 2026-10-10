@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -66,7 +67,7 @@ private val defaultFee = "Upto $5"
 @Composable
 fun FilterScreen(
     onBack: () -> Unit,
-    onHome: () -> Unit,
+    onTabSelected: (FlowTab) -> Unit,
     onShowResults: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -107,7 +108,7 @@ fun FilterScreen(
                 }
                 ChaskiFlowBottomBar(
                     selected = FlowTab.Home,
-                    onTabClick = { if (it == FlowTab.Home) onHome() },
+                    onTabClick = onTabSelected,
                 )
             }
         },
@@ -115,7 +116,7 @@ fun FilterScreen(
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding),
+                .padding(innerPadding).consumeWindowInsets(innerPadding),
             contentPadding = PaddingValues(bottom = ChaskiDimens.SpacingLg),
         ) {
             item(key = "appbar") {

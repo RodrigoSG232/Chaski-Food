@@ -9,13 +9,11 @@ import com.chaskifood.app.feature.auth.domain.AuthRepository
 import com.chaskifood.app.feature.business.domain.BusinessRepository
 import com.chaskifood.app.feature.business.domain.BusinessRequest
 import com.chaskifood.app.feature.business.domain.BusinessStatus
-import com.google.firebase.auth.FirebaseAuth
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -35,11 +33,33 @@ class RegisterBusinessViewModel @Inject constructor(
     private val _uiState = MutableStateFlow<UiState<BusinessRequest?>>(UiState.Success(null))
     val uiState: StateFlow<UiState<BusinessRequest?>> = _uiState.asStateFlow()
 
-    private val currentUser = authRepository.currentUserFlow.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = null,
-    )
+    val observations = MutableStateFlow<String?>(null)
+    val readyToResubmit = MutableStateFlow(false)
+    private var existingRequest: BusinessRequest? = null
+
+    fun loadExistingForResubmission() {
+        if (existingRequest != null) return
+        _uiState.value = UiState.Loading
+        viewModelScope.launch {
+            val user = authRepository.currentUserFlow.first()
+            if (user == null) { _uiState.value = UiState.Error("Inicia sesión para corregir tu solicitud."); return@launch }
+            when (val result = businessRepository.getBusinessRequest(user.uid).first()) {
+                is ApiResult.Failure -> _uiState.value = UiState.Error(result.message)
+                is ApiResult.Success -> {
+                    val request = result.data
+                    if (request == null || request.status != BusinessStatus.OBSERVED) {
+                        _uiState.value = UiState.Error("La solicitud ya no está observada. Consulta su estado.")
+                    } else {
+                        existingRequest = request
+                        populateFromExisting(request)
+                        observations.value = request.observations
+                        readyToResubmit.value = true
+                        _uiState.value = UiState.Success(null)
+                    }
+                }
+            }
+        }
+    }
 
     fun populateFromExisting(request: BusinessRequest) {
         businessName.value = request.businessName
@@ -51,7 +71,11 @@ class RegisterBusinessViewModel @Inject constructor(
     }
 
     fun submitRequest(isResubmission: Boolean = false, onSuccess: () -> Unit) {
-        val ownerUid = FirebaseAuth.getInstance().currentUser?.uid ?: currentUser.value?.uid ?: ""
+        if (_uiState.value is UiState.Loading) return
+        if (isResubmission && !readyToResubmit.value) {
+            _uiState.value = UiState.Error("Carga tu solicitud observada antes de reenviar.")
+            return
+        }
         val name = businessName.value.trim()
         val currentRuc = ruc.value.trim()
         val address = legalAddress.value.trim()
@@ -81,7 +105,8 @@ class RegisterBusinessViewModel @Inject constructor(
         }
 
         val request = BusinessRequest(
-            ownerUid = ownerUid,
+            id = existingRequest?.id.orEmpty(),
+            ownerUid = existingRequest?.ownerUid.orEmpty(),
             businessName = name,
             ruc = currentRuc,
             legalAddress = address,
@@ -93,10 +118,16 @@ class RegisterBusinessViewModel @Inject constructor(
 
         _uiState.value = UiState.Loading
         viewModelScope.launch {
+            val user = authRepository.currentUserFlow.first()
+            if (user == null || (existingRequest != null && existingRequest?.ownerUid != user.uid)) {
+                _uiState.value = UiState.Error("Inicia sesión con la cuenta propietaria de la solicitud.")
+                return@launch
+            }
+            val authenticatedRequest = request.copy(ownerUid = user.uid)
             val result = if (isResubmission) {
-                businessRepository.resubmitBusinessRequest(request)
+                businessRepository.resubmitBusinessRequest(authenticatedRequest)
             } else {
-                businessRepository.submitBusinessRequest(request)
+                businessRepository.submitBusinessRequest(authenticatedRequest)
             }
 
             when (result) {

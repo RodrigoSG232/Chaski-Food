@@ -10,6 +10,8 @@ interface AuthRepository {
     suspend fun signUpWithEmail(email: String, password: String): ApiResult<AuthUser>
     suspend fun signInWithGoogle(idToken: String): ApiResult<AuthUser>
     suspend fun sendPhoneVerificationCode(activity: Activity, phoneNumber: String): ApiResult<String>
+    suspend fun resendPhoneVerificationCode(activity: Activity, phoneNumber: String): ApiResult<String> =
+        sendPhoneVerificationCode(activity, phoneNumber)
     suspend fun verifyPhoneCode(verificationId: String, code: String): ApiResult<Unit>
     suspend fun sendPasswordResetEmail(email: String): ApiResult<Unit>
     suspend fun updateProfile(displayName: String): ApiResult<Unit>

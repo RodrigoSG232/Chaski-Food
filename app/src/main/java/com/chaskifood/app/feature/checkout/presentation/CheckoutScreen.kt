@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -57,7 +58,7 @@ private enum class DeliveryMethod { PickUp, Deliver }
 @Composable
 fun CheckoutScreen(
     onBack: () -> Unit,
-    onHome: () -> Unit,
+    onTabSelected: (FlowTab) -> Unit,
     onContinueToPayment: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -72,14 +73,14 @@ fun CheckoutScreen(
         bottomBar = {
             ChaskiFlowBottomBar(
                 selected = FlowTab.Home,
-                onTabClick = { if (it == FlowTab.Home) onHome() },
+                onTabClick = onTabSelected,
             )
         },
     ) { innerPadding ->
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding),
+                .padding(innerPadding).consumeWindowInsets(innerPadding),
             contentPadding = PaddingValues(bottom = ChaskiDimens.SpacingXl),
         ) {
             item(key = "appbar") {

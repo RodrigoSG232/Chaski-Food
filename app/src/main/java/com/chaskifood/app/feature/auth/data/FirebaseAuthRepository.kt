@@ -6,6 +6,7 @@ import com.chaskifood.app.core.datastore.SessionDataStore
 import com.chaskifood.app.feature.auth.domain.AuthRepository
 import com.chaskifood.app.feature.auth.domain.AuthUser
 import com.google.firebase.FirebaseException
+import com.google.firebase.FirebaseTooManyRequestsException
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseAuthInvalidCredentialsException
 import com.google.firebase.auth.FirebaseAuthInvalidUserException
@@ -16,6 +17,9 @@ import com.google.firebase.auth.PhoneAuthCredential
 import com.google.firebase.auth.PhoneAuthOptions
 import com.google.firebase.auth.PhoneAuthProvider
 import com.google.firebase.auth.userProfileChangeRequest
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
@@ -26,18 +30,26 @@ import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.coroutines.resume
 
+@OptIn(ExperimentalCoroutinesApi::class)
 @Singleton
 class FirebaseAuthRepository @Inject constructor(
     private val firebaseAuth: FirebaseAuth,
     private val sessionDataStore: SessionDataStore,
 ) : AuthRepository {
 
-    override val currentUserFlow: Flow<AuthUser?> = callbackFlow {
-        val listener = FirebaseAuth.AuthStateListener { auth ->
-            trySend(auth.currentUser?.toAuthUser())
+    private var resendToken: PhoneAuthProvider.ForceResendingToken? = null
+    private var resendPhone: String? = null
+    private var resendUserId: String? = null
+
+    override val currentUserFlow: Flow<AuthUser?> = callbackFlow<FirebaseUser?> {
+        val listener = FirebaseAuth.IdTokenListener { auth -> trySend(auth.currentUser) }
+        firebaseAuth.addIdTokenListener(listener)
+        awaitClose { firebaseAuth.removeIdTokenListener(listener) }
+    }.mapLatest { user ->
+        if (user == null) null else {
+            val mapped = user.toAuthUser()
+            if (firebaseAuth.currentUser?.uid == user.uid) mapped else null
         }
-        firebaseAuth.addAuthStateListener(listener)
-        awaitClose { firebaseAuth.removeAuthStateListener(listener) }
     }
 
     override suspend fun loginWithEmail(email: String, password: String): ApiResult<AuthUser> {
@@ -53,14 +65,18 @@ class FirebaseAuthRepository @Inject constructor(
             }
         } catch (e: FirebaseAuthInvalidCredentialsException) {
             ApiResult.Failure("Correo o contraseña incorrectos.")
+        } catch (cancelled: CancellationException) {
+            throw cancelled
         } catch (e: Exception) {
-            ApiResult.Failure(e.localizedMessage ?: "Error al iniciar sesión.", e)
+            ApiResult.Failure("No se pudo iniciar sesión. Revisa tus credenciales y conexión.", e)
         }
     }
 
     override suspend fun signUpWithEmail(email: String, password: String): ApiResult<AuthUser> {
         return try {
             val result = firebaseAuth.createUserWithEmailAndPassword(email, password).await()
+            // La cuenta ya existe aunque el envío falle; no repetir el alta.
+            result.user?.sendEmailVerification()
             val user = result.user?.toAuthUser()
             if (user != null) {
                 val token = result.user?.getIdToken(false)?.await()?.token ?: ""
@@ -71,6 +87,8 @@ class FirebaseAuthRepository @Inject constructor(
             }
         } catch (e: FirebaseAuthUserCollisionException) {
             ApiResult.Failure("Este correo electrónico ya está registrado. Por favor inicia sesión.")
+        } catch (cancelled: CancellationException) {
+            throw cancelled
         } catch (e: Exception) {
             ApiResult.Failure(e.localizedMessage ?: "Error al registrarse.", e)
         }
@@ -90,6 +108,8 @@ class FirebaseAuthRepository @Inject constructor(
             }
         } catch (e: FirebaseAuthUserCollisionException) {
             ApiResult.Failure("Este correo ya está asociado a otra cuenta.")
+        } catch (cancelled: CancellationException) {
+            throw cancelled
         } catch (e: Exception) {
             ApiResult.Failure(e.localizedMessage ?: "Error al iniciar sesión con Google.", e)
         }
@@ -98,21 +118,51 @@ class FirebaseAuthRepository @Inject constructor(
     override suspend fun sendPhoneVerificationCode(
         activity: Activity,
         phoneNumber: String,
+    ): ApiResult<String> = sendPhoneCode(activity, phoneNumber, forceResend = false)
+
+    override suspend fun resendPhoneVerificationCode(
+        activity: Activity,
+        phoneNumber: String,
+    ): ApiResult<String> = sendPhoneCode(activity, phoneNumber, forceResend = true)
+
+    private suspend fun sendPhoneCode(
+        activity: Activity,
+        phoneNumber: String,
+        forceResend: Boolean,
     ): ApiResult<String> = suspendCancellableCoroutine { continuation ->
+        val requestedUser = firebaseAuth.currentUser
         val options = PhoneAuthOptions.newBuilder(firebaseAuth)
             .setPhoneNumber(phoneNumber)
             .setTimeout(60L, TimeUnit.SECONDS)
             .setActivity(activity)
             .setCallbacks(object : PhoneAuthProvider.OnVerificationStateChangedCallbacks() {
                 override fun onVerificationCompleted(credential: PhoneAuthCredential) {
-                    // Auto-verification handled if applicable
+                    // También puede llegar después de onCodeSent. La renovación del token
+                    // informa a la pantalla de código de que Firebase ya verificó el teléfono.
+                    if (firebaseAuth.currentUser?.uid != requestedUser?.uid) return
+                    val task = if (requestedUser == null) firebaseAuth.signInWithCredential(credential)
+                        else requestedUser.linkWithCredential(credential)
+                    task.addOnCompleteListener { completed ->
+                        if (completed.isSuccessful) {
+                            if (firebaseAuth.currentUser?.uid != completed.result?.user?.uid) return@addOnCompleteListener
+                            completed.result?.user?.getIdToken(true)?.addOnCompleteListener {
+                                if (continuation.isActive) continuation.resume(ApiResult.Success(""))
+                            }
+                        } else if (continuation.isActive) {
+                            continuation.resume(ApiResult.Failure("No se pudo verificar automáticamente el teléfono.", completed.exception))
+                        }
+                    }
                 }
 
                 override fun onVerificationFailed(e: FirebaseException) {
                     if (continuation.isActive) {
                         continuation.resume(
                             ApiResult.Failure(
-                                e.localizedMessage ?: "Error al enviar código SMS.",
+                                when (e) {
+                                    is FirebaseTooManyRequestsException -> "Se alcanzó el límite de solicitudes SMS. Espera unos minutos antes de volver a intentar."
+                                    is FirebaseAuthInvalidCredentialsException -> "Revisa el número y el código de país antes de solicitar otro SMS."
+                                    else -> "No se pudo enviar el SMS. Revisa tu conexión y vuelve a intentar."
+                                },
                                 e,
                             ),
                         )
@@ -123,11 +173,21 @@ class FirebaseAuthRepository @Inject constructor(
                     verificationId: String,
                     token: PhoneAuthProvider.ForceResendingToken,
                 ) {
+                    if (firebaseAuth.currentUser?.uid == requestedUser?.uid) {
+                        resendToken = token
+                        resendPhone = phoneNumber
+                        resendUserId = requestedUser?.uid
+                    }
                     if (continuation.isActive) {
                         continuation.resume(ApiResult.Success(verificationId))
                     }
                 }
             })
+            .apply {
+                if (forceResend && resendPhone == phoneNumber && resendUserId == requestedUser?.uid) {
+                    resendToken?.let { setForceResendingToken(it) }
+                }
+            }
             .build()
 
         PhoneAuthProvider.verifyPhoneNumber(options)
@@ -145,9 +205,21 @@ class FirebaseAuthRepository @Inject constructor(
             } else {
                 firebaseAuth.signInWithCredential(credential).await()
             }
+            firebaseAuth.currentUser?.let { user ->
+                val token = user.getIdToken(false).await().token ?: error("No se pudo renovar la sesión.")
+                sessionDataStore.setSession(user.uid, token)
+            }
             ApiResult.Success(Unit)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
         } catch (e: Exception) {
-            ApiResult.Failure(e.localizedMessage ?: "Código SMS incorrecto.", e)
+            ApiResult.Failure(when {
+                e is FirebaseAuthInvalidCredentialsException && e.errorCode == "ERROR_SESSION_EXPIRED" ->
+                    "El código SMS venció. Solicita uno nuevo con Reenviar código SMS."
+                e is FirebaseAuthInvalidCredentialsException -> "El código SMS no es válido. Revísalo o solicita uno nuevo."
+                e is FirebaseTooManyRequestsException -> "Demasiados intentos. Espera unos minutos y vuelve a intentar."
+                else -> "No se pudo verificar el código. Revisa tu conexión y vuelve a intentar."
+            }, e)
         }
     }
 
@@ -156,7 +228,9 @@ class FirebaseAuthRepository @Inject constructor(
             firebaseAuth.sendPasswordResetEmail(email).await()
             ApiResult.Success(Unit)
         } catch (e: FirebaseAuthInvalidUserException) {
-            ApiResult.Failure("No existe ninguna cuenta registrada con este correo electrónico.")
+            ApiResult.Success(Unit)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
         } catch (e: Exception) {
             ApiResult.Failure(e.localizedMessage ?: "Error al enviar el correo de recuperación.", e)
         }
@@ -170,10 +244,13 @@ class FirebaseAuthRepository @Inject constructor(
                     this.displayName = displayName
                 }
                 user.updateProfile(profileUpdates).await()
+                user.getIdToken(true).await()
                 ApiResult.Success(Unit)
             } else {
                 ApiResult.Failure("No hay una sesión de usuario activa.")
             }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
         } catch (e: Exception) {
             ApiResult.Failure(e.localizedMessage ?: "Error al actualizar el perfil.", e)
         }
@@ -184,23 +261,11 @@ class FirebaseAuthRepository @Inject constructor(
         sessionDataStore.clearSession()
     }
 
-    companion object {
-        private val DELEGATED_ADMIN_EMAILS = setOf(
-            "chaskifood2@gmail.com",
-        )
-    }
-
-    private fun FirebaseUser.toAuthUser(): AuthUser {
-        val mail = email?.lowercase() ?: ""
-        val isUserAdmin = mail.contains("admin") ||
-            mail.endsWith("@chaskifood.com") ||
-            DELEGATED_ADMIN_EMAILS.contains(mail)
-        return AuthUser(
-            uid = uid,
-            email = email,
-            displayName = displayName,
-            phoneNumber = phoneNumber,
-            isAdmin = isUserAdmin,
-        )
+    private suspend fun FirebaseUser.toAuthUser(): AuthUser {
+        val isAdmin = try { getIdToken(false).await().claims["admin"] == true }
+        catch (cancelled: CancellationException) { throw cancelled }
+        catch (_: Exception) { false }
+        return AuthUser(uid = uid, email = email, displayName = displayName,
+            phoneNumber = phoneNumber, isAdmin = isAdmin)
     }
 }

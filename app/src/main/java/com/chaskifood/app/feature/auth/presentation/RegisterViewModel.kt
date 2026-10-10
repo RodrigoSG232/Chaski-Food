@@ -4,6 +4,9 @@ import android.content.Context
 import android.util.Patterns
 import androidx.credentials.CredentialManager
 import androidx.credentials.CustomCredential
+import androidx.credentials.exceptions.GetCredentialCancellationException
+import androidx.credentials.exceptions.NoCredentialException
+import kotlinx.coroutines.CancellationException
 import androidx.credentials.GetCredentialRequest
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -34,6 +37,7 @@ class RegisterViewModel @Inject constructor(
     val uiState: StateFlow<UiState<AuthUser?>> = _uiState.asStateFlow()
 
     fun register(onSuccess: (hasPhoneNumber: Boolean) -> Unit) {
+        if (_uiState.value is UiState.Loading) return
         val currentEmail = email.value.trim()
         val currentPassword = password.value
         val currentConfirmPassword = confirmPassword.value
@@ -84,6 +88,7 @@ class RegisterViewModel @Inject constructor(
     }
 
     fun signInWithGoogle(context: Context, onSuccess: (hasPhoneNumber: Boolean) -> Unit) {
+        if (_uiState.value is UiState.Loading) return
         _uiState.value = UiState.Loading
         viewModelScope.launch {
             try {
@@ -121,6 +126,14 @@ class RegisterViewModel @Inject constructor(
                     _uiState.value = UiState.Error("No se pudo obtener la credencial de Google.") {
                         _uiState.value = UiState.Success(null)
                     }
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: GetCredentialCancellationException) {
+                _uiState.value = UiState.Success(null)
+            } catch (_: NoCredentialException) {
+                _uiState.value = UiState.Error("No hay una cuenta de Google disponible. Agrega una cuenta o usa tu correo.") {
+                    _uiState.value = UiState.Success(null)
                 }
             } catch (e: Exception) {
                 _uiState.value = UiState.Error(e.localizedMessage ?: "Error al conectar con Google.") {

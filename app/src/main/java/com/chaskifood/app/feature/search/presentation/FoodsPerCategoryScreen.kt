@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -74,7 +75,7 @@ private val africanFoods = listOf(
 fun FoodsPerCategoryScreen(
     categoryName: String,
     onBack: () -> Unit,
-    onHome: () -> Unit,
+    onTabSelected: (FlowTab) -> Unit,
     onFoodClick: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -84,14 +85,14 @@ fun FoodsPerCategoryScreen(
         bottomBar = {
             ChaskiFlowBottomBar(
                 selected = FlowTab.Home,
-                onTabClick = { if (it == FlowTab.Home) onHome() },
+                onTabClick = onTabSelected,
             )
         },
     ) { innerPadding ->
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding),
+                .padding(innerPadding).consumeWindowInsets(innerPadding),
             contentPadding = PaddingValues(
                 start = ChaskiDimens.ScreenPadding,
                 end = ChaskiDimens.ScreenPadding,

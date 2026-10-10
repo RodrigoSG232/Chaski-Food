@@ -28,5 +28,4 @@ interface BusinessRepository {
         ruc: String,
     ): ApiResult<Unit>
     fun getAuditLogs(): Flow<ApiResult<List<AuditLog>>>
-    suspend fun recordAuditLog(log: AuditLog): ApiResult<Unit>
 }
