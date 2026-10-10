@@ -1,6 +1,7 @@
 package com.chaskifood.app.feature.catalog.data
 
 import com.chaskifood.app.feature.catalog.domain.CatalogRepository
+import com.chaskifood.app.feature.catalog.domain.StoreProductConfigurationRepository
 import com.google.firebase.storage.FirebaseStorage
 import dagger.Provides
 import dagger.Binds
@@ -18,6 +19,13 @@ abstract class CatalogDataModule {
     abstract fun bindCatalogRepository(
         impl: FirebaseCatalogRepository,
     ): CatalogRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindStoreProductConfigurationRepository(
+        impl: FirebaseStoreProductConfigurationRepository,
+    ): StoreProductConfigurationRepository
+
     companion object {
         @Provides
         @Singleton
