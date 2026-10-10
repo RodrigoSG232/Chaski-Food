@@ -36,7 +36,7 @@
     <string name="address_use_location">Usar mi ubicación actual</string>
     <string name="address_permission_settings">Abrir permisos de la aplicación</string>
     <string name="address_location_explanation">El GPS es opcional. Solo solicitaremos tu ubicación al pulsar el botón; Android te pedirá permiso. El mapa necesita conexión a Internet.</string>
-    <string name="address_location_loading">Buscando tu ubicación… Puede tardar hasta 30 segundos.</string>
+    <string name="address_location_loading">Buscando tu ubicación… Puede tardar hasta 15 segundos.</string>
     <string name="address_location_found">Ubicación encontrada. Ajusta el pin si no coincide con la entrada.</string>
     <string name="address_location_approximate">Ubicación aproximada. Acerca el mapa y ajusta el pin antes de confirmarlo.</string>
     <string name="address_location_denied">No concediste el permiso. Puedes seguir eligiendo el punto manualmente o volver a solicitarlo.</string>
@@ -54,6 +54,7 @@
     <string name="address_geocoding_notice">Al confirmar, Android intentará sugerir una dirección para el punto. El resultado puede ser aproximado; revísalo en el formulario.</string>
     <string name="address_geocoding_loading">Buscando una dirección para el punto…</string>
     <string name="address_geocoding_unavailable">No se pudo obtener una sugerencia. Puedes confirmar el punto y escribir la dirección manualmente.</string>
+    <string name="address_geocoding_retry">Reintentar búsqueda de dirección</string>
     <string name="address_confirm_point_manual">Confirmar punto y escribir dirección</string>
     <string name="address_map_address_help">Si el mapa encuentra una dirección, aparecerá como sugerencia editable. Verifica calle, número e interior antes de guardar.</string>
     <string name="address_point_required">Confirma un punto válido en el mapa.</string>

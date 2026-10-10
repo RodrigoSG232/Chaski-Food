@@ -55,6 +55,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.app.ActivityCompat
@@ -240,8 +243,8 @@ private fun AddressMapScreen(
                         Spacer(Modifier.height(4.dp))
                         Text(
                             text = when {
+                                state.addressLookup == AddressLookupStatus.LOADING -> stringResource(R.string.address_geocoding_loading)
                                 !state.suggestedAddress.isNullOrBlank() -> state.suggestedAddress
-                                state.addressLookup == AddressLookupStatus.LOADING -> "Buscando dirección de la ubicación..."
                                 state.point != null -> "Coordenadas: ${state.point.latitude}, ${state.point.longitude}"
                                 else -> addressText.ifBlank { "Mueve el mapa para seleccionar el punto de entrega" }
                             },
@@ -261,6 +264,15 @@ private fun AddressMapScreen(
                 enabled = state.locationStatus != AddressLocationStatus.LOCATING, outlined = true,
             )
 
+            LocationFeedback(state, onCancelLocation, onLocationSettings)
+
+            if (state.addressLookup == AddressLookupStatus.UNAVAILABLE) {
+                Text(stringResource(R.string.address_geocoding_unavailable), style = MaterialTheme.typography.bodyMedium)
+                TextButton(onClick = onSuggestAddress, enabled = state.locationStatus != AddressLocationStatus.LOCATING) {
+                    Text(stringResource(R.string.address_geocoding_retry))
+                }
+            }
+
             AddressButton(
                 stringResource(R.string.address_confirm_point),
                 { if (state.canConfirm && state.point != null) onConfirm(state.point, state.suggestedAddress) },
@@ -268,6 +280,44 @@ private fun AddressMapScreen(
             )
 
             MapAttribution()
+        }
+    }
+}
+
+@Composable
+private fun LocationFeedback(
+    state: AddressMapState,
+    onCancelLocation: () -> Unit,
+    onLocationSettings: () -> Unit,
+) {
+    val message = when (state.locationStatus) {
+        AddressLocationStatus.IDLE -> return
+        AddressLocationStatus.LOCATING -> R.string.address_location_loading
+        AddressLocationStatus.FOUND -> R.string.address_location_found
+        AddressLocationStatus.APPROXIMATE -> R.string.address_location_approximate
+        AddressLocationStatus.DENIED -> R.string.address_location_denied
+        AddressLocationStatus.BLOCKED -> R.string.address_location_blocked
+        AddressLocationStatus.DISABLED -> R.string.address_location_disabled
+        AddressLocationStatus.UNAVAILABLE -> R.string.address_location_unavailable
+    }
+    Column(
+        Modifier.fillMaxWidth().semantics { liveRegion = LiveRegionMode.Polite },
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            if (state.locationStatus == AddressLocationStatus.LOCATING) {
+                CircularProgressIndicator(Modifier.size(20.dp), color = ChaskiPrimary, strokeWidth = 2.dp)
+            }
+            Text(stringResource(message), style = MaterialTheme.typography.bodyMedium)
+        }
+        state.accuracyMeters?.takeIf { it.isFinite() && it >= 0f }?.let {
+            Text(stringResource(R.string.address_location_accuracy, it.toInt()), style = MaterialTheme.typography.bodySmall)
+        }
+        if (state.locationStatus == AddressLocationStatus.LOCATING) {
+            TextButton(onClick = onCancelLocation) { Text(stringResource(R.string.address_location_cancel)) }
+        }
+        if (state.locationStatus == AddressLocationStatus.DISABLED) {
+            TextButton(onClick = onLocationSettings) { Text(stringResource(R.string.address_location_settings)) }
         }
     }
 }

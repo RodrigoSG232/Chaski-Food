@@ -50,13 +50,13 @@ class AddressMapViewModel @Inject constructor(
     private var active = false
 
     fun open(request: AddressMapRequest) {
+        active = true
         if (_uiState.value.requestId != request.id) {
             cancelLocation()
             cancelAddressLookup()
             _uiState.value = AddressMapState(requestId = request.id, point = request.initialPoint)
             request.initialPoint?.let { if (it.isValid) suggestAddressForPoint(request.id, it) }
         } else _uiState.value = _uiState.value.copy(load = AddressMapLoad.LOADING, moving = false)
-        active = true
     }
 
     fun close(requestId: String) {
@@ -78,6 +78,7 @@ class AddressMapViewModel @Inject constructor(
     fun locate(requestId: String) {
         if (!accepts(requestId)) return
         cancelLocation()
+        cancelAddressLookup()
         val token = generation
         _uiState.value = _uiState.value.copy(locationStatus = AddressLocationStatus.LOCATING, accuracyMeters = null)
         locationJob = viewModelScope.launch {
@@ -86,18 +87,23 @@ class AddressMapViewModel @Inject constructor(
             catch (_: Exception) { DeviceLocationResult.Unavailable }
             if (!accepts(requestId) || token != generation) return@launch
             val old = _uiState.value
-            _uiState.value = when (result) {
+            when (result) {
                 is DeviceLocationResult.Available -> {
-                    if (result.coordinates.isValid) suggestAddressForPoint(requestId, result.coordinates)
-                    old.copy(
+                    if (!result.coordinates.isValid) {
+                        _uiState.value = old.copy(locationStatus = AddressLocationStatus.UNAVAILABLE)
+                        return@launch
+                    }
+                    _uiState.value = old.copy(
                         point = result.coordinates, centerRevision = old.centerRevision + 1, moving = false,
                         accuracyMeters = result.accuracyMeters,
                         locationStatus = if (result.approximate) AddressLocationStatus.APPROXIMATE else AddressLocationStatus.FOUND,
+                        suggestedAddress = null,
                     )
+                    suggestAddressForPoint(requestId, result.coordinates)
                 }
-                DeviceLocationResult.Disabled -> old.copy(locationStatus = AddressLocationStatus.DISABLED)
-                DeviceLocationResult.PermissionRequired -> old.copy(locationStatus = AddressLocationStatus.DENIED)
-                DeviceLocationResult.Unavailable -> old.copy(locationStatus = AddressLocationStatus.UNAVAILABLE)
+                DeviceLocationResult.Disabled -> _uiState.value = old.copy(locationStatus = AddressLocationStatus.DISABLED)
+                DeviceLocationResult.PermissionRequired -> _uiState.value = old.copy(locationStatus = AddressLocationStatus.DENIED)
+                DeviceLocationResult.Unavailable -> _uiState.value = old.copy(locationStatus = AddressLocationStatus.UNAVAILABLE)
             }
         }
     }
@@ -138,7 +144,7 @@ class AddressMapViewModel @Inject constructor(
     private fun suggestAddressForPoint(requestId: String, point: AddressCoordinates) {
         cancelAddressLookup()
         val token = ++addressGeneration
-        _uiState.value = _uiState.value.copy(addressLookup = AddressLookupStatus.LOADING)
+        _uiState.value = _uiState.value.copy(addressLookup = AddressLookupStatus.LOADING, suggestedAddress = null)
         addressJob = viewModelScope.launch {
             val result = try { reverseGeocodingProvider.addressFor(point) }
             catch (cancelled: CancellationException) { throw cancelled }
@@ -150,7 +156,7 @@ class AddressMapViewModel @Inject constructor(
                 )
                 ReverseGeocodingResult.Unavailable -> _uiState.value.copy(
                     addressLookup = AddressLookupStatus.UNAVAILABLE,
-                    suggestedAddress = "Coordenadas GPS: ${point.latitude}, ${point.longitude}",
+                    suggestedAddress = null,
                 )
             }
         }

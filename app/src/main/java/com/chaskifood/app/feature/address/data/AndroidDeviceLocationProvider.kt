@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.location.Location
 import android.location.LocationManager
+import android.os.Build
 import android.os.CancellationSignal
 import android.os.SystemClock
 import androidx.core.content.ContextCompat
@@ -18,7 +19,6 @@ import javax.inject.Inject
 import kotlin.coroutines.resume
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.suspendCancellableCoroutine
-import kotlinx.coroutines.withTimeoutOrNull
 
 class AndroidDeviceLocationProvider @Inject constructor(
     @ApplicationContext private val context: Context,
@@ -33,20 +33,15 @@ class AndroidDeviceLocationProvider @Inject constructor(
         return try {
             if (!LocationManagerCompat.isLocationEnabled(manager)) return DeviceLocationResult.Disabled
             val providers = buildList {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) add(LocationManager.FUSED_PROVIDER)
                 if (fine) add(LocationManager.GPS_PROVIDER)
                 add(LocationManager.NETWORK_PROVIDER)
-            }.filter { manager.isProviderEnabled(it) }
-            // GPS primero; red como alternativa. Cada intento termina y cancela su registro.
-            for (provider in providers) {
-                val fix = withTimeoutOrNull(15_000L) { capture(manager, provider) } ?: continue
-                val point = AddressCoordinates(fix.latitude, fix.longitude)
-                val ageNanos = SystemClock.elapsedRealtimeNanos() - fix.elapsedRealtimeNanos
-                if (!point.isValid || ageNanos !in 0L..60_000_000_000L) continue
-                val accuracy = fix.accuracy.takeIf { fix.hasAccuracy() && it.isFinite() && it >= 0 }
-                return DeviceLocationResult.Available(point, accuracy,
-                    approximate = !fine || accuracy == null || accuracy > 100f)
-            }
-            DeviceLocationResult.Unavailable
+            }.filter { it in manager.getProviders(true) }
+            firstAvailableLocation(providers.map { provider ->
+                suspend {
+                    capture(manager, provider)?.toResult(fine) ?: DeviceLocationResult.Unavailable
+                }
+            })
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (_: SecurityException) {
@@ -58,6 +53,15 @@ class AndroidDeviceLocationProvider @Inject constructor(
 
     private fun granted(permission: String) =
         ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
+
+    private fun Location.toResult(fine: Boolean): DeviceLocationResult {
+        val point = AddressCoordinates(latitude, longitude)
+        val ageNanos = SystemClock.elapsedRealtimeNanos() - elapsedRealtimeNanos
+        if (!point.isValid || ageNanos !in 0L..60_000_000_000L) return DeviceLocationResult.Unavailable
+        val precision = accuracy.takeIf { hasAccuracy() && it.isFinite() && it >= 0 }
+        return DeviceLocationResult.Available(point, precision,
+            approximate = !fine || precision == null || precision > 100f)
+    }
 
     @SuppressLint("MissingPermission") // Comprobado arriba; también se maneja revocación durante la captura.
     private suspend fun capture(manager: LocationManager, provider: String): Location? =
