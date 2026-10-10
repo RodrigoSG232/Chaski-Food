@@ -20,7 +20,6 @@ import androidx.compose.material.icons.filled.ChatBubble
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.LocalPhone
 import androidx.compose.material.icons.filled.LocationOn
-import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -88,13 +87,6 @@ fun OrderTrackingScreen(
                     modifier = Modifier.weight(1f),
                     textAlign = TextAlign.Center,
                 )
-                IconButton(onClick = {}) {
-                    Icon(
-                        imageVector = Icons.Filled.MoreVert,
-                        contentDescription = "Más",
-                        tint = Color(0xFF0D0D0D),
-                    )
-                }
             }
         }
 

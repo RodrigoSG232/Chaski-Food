@@ -10,6 +10,7 @@ import com.chaskifood.app.feature.business.domain.StoreRepository
 import com.chaskifood.app.feature.auth.domain.AuthRepository
 import com.chaskifood.app.feature.business.domain.validOperatingHours
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.CancellationException
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -25,6 +26,16 @@ sealed interface StoreOperationsUiState {
     data class Error(val message: String) : StoreOperationsUiState
 }
 
+enum class StoreOperation { STATUS, HOURS }
+
+data class StoreOperationState(
+    val operation: StoreOperation? = null,
+    val saving: Boolean = false,
+    val error: String? = null,
+    val message: String? = null,
+    val successRevision: Long = 0,
+)
+
 @HiltViewModel
 class StoreOperationsViewModel @Inject constructor(
     private val storeRepository: StoreRepository,
@@ -34,12 +45,15 @@ class StoreOperationsViewModel @Inject constructor(
     private val _uiState = MutableStateFlow<StoreOperationsUiState>(StoreOperationsUiState.Loading)
     val uiState: StateFlow<StoreOperationsUiState> = _uiState.asStateFlow()
 
-    private val _actionMessage = MutableStateFlow<String?>(null)
-    val actionMessage: StateFlow<String?> = _actionMessage.asStateFlow()
+    private val _operations = MutableStateFlow<Map<String, StoreOperationState>>(emptyMap())
+    val operations = _operations.asStateFlow()
 
     private var observation: Job? = null
     init { loadAssignedStores() }
-    fun clearActionMessage() { _actionMessage.value = null }
+    fun clearOperationFeedback(storeId: String) {
+        val state = _operations.value[storeId] ?: return
+        if (!state.saving) _operations.value += storeId to state.copy(error = null, message = null)
+    }
 
     fun loadAssignedStores() {
         observation?.cancel()
@@ -64,38 +78,57 @@ class StoreOperationsViewModel @Inject constructor(
         (_uiState.value as? StoreOperationsUiState.Success)?.stores?.any { it.id == storeId } == true
 
     fun updateStatus(storeId: String, status: OperationalStatus, pauseReason: String? = null) {
-        if (!assigned(storeId)) { _actionMessage.value = "Local no autorizado."; return }
-        viewModelScope.launch {
-            when (val result = storeRepository.updateOperationalStatus(storeId, status, pauseReason)) {
-                is ApiResult.Success -> {
-                    val statusText = when (status) {
-                        OperationalStatus.OPEN -> "Local Abierto para recibir pedidos."
-                        OperationalStatus.PAUSED -> "Local Pausado temporalmente."
-                        OperationalStatus.CLOSED -> "Local Cerrado."
-                    }
-                    _actionMessage.value = statusText
-                }
-                is ApiResult.Failure -> {
-                    _actionMessage.value = result.message
-                }
-            }
+        val message = when (status) {
+            OperationalStatus.OPEN -> "Local abierto para recibir pedidos."
+            OperationalStatus.PAUSED -> "Local pausado temporalmente."
+            OperationalStatus.CLOSED -> "Local cerrado."
+        }
+        performOperation(storeId, StoreOperation.STATUS, message) {
+            storeRepository.updateOperationalStatus(storeId, status, pauseReason?.trim()?.takeIf { it.isNotEmpty() })
         }
     }
 
     fun updateHours(storeId: String, hours: List<DayOperatingHours>) {
-        if (!assigned(storeId)) { _actionMessage.value = "Local no autorizado."; return }
+        if (_operations.value[storeId]?.saving == true) return
         if (!validOperatingHours(hours)) {
-            _actionMessage.value = "Usa horas HH:mm válidas; apertura y cierre deben diferir."
+            showError(storeId, StoreOperation.HOURS, "Usa horas HH:mm válidas; apertura y cierre deben diferir.")
             return
         }
+        val snapshot = hours.toList()
+        performOperation(storeId, StoreOperation.HOURS, "Horario de atención guardado correctamente.") {
+            storeRepository.updateOperatingHours(storeId, snapshot)
+        }
+    }
+
+    private fun showError(storeId: String, operation: StoreOperation, error: String) {
+        val previous = _operations.value[storeId] ?: StoreOperationState()
+        _operations.value += storeId to previous.copy(operation = operation, saving = false, error = error, message = null)
+    }
+
+    private fun performOperation(
+        storeId: String,
+        operation: StoreOperation,
+        successMessage: String,
+        save: suspend () -> ApiResult<Unit>,
+    ) {
+        if (_operations.value[storeId]?.saving == true) return
+        if (!assigned(storeId)) { showError(storeId, operation, "Local no autorizado. Actualiza la lista."); return }
+        val previous = _operations.value[storeId] ?: StoreOperationState()
+        _operations.value += storeId to previous.copy(operation = operation, saving = true, error = null, message = null)
         viewModelScope.launch {
-            when (val result = storeRepository.updateOperatingHours(storeId, hours)) {
-                is ApiResult.Success -> {
-                    _actionMessage.value = "Horario de atención actualizado correctamente."
+            try {
+                val result = try { save() }
+                catch (cancelled: CancellationException) { throw cancelled }
+                catch (_: Exception) { ApiResult.Failure("No se pudo guardar el cambio. Intenta nuevamente.") }
+                when (result) {
+                    is ApiResult.Success -> _operations.value += storeId to StoreOperationState(
+                        operation = operation, message = successMessage, successRevision = previous.successRevision + 1,
+                    )
+                    is ApiResult.Failure -> showError(storeId, operation, result.message ?: "No se pudo guardar el cambio. Intenta nuevamente.")
                 }
-                is ApiResult.Failure -> {
-                    _actionMessage.value = result.message
-                }
+            } finally {
+                val current = _operations.value[storeId]
+                if (current?.saving == true) _operations.value += storeId to current.copy(saving = false)
             }
         }
     }

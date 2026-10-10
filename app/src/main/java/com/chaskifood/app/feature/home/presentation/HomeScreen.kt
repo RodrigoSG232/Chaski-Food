@@ -31,6 +31,7 @@ import androidx.compose.material.icons.outlined.ShoppingBag
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import com.chaskifood.app.ui.components.DemoNotice
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -152,6 +153,9 @@ fun HomeScreen(
             )
         }
 
+        item(key = "demo-notice") {
+            DemoNotice(description = stringResource(R.string.demo_catalog_description))
+        }
         item(key = "featured-title") {
             SectionTitle(title = "Restaurantes destacados", onSeeAllClick = onSeeAll)
         }

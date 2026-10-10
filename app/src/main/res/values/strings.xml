@@ -21,7 +21,7 @@
 
     <!-- Cuenta y Perfil -->
     <string name="account_title">Cuenta</string>
-    <string name="account_subtitle">Actualiza los datos de tu cuenta como notificaciones, pagos, perfil, etc.</string>
+    <string name="account_subtitle">Gestiona tu perfil, direcciones y negocio</string>
     <string name="section_profile">PERFIL</string>
     <string name="profile_info_title">Información del perfil</string>
     <string name="profile_info_subtitle">Cambia la información de tu cuenta</string>

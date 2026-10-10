@@ -2,6 +2,8 @@ package com.chaskifood.app.feature.checkout.presentation
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,7 +22,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.RadioButtonChecked
 import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material3.Icon
@@ -88,14 +89,6 @@ fun PaymentScreen(
                 ChaskiAppBar(
                     title = "Pago",
                     onBackClick = onBack,
-                    actions = {
-                        IconButton(onClick = {}) {
-                            Icon(
-                                imageVector = Icons.Filled.MoreVert,
-                                contentDescription = "Más",
-                            )
-                        }
-                    },
                 )
             }
 
@@ -116,19 +109,11 @@ fun PaymentScreen(
                     )
                     Spacer(Modifier.width(ChaskiDimens.SpacingSm))
                     Text(
-                        text = "Total a pagar $40.00",
+                        text = "Total de ejemplo: $40.00",
                         style = MaterialTheme.typography.bodyLarge,
                         color = Color(0xFF616161),
                         modifier = Modifier.weight(1f),
                     )
-                    IconButton(onClick = {}) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                            contentDescription = null,
-                            modifier = Modifier.size(24.dp),
-                            tint = MaterialTheme.colorScheme.onBackground,
-                        )
-                    }
                 }
             }
 
@@ -138,7 +123,7 @@ fun PaymentScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .background(ChaskiSurface)
-                        .clickable { selected = index }
+                        .selectable(selected = selected == index, role = Role.RadioButton, onClick = { selected = index })
                         .padding(horizontal = ChaskiDimens.ScreenPadding, vertical = ChaskiDimens.SpacingMd),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
@@ -189,7 +174,7 @@ fun PaymentScreen(
                     }
                     Spacer(Modifier.width(ChaskiDimens.SpacingLg))
                     Text(
-                        text = "Nueva tarjeta",
+                        text = "Tarjetas: próximamente",
                         style = MaterialTheme.typography.bodyLarge,
                         fontWeight = FontWeight.Medium,
                         color = Color(0xFF424242),
@@ -199,7 +184,7 @@ fun PaymentScreen(
 
             item(key = "purchase") {
                 ChaskiButton(
-                    text = "COMPLETAR COMPRA",
+                    text = "VER EJEMPLO DE PEDIDO",
                     onClick = onCompletePurchase,
                     variant = ChaskiButtonVariant.Primary,
                     modifier = Modifier

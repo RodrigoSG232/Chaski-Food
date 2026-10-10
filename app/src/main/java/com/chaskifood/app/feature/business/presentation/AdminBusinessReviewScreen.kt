@@ -53,6 +53,7 @@ import com.chaskifood.app.core.common.UiState
 import com.chaskifood.app.feature.auth.presentation.AuthAppBar
 import com.chaskifood.app.feature.business.domain.BusinessRequest
 import com.chaskifood.app.feature.business.domain.BusinessStatus
+import com.chaskifood.app.feature.business.domain.canBeEvaluated
 import com.chaskifood.app.ui.theme.ChaskiBackground
 import com.chaskifood.app.ui.theme.ChaskiDimens
 import com.chaskifood.app.ui.theme.ChaskiStatusApprovedBg
@@ -82,7 +83,8 @@ fun AdminBusinessReviewScreen(
     var dialogTargetStatus by rememberSaveable { mutableStateOf(BusinessStatus.OBSERVED.name) }
     var dialogObservationInput by rememberSaveable { mutableStateOf("") }
     val activeDialogRequest = (filteredResult as? ApiResult.Success)?.data
-        ?.find { it.id == dialogRequestId }?.let { it to BusinessStatus.valueOf(dialogTargetStatus) }
+        ?.find { it.id == dialogRequestId && it.status.canBeEvaluated }
+        ?.let { it to BusinessStatus.valueOf(dialogTargetStatus) }
 
     Column(
         modifier = modifier
@@ -132,6 +134,7 @@ fun AdminBusinessReviewScreen(
                     val isSelected = selectedFilter == status
                     Surface(
                         onClick = { viewModel.selectedFilter.value = status },
+                        enabled = actionState !is UiState.Loading,
                         shape = RoundedCornerShape(20.dp),
                         color = if (isSelected) Color(0xFF212121) else Color(0xFFEEEEEE),
                     ) {
@@ -157,7 +160,11 @@ fun AdminBusinessReviewScreen(
                 )
             }
 
-            if (filteredResult == null || actionState is UiState.Loading) {
+            if (actionState is UiState.Loading && dialogRequestId == null) {
+                LinearProgressIndicator(Modifier.fillMaxWidth().padding(bottom = 8.dp))
+                Text("Guardando evaluación…", style = MaterialTheme.typography.bodySmall)
+            }
+            if (filteredResult == null) {
                 CircularProgressIndicator(
                     modifier = Modifier.align(Alignment.CenterHorizontally),
                     color = Color(0xFF388E3C),
@@ -180,6 +187,7 @@ fun AdminBusinessReviewScreen(
                         items(requests, key = { it.id }) { request ->
                             AdminBusinessCard(
                                 request = request,
+                                actionsEnabled = actionState !is UiState.Loading,
                                 onApprove = {
                                     viewModel.evaluateRequest(
                                         requestId = request.id,
@@ -283,6 +291,7 @@ fun AdminBusinessReviewScreen(
 @Composable
 private fun AdminBusinessCard(
     request: BusinessRequest,
+    actionsEnabled: Boolean,
     onApprove: () -> Unit,
     onObserve: () -> Unit,
     onReject: () -> Unit,
@@ -346,64 +355,66 @@ private fun AdminBusinessCard(
                 )
             }
 
-            HorizontalDivider(
-                modifier = Modifier.padding(vertical = ChaskiDimens.SpacingMd),
-                color = Color(0xFFEEEEEE),
-            )
-
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Row(
-                    modifier = Modifier
-                        .weight(1f)
-                        .clip(RoundedCornerShape(6.dp))
-                        .background(Color(0xFF2E7D32))
-                        .clickable(onClick = onApprove)
-                        .padding(vertical = 10.dp),
-                    horizontalArrangement = Arrangement.Center,
-                ) {
-                    Text(
-                        text = "APROBAR",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White,
-                    )
-                }
+            if (request.status.canBeEvaluated) {
+                HorizontalDivider(
+                    modifier = Modifier.padding(vertical = ChaskiDimens.SpacingMd),
+                    color = Color(0xFFEEEEEE),
+                )
 
                 Row(
-                    modifier = Modifier
-                        .weight(1f)
-                        .clip(RoundedCornerShape(6.dp))
-                        .background(Color(0xFFE65100))
-                        .clickable(onClick = onObserve)
-                        .padding(vertical = 10.dp),
-                    horizontalArrangement = Arrangement.Center,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxWidth(),
                 ) {
-                    Text(
-                        text = "OBSERVAR",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White,
-                    )
-                }
+                    Row(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(Color(0xFF2E7D32))
+                            .clickable(enabled = actionsEnabled, onClick = onApprove)
+                            .padding(vertical = 10.dp),
+                        horizontalArrangement = Arrangement.Center,
+                    ) {
+                        Text(
+                            text = "APROBAR",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White,
+                        )
+                    }
 
-                Row(
-                    modifier = Modifier
-                        .weight(1f)
-                        .clip(RoundedCornerShape(6.dp))
-                        .background(Color(0xFFC62828))
-                        .clickable(onClick = onReject)
-                        .padding(vertical = 10.dp),
-                    horizontalArrangement = Arrangement.Center,
-                ) {
-                    Text(
-                        text = "RECHAZAR",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White,
-                    )
+                    Row(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(Color(0xFFE65100))
+                            .clickable(enabled = actionsEnabled, onClick = onObserve)
+                            .padding(vertical = 10.dp),
+                        horizontalArrangement = Arrangement.Center,
+                    ) {
+                        Text(
+                            text = "OBSERVAR",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White,
+                        )
+                    }
+
+                    Row(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(Color(0xFFC62828))
+                            .clickable(enabled = actionsEnabled, onClick = onReject)
+                            .padding(vertical = 10.dp),
+                        horizontalArrangement = Arrangement.Center,
+                    ) {
+                        Text(
+                            text = "RECHAZAR",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White,
+                        )
+                    }
                 }
             }
         }

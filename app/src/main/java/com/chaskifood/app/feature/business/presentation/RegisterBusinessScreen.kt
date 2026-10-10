@@ -43,7 +43,6 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -88,7 +87,8 @@ fun RegisterBusinessScreen(
     val category by viewModel.category.collectAsState()
     val uiState by viewModel.uiState.collectAsState()
 
-    var countryDialCode by rememberSaveable { mutableStateOf(countries.first().dialCode) }
+    val countryDialCode by viewModel.countryDialCode.collectAsState()
+    val phoneError by viewModel.phoneError.collectAsState()
     val selectedCountry = countries.first { it.dialCode == countryDialCode }
     var expandedCountryDropdown by remember { mutableStateOf(false) }
     var expandedCategoryDropdown by remember { mutableStateOf(false) }
@@ -207,7 +207,7 @@ fun RegisterBusinessScreen(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier
                             .background(Color(0xFFEEEEEE), shape = RoundedCornerShape(8.dp))
-                            .clickable { expandedCountryDropdown = !expandedCountryDropdown }
+                            .clickable(enabled = uiState !is UiState.Loading) { expandedCountryDropdown = !expandedCountryDropdown }
                             .padding(horizontal = 12.dp, vertical = 14.dp),
                     ) {
                         Text(
@@ -237,7 +237,7 @@ fun RegisterBusinessScreen(
                                     )
                                 },
                                 onClick = {
-                                    countryDialCode = country.dialCode
+                                    viewModel.selectPhoneCountry(country.dialCode)
                                     expandedCountryDropdown = false
                                 },
                             )
@@ -249,7 +249,9 @@ fun RegisterBusinessScreen(
 
                 OutlinedTextField(
                     value = phone,
-                    onValueChange = { viewModel.phone.value = it.filter { char -> char.isDigit() }.take(12) },
+                    onValueChange = viewModel::updatePhone,
+                    enabled = uiState !is UiState.Loading,
+                    isError = phoneError != null,
                     modifier = Modifier.weight(1f),
                     placeholder = {
                         Text(
@@ -271,6 +273,12 @@ fun RegisterBusinessScreen(
                     ),
                 )
             }
+
+            Text(
+                text = phoneError ?: "Número nacional, sin el prefijo ${selectedCountry.dialCode}.",
+                color = if (phoneError != null) MaterialTheme.colorScheme.error else ChaskiTextMuted,
+                style = MaterialTheme.typography.bodySmall,
+            )
 
             Spacer(Modifier.height(ChaskiDimens.SpacingMd))
 

@@ -1,6 +1,7 @@
 package com.chaskifood.app.feature.business.data
 
 import com.chaskifood.app.feature.business.domain.BusinessRepository
+import com.chaskifood.app.feature.business.domain.BusinessPhoneNormalizer
 import com.chaskifood.app.feature.business.domain.StoreRepository
 import dagger.Binds
 import dagger.Module
@@ -11,6 +12,9 @@ import javax.inject.Singleton
 @Module
 @InstallIn(SingletonComponent::class)
 abstract class BusinessDataModule {
+
+    @Binds
+    abstract fun bindBusinessPhoneNormalizer(impl: AndroidBusinessPhoneNormalizer): BusinessPhoneNormalizer
 
     @Binds
     @Singleton

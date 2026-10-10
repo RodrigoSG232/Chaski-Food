@@ -33,6 +33,15 @@ data class DayOperatingHours(
     val enabled: Boolean = true,
 )
 
+/** Día al que corresponde el cierre; una jornada nocturna continúa al día siguiente. */
+fun DayOperatingHours.closingDay(): DayOfWeekEnum? {
+    if (!enabled) return null
+    val opening = timeInMinutes(openTime) ?: return null
+    val closing = timeInMinutes(closeTime) ?: return null
+    if (opening == closing) return null
+    return if (closing < opening) DayOfWeekEnum.entries[(dayOfWeek.ordinal + 1) % 7] else dayOfWeek
+}
+
 fun defaultWeeklyOperatingHours(): List<DayOperatingHours> {
     return DayOfWeekEnum.entries.map { day ->
         DayOperatingHours(dayOfWeek = day)

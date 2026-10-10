@@ -11,6 +11,7 @@ import com.chaskifood.app.feature.business.domain.BusinessStatus
 import com.chaskifood.app.feature.catalog.domain.CatalogRepository
 import com.chaskifood.app.feature.catalog.domain.Product
 import com.chaskifood.app.feature.catalog.domain.ProductCategory
+import com.chaskifood.app.feature.catalog.domain.validProductPrice
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -123,8 +124,8 @@ class ManageCatalogViewModel @Inject constructor(
                     _saveError.value = _actionMessage.value
                     return@launch
                 }
-                if (!product.price.isFinite() || product.price <= 0.0) {
-                    _actionMessage.value = "El precio del producto debe ser mayor a 0."
+                if (!validProductPrice(product.price)) {
+                    _actionMessage.value = "El precio debe ser mayor a 0 y tener hasta dos decimales."
                     _saveError.value = _actionMessage.value
                     return@launch
                 }

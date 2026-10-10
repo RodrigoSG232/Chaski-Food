@@ -1,6 +1,7 @@
 package com.chaskifood.app.feature.business.presentation
 
-import android.util.Patterns
+import androidx.core.util.PatternsCompat
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.chaskifood.app.core.common.ApiResult
@@ -9,6 +10,8 @@ import com.chaskifood.app.feature.auth.domain.AuthRepository
 import com.chaskifood.app.feature.business.domain.BusinessRepository
 import com.chaskifood.app.feature.business.domain.BusinessRequest
 import com.chaskifood.app.feature.business.domain.BusinessStatus
+import com.chaskifood.app.feature.business.domain.BusinessPhoneNormalizer
+import com.chaskifood.app.feature.business.domain.splitBusinessContactPhone
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -21,12 +24,17 @@ import javax.inject.Inject
 class RegisterBusinessViewModel @Inject constructor(
     private val businessRepository: BusinessRepository,
     private val authRepository: AuthRepository,
+    private val phoneNormalizer: BusinessPhoneNormalizer,
+    private val savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
 
     val businessName = MutableStateFlow("")
     val ruc = MutableStateFlow("")
     val legalAddress = MutableStateFlow("")
-    val phone = MutableStateFlow("")
+    val phone = savedStateHandle.getMutableStateFlow("business_phone", "")
+    val countryDialCode = savedStateHandle.getMutableStateFlow("business_phone_country", "+51")
+    private val _phoneError = MutableStateFlow<String?>(null)
+    val phoneError = _phoneError.asStateFlow()
     val email = MutableStateFlow("")
     val category = MutableStateFlow("Restaurante")
 
@@ -65,7 +73,11 @@ class RegisterBusinessViewModel @Inject constructor(
         businessName.value = request.businessName
         ruc.value = request.ruc
         legalAddress.value = request.legalAddress
-        phone.value = request.phone
+        if (savedStateHandle.get<Boolean>("business_phone_edited") != true) {
+            val contact = splitBusinessContactPhone(request.phone)
+            countryDialCode.value = contact.dialCode
+            phone.value = contact.nationalNumber
+        }
         email.value = request.email
         category.value = request.category
     }
@@ -79,11 +91,18 @@ class RegisterBusinessViewModel @Inject constructor(
         val name = businessName.value.trim()
         val currentRuc = ruc.value.trim()
         val address = legalAddress.value.trim()
-        val currentPhone = phone.value.trim()
+        _phoneError.value = null
+        val currentPhone = phoneNormalizer.toInternational(countryDialCode.value, phone.value)
         val currentEmail = email.value.trim()
         val currentCategory = category.value.trim()
 
-        if (name.isBlank() || currentRuc.isBlank() || address.isBlank() || currentPhone.isBlank() || currentEmail.isBlank()) {
+        if (currentPhone == null) {
+            _phoneError.value = "Ingresa un teléfono válido para el país elegido, sin repetir el prefijo ${countryDialCode.value}."
+            _uiState.value = UiState.Error(_phoneError.value)
+            return
+        }
+
+        if (name.isBlank() || currentRuc.isBlank() || address.isBlank() || currentEmail.isBlank()) {
             _uiState.value = UiState.Error("Por favor completa todos los campos obligatorios del negocio.") {
                 _uiState.value = UiState.Success(null)
             }
@@ -97,7 +116,7 @@ class RegisterBusinessViewModel @Inject constructor(
             return
         }
 
-        if (!Patterns.EMAIL_ADDRESS.matcher(currentEmail).matches()) {
+        if (!PatternsCompat.EMAIL_ADDRESS.matcher(currentEmail).matches()) {
             _uiState.value = UiState.Error("Ingresa un correo electrónico comercial válido.") {
                 _uiState.value = UiState.Success(null)
             }
@@ -142,5 +161,23 @@ class RegisterBusinessViewModel @Inject constructor(
                 }
             }
         }
+    }
+
+    fun updatePhone(value: String) {
+        if (_uiState.value is UiState.Loading) return
+        savedStateHandle["business_phone_edited"] = true
+        if (value.trim().startsWith('+')) {
+            val contact = splitBusinessContactPhone(value)
+            countryDialCode.value = contact.dialCode
+            phone.value = contact.nationalNumber
+        } else phone.value = value.filter { it in '0'..'9' }.take(15)
+        _phoneError.value = null
+    }
+
+    fun selectPhoneCountry(dialCode: String) {
+        if (_uiState.value is UiState.Loading) return
+        savedStateHandle["business_phone_edited"] = true
+        countryDialCode.value = dialCode
+        _phoneError.value = null
     }
 }

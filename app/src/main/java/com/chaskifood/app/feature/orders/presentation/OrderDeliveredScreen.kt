@@ -18,7 +18,6 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
@@ -61,13 +60,6 @@ fun OrderDeliveredScreen(
                 )
             }
             Spacer(Modifier.weight(1f))
-            IconButton(onClick = {}) {
-                Icon(
-                    imageVector = Icons.Filled.MoreVert,
-                    contentDescription = "Más",
-                    tint = Color.White,
-                )
-            }
         }
 
         Spacer(Modifier.height(120.dp))

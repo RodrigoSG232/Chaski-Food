@@ -46,6 +46,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -172,7 +175,7 @@ fun AccountScreen(
         AccountMenuItem(
             icon = Icons.Filled.CreditCard,
             title = stringResource(R.string.payment_methods_title),
-            subtitle = stringResource(R.string.payment_methods_subtitle),
+            subtitle = stringResource(R.string.feature_pending),
             onClick = onOpenPaymentMethods,
         )
 
@@ -186,14 +189,14 @@ fun AccountScreen(
         AccountMenuItem(
             icon = Icons.Filled.PersonAdd,
             title = "Agregar cuentas sociales",
-            subtitle = "Vincula Google, Facebook y más",
+            subtitle = stringResource(R.string.feature_pending),
             onClick = onOpenSocialAccounts,
         )
 
         AccountMenuItem(
             icon = Icons.Filled.People,
             title = "Referir a tus amigos",
-            subtitle = "Consigue descuentos compartiendo la app",
+            subtitle = stringResource(R.string.feature_pending),
             onClick = onOpenReferral,
         )
 
@@ -208,21 +211,24 @@ fun AccountScreen(
         AccountMenuItem(
             icon = Icons.AutoMirrored.Filled.Message,
             title = "Notificaciones SMS",
-            subtitle = "Mensajes de confirmación de pedido",
+            subtitle = stringResource(R.string.feature_pending),
+            enabled = false,
             onClick = {},
         )
 
         AccountMenuItem(
             icon = Icons.Filled.Notifications,
             title = "Notificaciones push",
-            subtitle = "Alertas de estado de tus envíos",
+            subtitle = stringResource(R.string.feature_pending),
+            enabled = false,
             onClick = {},
         )
 
         AccountMenuItem(
             icon = Icons.Filled.Campaign,
             title = "Notificaciones promocionales",
-            subtitle = "Ofertas especiales y cupones de descuento",
+            subtitle = stringResource(R.string.feature_pending),
+            enabled = false,
             onClick = {},
         )
 
@@ -237,14 +243,16 @@ fun AccountScreen(
         AccountMenuItem(
             icon = Icons.Filled.Star,
             title = "Califícanos",
-            subtitle = "Danos tu opinión en Play Store",
+            subtitle = stringResource(R.string.feature_pending),
+            enabled = false,
             onClick = {},
         )
 
         AccountMenuItem(
             icon = Icons.AutoMirrored.Filled.HelpOutline,
             title = "Preguntas frecuentes (FAQ)",
-            subtitle = "Resuelve tus dudas frecuentes",
+            subtitle = stringResource(R.string.feature_pending),
+            enabled = false,
             onClick = {},
         )
 
@@ -270,7 +278,7 @@ private fun SectionHeader(title: String) {
         fontWeight = FontWeight.SemiBold,
         letterSpacing = 0.8.sp,
         color = ChaskiTextDisabled,
-        modifier = Modifier.padding(bottom = ChaskiDimens.SpacingSm, top = ChaskiDimens.SpacingSm),
+        modifier = Modifier.padding(bottom = ChaskiDimens.SpacingSm, top = ChaskiDimens.SpacingSm).semantics { heading() },
     )
 }
 
@@ -281,12 +289,13 @@ private fun AccountMenuItem(
     subtitle: String,
     onClick: () -> Unit,
     titleColor: Color = ChaskiTextPrimary,
+    enabled: Boolean = true,
 ) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
+            .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
             .padding(vertical = ChaskiDimens.SpacingMd),
     ) {
         Icon(
@@ -309,15 +318,17 @@ private fun AccountMenuItem(
             Text(
                 text = subtitle,
                 style = MaterialTheme.typography.bodySmall,
-                color = ChaskiTextDisabled,
+                color = ChaskiTextMuted,
             )
         }
 
+        if (enabled) {
         Icon(
             imageVector = Icons.Filled.ChevronRight,
             contentDescription = null,
             tint = ChaskiTextDisabled,
             modifier = Modifier.size(20.dp),
         )
+        }
     }
 }

@@ -1,6 +1,8 @@
 package com.chaskifood.app.feature.orders.presentation
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -11,7 +13,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Inventory2
-import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -50,31 +51,24 @@ fun OrderPlacedScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding).consumeWindowInsets(innerPadding),
+                .padding(innerPadding).consumeWindowInsets(innerPadding)
+                .verticalScroll(rememberScrollState()),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             ChaskiAppBar(
                 title = "",
-                onBackClick = onTrackOrder,
-                actions = {
-                    IconButton(onClick = {}) {
-                        Icon(
-                            imageVector = Icons.Filled.MoreVert,
-                            contentDescription = "Más",
-                        )
-                    }
-                },
+                onBackClick = onAddMoreOrders,
             )
-            Spacer(Modifier.weight(1f))
+            Spacer(Modifier.size(ChaskiDimens.SpacingXl))
             Text(
-                text = "¡Pedido realizado!",
+                text = "Ejemplo de pedido",
                 style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.Bold,
                 color = Color(0xFF212121),
             )
             Spacer(Modifier.size(ChaskiDimens.SpacingMd))
             Text(
-                text = "Realizaste tu pedido correctamente.\nAsignaremos un repartidor para que lo\nrecogerá y te avisaremos con los detalles.",
+                text = "Este es un recorrido de demostración.\nNo se ha registrado un pedido ni realizado un cobro.",
                 style = MaterialTheme.typography.bodyLarge,
                 color = Color(0xFF616161),
                 textAlign = TextAlign.Center,
@@ -86,7 +80,7 @@ fun OrderPlacedScreen(
                 modifier = Modifier.size(98.dp),
                 tint = Color(0xFF616161),
             )
-            Spacer(Modifier.weight(1f))
+            Spacer(Modifier.size(ChaskiDimens.SpacingXl))
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -95,7 +89,7 @@ fun OrderPlacedScreen(
                 verticalArrangement = Arrangement.spacedBy(ChaskiDimens.SpacingMd),
             ) {
                 ChaskiButton(
-                    text = "Rastrear pedido",
+                    text = "Ver seguimiento de ejemplo",
                     onClick = onTrackOrder,
                     variant = ChaskiButtonVariant.Primary,
                 )
@@ -109,7 +103,7 @@ fun OrderPlacedScreen(
                     colors = androidx.compose.material3.ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF212121)),
                 ) {
                     Text(
-                        text = "Añadir más pedidos",
+                        text = "Volver al inicio",
                         fontWeight = FontWeight.SemiBold,
                     )
                 }

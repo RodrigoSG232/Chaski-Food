@@ -28,6 +28,20 @@ import androidx.compose.material.icons.filled.PauseCircle
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Store
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.TimePicker
+import androidx.compose.material3.TimePickerLayoutType
+import androidx.compose.material3.rememberTimePickerState
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import com.chaskifood.app.R
+import com.chaskifood.app.feature.business.domain.closingDay
+import com.chaskifood.app.feature.business.domain.timeInMinutes
+import com.chaskifood.app.feature.business.domain.validOperatingHours
+import java.util.Locale
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -36,11 +50,13 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
@@ -48,12 +64,16 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.key
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.saveable.listSaver
 import com.chaskifood.app.feature.business.domain.DayOfWeekEnum
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -81,10 +101,17 @@ fun StoreOperationsScreen(
     viewModel: StoreOperationsViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    val actionMessage by viewModel.actionMessage.collectAsState()
+    val operations by viewModel.operations.collectAsState()
+    val draftStates = rememberSaveableStateHolder()
 
     var pauseStoreId by rememberSaveable { mutableStateOf<String?>(null) }
-    val storeToPause = (uiState as? StoreOperationsUiState.Success)?.stores?.find { it.id == pauseStoreId }
+    var pauseStoreName by rememberSaveable { mutableStateOf("") }
+    var pauseSuccessRevision by rememberSaveable { mutableLongStateOf(0L) }
+    val pauseOperation = operations[pauseStoreId] ?: StoreOperationState()
+    LaunchedEffect(pauseStoreId, pauseOperation.successRevision) {
+        if (pauseStoreId != null && pauseOperation.operation == StoreOperation.STATUS &&
+            pauseOperation.successRevision > pauseSuccessRevision) pauseStoreId = null
+    }
 
     Column(
         modifier = modifier
@@ -117,33 +144,6 @@ fun StoreOperationsScreen(
             )
 
             Spacer(Modifier.height(ChaskiDimens.SpacingLg))
-
-            if (actionMessage != null) {
-                Card(
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 16.dp),
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(12.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(
-                            text = actionMessage ?: "",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer,
-                            modifier = Modifier.weight(1f),
-                        )
-                        TextButton(onClick = { viewModel.clearActionMessage() }) {
-                            Text("OK")
-                        }
-                    }
-                }
-            }
 
             when (val state = uiState) {
                 is StoreOperationsUiState.Loading -> {
@@ -189,11 +189,15 @@ fun StoreOperationsScreen(
                 }
                 is StoreOperationsUiState.Success -> {
                     state.stores.forEach { store ->
-                        key(store.id) {
+                        draftStates.SaveableStateProvider(store.id) {
                             StoreOperationCard(
                                 store = store,
+                                operationState = operations[store.id] ?: StoreOperationState(),
                                 onStatusChange = { newStatus ->
                                     if (newStatus == OperationalStatus.PAUSED) {
+                                        viewModel.clearOperationFeedback(store.id)
+                                        pauseStoreName = store.name
+                                        pauseSuccessRevision = operations[store.id]?.successRevision ?: 0L
                                         pauseStoreId = store.id
                                     } else {
                                         viewModel.updateStatus(store.id, newStatus, null)
@@ -213,23 +217,22 @@ fun StoreOperationsScreen(
         }
     }
 
-    if (storeToPause != null) {
+    pauseStoreId?.let { storeId -> key(storeId) {
         PauseReasonDialog(
-            storeName = storeToPause?.name ?: "",
+            storeName = pauseStoreName,
+            operationState = pauseOperation,
             onDismiss = { pauseStoreId = null },
             onConfirm = { reason ->
-                storeToPause?.let { store ->
-                    viewModel.updateStatus(store.id, OperationalStatus.PAUSED, reason)
-                }
-                pauseStoreId = null
+                viewModel.updateStatus(storeId, OperationalStatus.PAUSED, reason)
             },
         )
-    }
+    } }
 }
 
 @Composable
 private fun StoreOperationCard(
     store: BusinessStore,
+    operationState: StoreOperationState,
     onStatusChange: (OperationalStatus) -> Unit,
     onSaveHours: (List<DayOperatingHours>) -> Unit,
 ) {
@@ -344,6 +347,7 @@ private fun StoreOperationCard(
             ) {
                 StatusButton(
                     text = "ABIERTO",
+                    enabled = !operationState.saving && store.operationalStatus != OperationalStatus.OPEN,
                     isSelected = store.operationalStatus == OperationalStatus.OPEN,
                     activeColor = Color(0xFF2E7D32),
                     onClick = { onStatusChange(OperationalStatus.OPEN) },
@@ -351,6 +355,7 @@ private fun StoreOperationCard(
                 )
                 StatusButton(
                     text = "PAUSAR",
+                    enabled = !operationState.saving,
                     isSelected = store.operationalStatus == OperationalStatus.PAUSED,
                     activeColor = Color(0xFFEF6C00),
                     onClick = { onStatusChange(OperationalStatus.PAUSED) },
@@ -358,6 +363,7 @@ private fun StoreOperationCard(
                 )
                 StatusButton(
                     text = "CERRADO",
+                    enabled = !operationState.saving && store.operationalStatus != OperationalStatus.CLOSED,
                     isSelected = store.operationalStatus == OperationalStatus.CLOSED,
                     activeColor = Color(0xFFC62828),
                     onClick = { onStatusChange(OperationalStatus.CLOSED) },
@@ -365,12 +371,16 @@ private fun StoreOperationCard(
                 )
             }
 
+            if (operationState.operation == StoreOperation.STATUS || !expandedHours) {
+                OperationFeedback(operationState)
+            }
+
             Spacer(Modifier.height(12.dp))
 
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable { expandedHours = !expandedHours }
+                    .clickable(enabled = !operationState.saving) { expandedHours = !expandedHours }
                     .padding(vertical = 8.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
@@ -402,6 +412,8 @@ private fun StoreOperationCard(
                     editableHours = draftHours,
                     onChange = { draftHours = it },
                     onSave = onSaveHours,
+                    enabled = !operationState.saving,
+                    operationState = operationState.takeIf { it.operation == StoreOperation.HOURS },
                 )
             }
         }
@@ -411,6 +423,7 @@ private fun StoreOperationCard(
 @Composable
 private fun StatusButton(
     text: String,
+    enabled: Boolean,
     isSelected: Boolean,
     activeColor: Color,
     onClick: () -> Unit,
@@ -418,12 +431,13 @@ private fun StatusButton(
 ) {
     Button(
         onClick = onClick,
+        enabled = enabled,
         colors = ButtonDefaults.buttonColors(
             containerColor = if (isSelected) activeColor else Color(0xFFEEEEEE),
             contentColor = if (isSelected) Color.White else Color.DarkGray,
         ),
         shape = RoundedCornerShape(8.dp),
-        modifier = modifier.height(36.dp),
+        modifier = modifier.heightIn(min = 48.dp),
     ) {
         Text(
             text = text,
@@ -434,97 +448,134 @@ private fun StatusButton(
 }
 
 @Composable
-private fun HoursEditor(
+internal fun weekdayLabel(day: DayOfWeekEnum): String = stringResource(when (day) {
+    DayOfWeekEnum.MONDAY -> R.string.weekday_monday
+    DayOfWeekEnum.TUESDAY -> R.string.weekday_tuesday
+    DayOfWeekEnum.WEDNESDAY -> R.string.weekday_wednesday
+    DayOfWeekEnum.THURSDAY -> R.string.weekday_thursday
+    DayOfWeekEnum.FRIDAY -> R.string.weekday_friday
+    DayOfWeekEnum.SATURDAY -> R.string.weekday_saturday
+    DayOfWeekEnum.SUNDAY -> R.string.weekday_sunday
+})
+
+@Composable
+internal fun HoursEditor(
     editableHours: List<DayOperatingHours>,
     onChange: (List<DayOperatingHours>) -> Unit,
     onSave: (List<DayOperatingHours>) -> Unit,
+    enabled: Boolean,
+    operationState: StoreOperationState?,
 ) {
-
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(top = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        editableHours.forEachIndexed { index, item ->
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Text(
-                    text = item.dayOfWeek.name.take(3),
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.width(40.dp),
-                )
-
-                Switch(
-                    checked = item.enabled,
-                    onCheckedChange = { enabled ->
-                        onChange(editableHours.mapIndexed { i, day -> if (i == index) item.copy(enabled = enabled) else day })
-                    },
-                )
-
+    var selectedDay by rememberSaveable { mutableStateOf<String?>(null) }
+    var selectingOpening by rememberSaveable { mutableStateOf(true) }
+    val selected = editableHours.singleOrNull { it.dayOfWeek.name == selectedDay }
+    if (selected != null && enabled && selected.enabled) {
+        key(selectedDay, selectingOpening) {
+            HoursTimeDialog(
+                day = weekdayLabel(selected.dayOfWeek),
+                opening = selectingOpening,
+                initialTime = if (selectingOpening) selected.openTime else selected.closeTime,
+                onDismiss = { selectedDay = null },
+                onConfirm = { time ->
+                    onChange(editableHours.map { day ->
+                        if (day.dayOfWeek != selected.dayOfWeek) day
+                        else if (selectingOpening) day.copy(openTime = time) else day.copy(closeTime = time)
+                    })
+                    selectedDay = null
+                },
+            )
+        }
+    }
+    Column(Modifier.fillMaxWidth().padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Text(stringResource(R.string.hours_format_hint), style = MaterialTheme.typography.bodyMedium)
+        editableHours.forEach { item ->
+            val dayLabel = weekdayLabel(item.dayOfWeek)
+            val switchLabel = stringResource(R.string.hours_day_enabled, dayLabel)
+            Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Text(dayLabel, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+                    Switch(checked = item.enabled, enabled = enabled,
+                        modifier = Modifier.semantics { contentDescription = switchLabel },
+                        onCheckedChange = { checked ->
+                            onChange(editableHours.map { if (it.dayOfWeek == item.dayOfWeek) it.copy(enabled = checked) else it })
+                        })
+                }
                 if (item.enabled) {
-                    OutlinedTextField(
-                        value = item.openTime,
-                        onValueChange = { open ->
-                            onChange(editableHours.mapIndexed { i, day -> if (i == index) item.copy(openTime = open) else day })
-                        },
-                        label = { Text("Abre", fontSize = 10.sp) },
-                        modifier = Modifier.width(80.dp),
-                        singleLine = true,
-                    )
-
-                    OutlinedTextField(
-                        value = item.closeTime,
-                        onValueChange = { close ->
-                            onChange(editableHours.mapIndexed { i, day -> if (i == index) item.copy(closeTime = close) else day })
-                        },
-                        label = { Text("Cierra", fontSize = 10.sp) },
-                        modifier = Modifier.width(80.dp),
-                        singleLine = true,
-                    )
+                    listOf(true, false).forEach { opening ->
+                        val label = stringResource(if (opening) R.string.hours_opening else R.string.hours_closing)
+                        val time = if (opening) item.openTime else item.closeTime
+                        val actionLabel = stringResource(R.string.hours_choose_time, label, dayLabel) + ": " + time
+                        OutlinedButton(enabled = enabled, onClick = {
+                            selectingOpening = opening
+                            selectedDay = item.dayOfWeek.name
+                        }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
+                            .semantics { contentDescription = actionLabel }) {
+                            Text("$label: $time", style = MaterialTheme.typography.bodyLarge)
+                        }
+                    }
+                    val closingDay = item.closingDay()
+                    if (closingDay != null && closingDay != item.dayOfWeek) {
+                        Text(stringResource(R.string.hours_next_day, weekdayLabel(closingDay), item.closeTime),
+                            style = MaterialTheme.typography.bodyMedium)
+                    } else if (item.openTime == item.closeTime) {
+                        Text(stringResource(R.string.hours_same_time_error), color = MaterialTheme.colorScheme.error)
+                    }
                 } else {
-                    Text(
-                        text = "No atiende este día",
-                        fontSize = 12.sp,
-                        color = Color.Gray,
-                        modifier = Modifier.padding(start = 16.dp),
-                    )
+                    Text(stringResource(R.string.hours_day_closed), style = MaterialTheme.typography.bodyMedium)
                 }
             }
         }
-
-        Spacer(Modifier.height(8.dp))
-
-        Button(
-            onClick = { onSave(editableHours.toList()) },
-            colors = ButtonDefaults.buttonColors(containerColor = ChaskiPrimary),
-            shape = RoundedCornerShape(8.dp),
-            modifier = Modifier.fillMaxWidth(),
-        ) {
+        Button(onClick = { onSave(editableHours.toList()) }, enabled = enabled && validOperatingHours(editableHours),
+            colors = ButtonDefaults.buttonColors(containerColor = ChaskiPrimary), shape = RoundedCornerShape(8.dp),
+            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
             Text("GUARDAR HORARIO", fontWeight = FontWeight.Bold)
         }
+        operationState?.let { OperationFeedback(it) }
     }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun HoursTimeDialog(
+    day: String,
+    opening: Boolean,
+    initialTime: String,
+    onDismiss: () -> Unit,
+    onConfirm: (String) -> Unit,
+) {
+    val minutes = timeInMinutes(initialTime) ?: if (opening) 8 * 60 else 22 * 60
+    val state = rememberTimePickerState(initialHour = minutes / 60, initialMinute = minutes % 60, is24Hour = true)
+    val label = stringResource(if (opening) R.string.hours_opening else R.string.hours_closing)
+    AlertDialog(onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.hours_choose_time, label, day)) },
+        text = {
+            Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()), horizontalAlignment = Alignment.CenterHorizontally) {
+                TimePicker(state = state, layoutType = TimePickerLayoutType.Vertical)
+            }
+        },
+        confirmButton = { TextButton(onClick = { onConfirm(String.format(Locale.ROOT, "%02d:%02d", state.hour, state.minute)) }) {
+            Text(stringResource(R.string.hours_confirm))
+        } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.hours_cancel)) } },
+    )
 }
 
 @Composable
 private fun PauseReasonDialog(
     storeName: String,
+    operationState: StoreOperationState,
     onDismiss: () -> Unit,
     onConfirm: (reason: String?) -> Unit,
 ) {
     var reason by rememberSaveable { mutableStateOf("") }
 
     AlertDialog(
-        onDismissRequest = onDismiss,
+        onDismissRequest = { if (!operationState.saving) onDismiss() },
         title = {
             Text(text = "Pausar Local: $storeName")
         },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
                     text = "Indica el motivo de la pausa temporal (ej. Exceso de pedidos en cocina, sin insumos):",
                     fontSize = 13.sp,
@@ -532,23 +583,42 @@ private fun PauseReasonDialog(
                 )
                 OutlinedTextField(
                     value = reason,
+                    enabled = !operationState.saving,
                     onValueChange = { reason = it },
                     label = { Text("Motivo opcional") },
                     modifier = Modifier.fillMaxWidth(),
                 )
+                OperationFeedback(operationState)
             }
         },
         confirmButton = {
-            Button(onClick = { onConfirm(reason.ifBlank { null }) }) {
+            Button(enabled = !operationState.saving, onClick = { onConfirm(reason.ifBlank { null }) }) {
                 Text("PAUSAR LOCAL")
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
+            TextButton(enabled = !operationState.saving, onClick = onDismiss) {
                 Text("CANCELAR")
             }
         },
     )
+}
+
+@Composable
+private fun OperationFeedback(state: StoreOperationState) {
+    if (!state.saving && state.error == null && state.message == null) return
+    Column(
+        Modifier.fillMaxWidth().padding(top = 8.dp).semantics { liveRegion = LiveRegionMode.Polite },
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        if (state.saving) {
+            LinearProgressIndicator(Modifier.fillMaxWidth(), color = ChaskiPrimary)
+            Text(if (state.operation == StoreOperation.HOURS) "Guardando horario…" else "Guardando estado del local…",
+                style = MaterialTheme.typography.bodySmall)
+        }
+        state.error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
+        state.message?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+    }
 }
 
 private val OperatingHoursSaver = listSaver<List<DayOperatingHours>, Any>(

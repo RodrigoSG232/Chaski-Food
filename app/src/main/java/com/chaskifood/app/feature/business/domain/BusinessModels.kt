@@ -8,6 +8,8 @@ enum class BusinessStatus {
     SUSPENDED,
 }
 
+val BusinessStatus.canBeEvaluated: Boolean get() = this == BusinessStatus.PENDING_REVIEW
+
 data class BusinessRequest(
     val id: String = "",
     val ownerUid: String = "",

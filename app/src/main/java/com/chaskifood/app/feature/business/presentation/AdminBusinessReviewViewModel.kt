@@ -9,12 +9,15 @@ import com.chaskifood.app.feature.auth.domain.AuthRepository
 import com.chaskifood.app.feature.business.domain.BusinessRepository
 import com.chaskifood.app.feature.business.domain.BusinessRequest
 import com.chaskifood.app.feature.business.domain.BusinessStatus
+import com.chaskifood.app.feature.business.domain.canBeEvaluated
+import kotlinx.coroutines.CancellationException
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -27,14 +30,9 @@ class AdminBusinessReviewViewModel @Inject constructor(
 
     val selectedFilter = MutableStateFlow<BusinessStatus?>(BusinessStatus.PENDING_REVIEW)
 
-    val currentUser = authRepository.currentUserFlow.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = null,
-    )
-
     private val retries = MutableStateFlow(0)
     private val allRequestsFlow = retryableQuery(retries, businessRepository::getAllBusinessRequests)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
     fun retryLoading() { retries.value += 1 }
 
     val filteredRequests: StateFlow<ApiResult<List<BusinessRequest>>?> = combine(
@@ -73,7 +71,15 @@ class AdminBusinessReviewViewModel @Inject constructor(
         onSuccess: () -> Unit,
     ) {
         if (_actionState.value is UiState.Loading) return
-        val reviewerEmail = currentUser.value?.email ?: currentUser.value?.uid ?: "Desconocido"
+        val request = (allRequestsFlow.value as? ApiResult.Success)?.data?.find { it.id == requestId }
+        if (request?.status?.canBeEvaluated != true) {
+            _actionState.value = UiState.Error("La solicitud ya no está pendiente o no está disponible. Actualiza la lista.")
+            return
+        }
+        if (status !in setOf(BusinessStatus.APPROVED, BusinessStatus.OBSERVED, BusinessStatus.REJECTED)) {
+            _actionState.value = UiState.Error("Selecciona una acción de evaluación válida.")
+            return
+        }
 
         if ((status == BusinessStatus.OBSERVED || status == BusinessStatus.REJECTED) && observations.isNullOrBlank()) {
             _actionState.value = UiState.Error("Debes ingresar obligatoriamente las observaciones o motivo.") {
@@ -84,7 +90,16 @@ class AdminBusinessReviewViewModel @Inject constructor(
 
         _actionState.value = UiState.Loading
         viewModelScope.launch {
-            when (val result = businessRepository.evaluateBusinessRequest(requestId, status, observations, reviewerEmail)) {
+            val result = try {
+                val user = authRepository.currentUserFlow.first()
+                if (user == null) {
+                    _actionState.value = UiState.Error("Inicia sesión para evaluar solicitudes.")
+                    return@launch
+                }
+                businessRepository.evaluateBusinessRequest(requestId, status, observations?.trim(), user.email ?: user.uid)
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (_: Exception) { ApiResult.Failure("No se pudo completar la evaluación. Intenta nuevamente.") }
+            when (result) {
                 is ApiResult.Success -> {
                     _actionState.value = UiState.Success(Unit)
                     onSuccess()

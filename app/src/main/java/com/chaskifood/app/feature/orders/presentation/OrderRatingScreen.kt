@@ -19,7 +19,6 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.StarBorder
 import androidx.compose.material3.Icon
@@ -68,13 +67,6 @@ fun OrderRatingScreen(
                 )
             }
             Spacer(Modifier.weight(1f))
-            IconButton(onClick = {}) {
-                Icon(
-                    imageVector = Icons.Filled.MoreVert,
-                    contentDescription = "Más",
-                    tint = Color(0xFF0D0D0D),
-                )
-            }
         }
 
         Column(

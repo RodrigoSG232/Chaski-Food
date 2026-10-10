@@ -22,6 +22,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChevronLeft
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -172,7 +176,7 @@ fun AuthTitleBanner(
                         fontWeight = FontWeight.Bold,
                         color = ChaskiPrimary,
                         textAlign = TextAlign.Center,
-                        modifier = Modifier.clickable(onClick = onLinkClick),
+                        modifier = Modifier.clickable(role = Role.Button, onClick = onLinkClick),
                     )
                 }
             }
@@ -181,8 +185,7 @@ fun AuthTitleBanner(
 }
 
 /**
- * Campo de auth del diseño: etiqueta 16sp fw500 #424242 + caja
- * rellena #EEEEEE radius 8 con icono opcional y placeholder sutil #9E9E9E, 15sp.
+ * Campo de acceso con etiqueta nativa asociada al texto editable.
  */
 @Composable
 fun AuthTextField(
@@ -197,17 +200,10 @@ fun AuthTextField(
     visualTransformation: VisualTransformation = VisualTransformation.None,
 ) {
     Column(modifier = modifier.fillMaxWidth()) {
-        Text(
-            text = label,
-            fontSize = 16.sp,
-            fontWeight = FontWeight.Medium,
-            letterSpacing = 0.5.sp,
-            color = AuthLabelColor,
-        )
-        Spacer(Modifier.height(ChaskiDimens.SpacingMd))
         OutlinedTextField(
             value = value,
             onValueChange = onValueChange,
+            label = { Text(label, color = AuthLabelColor) },
             modifier = Modifier
                 .fillMaxWidth()
                 .heightIn(min = 48.dp),
@@ -253,6 +249,18 @@ fun AuthTextField(
     }
 }
 
+/** Acción etiquetada según la visibilidad de la contraseña. */
+@Composable
+fun AuthPasswordVisibilityButton(visible: Boolean, onClick: () -> Unit) {
+    IconButton(onClick = onClick) {
+        Icon(
+            imageVector = if (visible) Icons.Filled.VisibilityOff else Icons.Filled.Visibility,
+            contentDescription = stringResource(if (visible) R.string.hide_password else R.string.show_password),
+            tint = ChaskiTextPrimary,
+        )
+    }
+}
+
 /**
  * Botón principal de auth: relleno rojo, radius 8, texto 14sp semibold.
  */
@@ -292,7 +300,7 @@ fun AuthSubmitButton(
 @Composable
 fun SocialAuthRow(
     onGoogle: () -> Unit,
-    onFacebook: () -> Unit,
+    onFacebook: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     Row(
@@ -306,12 +314,14 @@ fun SocialAuthRow(
             onClick = onGoogle,
             modifier = Modifier.weight(1f),
         )
-        SocialAuthButton(
-            text = "Facebook",
-            logo = { FacebookLogo() },
-            onClick = onFacebook,
-            modifier = Modifier.weight(1f),
-        )
+        if (onFacebook != null) {
+            SocialAuthButton(
+                text = "Facebook",
+                logo = { FacebookLogo() },
+                onClick = onFacebook,
+                modifier = Modifier.weight(1f),
+            )
+        }
     }
 }
 
@@ -379,7 +389,7 @@ fun AuthTextLink(
 fun GoogleLogo(modifier: Modifier = Modifier) {
     Icon(
         painter = painterResource(id = R.drawable.ic_google_logo),
-        contentDescription = "Google",
+        contentDescription = null,
         modifier = modifier.size(20.dp),
         tint = Color.Unspecified,
     )
@@ -390,7 +400,7 @@ fun GoogleLogo(modifier: Modifier = Modifier) {
 fun FacebookLogo(modifier: Modifier = Modifier) {
     Icon(
         painter = painterResource(id = R.drawable.ic_facebook_logo),
-        contentDescription = "Facebook",
+        contentDescription = null,
         modifier = modifier.size(20.dp),
         tint = Color.Unspecified,
     )

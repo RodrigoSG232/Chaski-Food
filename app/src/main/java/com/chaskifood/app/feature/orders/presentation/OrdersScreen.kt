@@ -28,6 +28,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
+import com.chaskifood.app.ui.components.DemoNotice
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -84,7 +85,7 @@ fun OrdersScreen(
     onDelivered: (String) -> Unit,
     modifier: Modifier = Modifier,
     orders: List<OrderSummary> = mockOrders,
-    onMoreClick: () -> Unit = {},
+    onMoreClick: (() -> Unit)? = null,
 ) {
     Column(
         modifier = modifier
@@ -92,6 +93,7 @@ fun OrdersScreen(
             .background(ChaskiSurface),
     ) {
         OrdersHeader(onMoreClick = onMoreClick)
+        DemoNotice()
 
         if (orders.isEmpty()) {
             EmptyOrdersState()
@@ -115,7 +117,7 @@ fun OrdersScreen(
 }
 
 @Composable
-private fun OrdersHeader(onMoreClick: () -> Unit) {
+private fun OrdersHeader(onMoreClick: (() -> Unit)?) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -131,12 +133,14 @@ private fun OrdersHeader(onMoreClick: () -> Unit) {
             color = Color(0xFF212121),
         )
         Spacer(Modifier.weight(1f))
+        if (onMoreClick != null) {
         IconButton(onClick = onMoreClick) {
             Icon(
                 imageVector = Icons.Filled.MoreVert,
                 contentDescription = "Más",
                 tint = Color(0xFF212121),
             )
+        }
         }
     }
 }

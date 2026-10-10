@@ -1,0 +1,33 @@
+<resources>
+    <string name="show_password">Mostrar contraseña</string>
+    <string name="hide_password">Ocultar contraseña</string>
+    <string name="search_food_label">Buscar comida o restaurantes</string>
+    <string name="remove_recent_search">Eliminar búsqueda: %1$s</string>
+    <string name="feature_pending">Próximamente</string>
+    <string name="feature_pending_back">Volver</string>
+    <string name="payment_pending_description">Los métodos de pago todavía no están disponibles. Podrás configurarlos cuando se habiliten los pagos en la app.</string>
+    <string name="card_pending_description">El registro de tarjetas todavía no está disponible. Por ahora no necesitas ingresar datos de tu tarjeta.</string>
+    <string name="social_pending_description">La vinculación de cuentas todavía no está disponible. Puedes seguir usando tu método actual de acceso.</string>
+    <string name="referral_pending_description">El programa de referidos todavía no está disponible. Los descuentos y enlaces de invitación se mostrarán cuando se habilite.</string>
+    <string name="demo_notice_title">Vista de ejemplo</string>
+    <string name="demo_notice_compact">Ejemplo: compra no disponible</string>
+    <string name="demo_notice_description">Datos de demostración. Este recorrido no genera pedidos, cobros ni entregas reales.</string>
+    <string name="demo_catalog_description">Restaurantes, platos y precios de ejemplo. La compra todavía no está disponible.</string>
+    <string name="weekday_monday">Lunes</string>
+    <string name="weekday_tuesday">Martes</string>
+    <string name="weekday_wednesday">Miércoles</string>
+    <string name="weekday_thursday">Jueves</string>
+    <string name="weekday_friday">Viernes</string>
+    <string name="weekday_saturday">Sábado</string>
+    <string name="weekday_sunday">Domingo</string>
+    <string name="hours_day_enabled">Atiende el %1$s</string>
+    <string name="hours_opening">Apertura</string>
+    <string name="hours_closing">Cierre</string>
+    <string name="hours_choose_time">%1$s del %2$s</string>
+    <string name="hours_format_hint">Horario de 24 horas (hora de Perú). Toca Apertura o Cierre para elegir la hora.</string>
+    <string name="hours_next_day">Cierra el %1$s a las %2$s (día siguiente).</string>
+    <string name="hours_same_time_error">La apertura y el cierre deben tener horas diferentes.</string>
+    <string name="hours_day_closed">No atiende este día</string>
+    <string name="hours_confirm">Aceptar</string>
+    <string name="hours_cancel">Cancelar</string>
+</resources>

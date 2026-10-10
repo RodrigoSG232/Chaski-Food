@@ -94,6 +94,9 @@ import com.chaskifood.app.feature.auth.presentation.AuthAppBar
 import com.chaskifood.app.feature.auth.presentation.AuthSubmitButton
 import com.chaskifood.app.feature.catalog.domain.Product
 import com.chaskifood.app.feature.catalog.domain.ProductCategory
+import com.chaskifood.app.feature.catalog.domain.formatProductPrice
+import com.chaskifood.app.feature.catalog.domain.parseProductPrice
+import androidx.compose.ui.focus.onFocusChanged
 import com.chaskifood.app.ui.theme.ChaskiBackground
 import com.chaskifood.app.ui.theme.ChaskiDimens
 import com.chaskifood.app.ui.theme.ChaskiPrimary
@@ -106,7 +109,6 @@ import com.chaskifood.app.ui.theme.ChaskiTextPrimary
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import java.util.Locale
 
 @Composable
 fun ManageCatalogScreen(
@@ -474,7 +476,7 @@ private fun ProductsTabContent(
                                     modifier = Modifier.weight(1f),
                                 )
                                 Text(
-                                    text = "S/ ${String.format(Locale.forLanguageTag("es-PE"), "%.2f", product.price)}",
+                                    text = "S/ ${formatProductPrice(product.price)}",
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 16.sp,
                                     color = ChaskiPrimary,
@@ -610,7 +612,9 @@ internal fun ProductDialog(
     val context = LocalContext.current
     var name by rememberSaveable(productToEdit?.id) { mutableStateOf(productToEdit?.name ?: "") }
     var description by rememberSaveable(productToEdit?.id) { mutableStateOf(productToEdit?.description ?: "") }
-    var priceInput by rememberSaveable(productToEdit?.id) { mutableStateOf(productToEdit?.price?.toString() ?: "") }
+    var priceInput by rememberSaveable(productToEdit?.id) { mutableStateOf(productToEdit?.price?.let(::formatProductPrice) ?: "") }
+    var priceTouched by rememberSaveable(productToEdit?.id) { mutableStateOf(false) }
+    val parsedPrice = remember(priceInput) { parseProductPrice(priceInput) }
     var prepTimeInput by rememberSaveable(productToEdit?.id) { mutableStateOf(productToEdit?.prepTimeMinutes?.toString() ?: "15") }
     var selectedCategoryId by rememberSaveable(productToEdit?.id) { mutableStateOf(productToEdit?.categoryId ?: categories.firstOrNull()?.id ?: "") }
     var selectedCategoryName by rememberSaveable(productToEdit?.id) { mutableStateOf(productToEdit?.categoryName ?: categories.firstOrNull()?.name ?: "") }
@@ -772,11 +776,18 @@ internal fun ProductDialog(
                 ) {
                     OutlinedTextField(
                         value = priceInput,
-                        onValueChange = { priceInput = it },
+                        onValueChange = { priceInput = it; priceTouched = true },
+                        enabled = !saving,
+                        isError = priceTouched && parsedPrice.error != null,
+                        supportingText = {
+                            Text(if (priceTouched) parsedPrice.error ?: "Hasta dos decimales." else "Acepta punto o coma y hasta dos decimales.")
+                        },
                         label = { Text("Precio (S/) *") },
                         placeholder = { Text("32.50") },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier.weight(1f).onFocusChanged { focus ->
+                            if (!focus.isFocused && priceTouched) parseProductPrice(priceInput).value?.let { priceInput = formatProductPrice(it) }
+                        },
                     )
 
                     OutlinedTextField(
@@ -848,7 +859,9 @@ internal fun ProductDialog(
                 text = "GUARDAR",
                 onClick = {
                     if (saving || imageLoading || imageError != null) return@AuthSubmitButton
-                    val price = priceInput.toDoubleOrNull() ?: 0.0
+                    priceTouched = true
+                    val price = parseProductPrice(priceInput).value ?: return@AuthSubmitButton
+                    priceInput = formatProductPrice(price)
                     val prepTime = prepTimeInput.toIntOrNull() ?: 0
                     val product = productToEdit?.copy(
                         name = name.trim(),

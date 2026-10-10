@@ -38,6 +38,15 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
+import com.chaskifood.app.R
+import com.chaskifood.app.ui.components.DemoNotice
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -94,14 +103,15 @@ fun SearchFoodScreen(
     onFoodClick: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    var query by remember { mutableStateOf("") }
-    var recents by remember { mutableStateOf(recentSearches) }
+    var query by rememberSaveable { mutableStateOf("") }
+    var recents by rememberSaveable { mutableStateOf(recentSearches) }
 
     Column(
         modifier = modifier
             .fillMaxSize()
             .background(ChaskiSurface),
     ) {
+        DemoNotice(description = stringResource(R.string.demo_catalog_description))
         SearchBar(
             query = query,
             onQueryChange = { query = it },
@@ -132,6 +142,7 @@ private fun SearchBar(
     onQueryChange: (String) -> Unit,
     onClear: () -> Unit,
 ) {
+    val searchLabel = stringResource(R.string.search_food_label)
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -158,12 +169,12 @@ private fun SearchBar(
                 fontWeight = FontWeight.Medium,
                 color = Color(0xFF616161),
             ),
-            modifier = Modifier.weight(1f),
+            modifier = Modifier.weight(1f).semantics { contentDescription = searchLabel },
         )
-        IconButton(onClick = onClear, modifier = Modifier.size(32.dp)) {
+        IconButton(onClick = onClear, modifier = Modifier.size(48.dp)) {
             Icon(
                 imageVector = Icons.Filled.Close,
-                contentDescription = "Limpiar",
+                contentDescription = "Limpiar búsqueda",
                 modifier = Modifier.size(20.dp),
                 tint = Color(0xFF616161),
             )
@@ -182,6 +193,7 @@ private fun RecentLanding(
     Column(
         modifier = Modifier
             .fillMaxWidth()
+            .verticalScroll(rememberScrollState())
             .padding(horizontal = ChaskiDimens.SpacingLg),
         verticalArrangement = Arrangement.spacedBy(ChaskiDimens.SpacingMd),
     ) {
@@ -203,7 +215,7 @@ private fun RecentLanding(
                 fontWeight = FontWeight.Medium,
                 letterSpacing = 0.5.sp,
                 color = Color(0xFFF04949),
-                modifier = Modifier.clickable(onClick = onClearAll),
+                modifier = Modifier.clickable(role = Role.Button, onClick = onClearAll),
             )
         }
 
@@ -211,7 +223,7 @@ private fun RecentLanding(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable { onQuery(term) }
+                    .clickable(role = Role.Button, onClickLabel = "Buscar $term") { onQuery(term) }
                     .padding(vertical = ChaskiDimens.SpacingSm),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(ChaskiDimens.SpacingSm),
@@ -232,11 +244,11 @@ private fun RecentLanding(
                 )
                 IconButton(
                     onClick = { onRemove(term) },
-                    modifier = Modifier.size(32.dp),
+                    modifier = Modifier.size(48.dp),
                 ) {
                     Icon(
                         imageVector = Icons.Filled.Close,
-                        contentDescription = null,
+                        contentDescription = stringResource(R.string.remove_recent_search, term),
                         modifier = Modifier.size(20.dp),
                         tint = Color(0xFF9E9E9E),
                     )
@@ -287,7 +299,7 @@ private fun ResultsList(
     ) {
         item(key = "subtitle") {
             Text(
-                text = "Mostrando 8 resultados para \u201c$query\u201d",
+                text = "Resultados de ejemplo para \u201c$query\u201d",
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Medium,
                 letterSpacing = 0.5.sp,
@@ -357,7 +369,7 @@ private fun FilterChipsRow(
                     .clip(RoundedCornerShape(12.dp))
                     .border(1.5.dp, Color(0xFFBDBDBD), RoundedCornerShape(12.dp))
                     .background(Color(0xFFFBFBFB))
-                    .clickable { onRemove(chip) }
+                    .clickable(role = Role.Button, onClickLabel = "Eliminar filtro $chip") { onRemove(chip) }
                     .padding(
                         start = ChaskiDimens.SpacingLg,
                         end = ChaskiDimens.SpacingSm,
