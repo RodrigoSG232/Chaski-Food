@@ -33,6 +33,7 @@ import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Store
 import androidx.compose.material.icons.filled.Storefront
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -72,6 +73,7 @@ fun AccountScreen(
     onOpenBusiness: () -> Unit = {},
     onOpenStoreOperations: () -> Unit = {},
     onOpenManageCatalog: () -> Unit = {},
+    onOpenStoreProductConfiguration: () -> Unit = {},
     onOpenAdminReview: () -> Unit = {},
     onOpenAdminSupervision: () -> Unit = {},
     onOpenAdminAuditLog: () -> Unit = {},
@@ -130,6 +132,13 @@ fun AccountScreen(
             title = "Menú y Catálogo de Productos",
             subtitle = "Gestiona categorías, platillos, precios y fotografías",
             onClick = onOpenManageCatalog,
+        )
+
+        AccountMenuItem(
+            icon = Icons.Filled.Tune,
+            title = "Productos por Local",
+            subtitle = "Configura precios y disponibilidad por establecimiento",
+            onClick = onOpenStoreProductConfiguration,
         )
 
         AccountMenuItem(
