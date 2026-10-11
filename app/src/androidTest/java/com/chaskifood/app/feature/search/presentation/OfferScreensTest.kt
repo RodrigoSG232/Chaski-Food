@@ -80,6 +80,19 @@ class OfferScreensTest {
         compose.onNodeWithText("Ají de gallina").assertIsNotDisplayed()
     }
 
+    @Test
+    fun detalleMuestraDatosYReferenciaParaImagenDeFirebase() {
+        compose.setContent {
+            ChaskiTheme { ProductDetailContent(product()) }
+        }
+
+        compose.onNodeWithText("Ají de gallina").assertIsDisplayed()
+        compose.onNodeWithText("S/ 18.90").assertIsDisplayed()
+        compose.onNodeWithText("Clásico plato peruano").assertIsDisplayed()
+        compose.onNodeWithText("Tiempo estimado: 20 min").assertIsDisplayed()
+        compose.onNodeWithText("Imagen del producto · Firebase Storage").assertIsDisplayed()
+    }
+
     private fun category() = OfferCategory("category-1", "Criollos", 1)
 
     private fun store() = DiscoverableStore(

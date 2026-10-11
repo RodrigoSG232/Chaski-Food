@@ -111,6 +111,42 @@ class OfferViewModelsTest {
         assertEquals("Local cerrado", (model.uiState.value as StoreOfferUiState.Unavailable).message)
     }
 
+    @Test
+    fun `detalle encuentra el producto solicitado dentro de la oferta vigente`() = runTest {
+        val repository = FakeStoreOffers()
+        val store = store("store-1", "Miraflores")
+        repository.state(store.id).value = StoreOfferState.Ready(offer(store, "Ceviche", "category-1"))
+        val model = ProductDetailViewModel(
+            SavedStateHandle(
+                mapOf("storeId" to store.id, "productId" to "product-Ceviche"),
+            ),
+            repository,
+        ).also { viewModels.put("detail", it) }
+        runCurrent()
+
+        assertEquals("Ceviche", (model.uiState.value as ProductDetailUiState.Success).product.name)
+        assertEquals("store-1", repository.lastObservedId)
+    }
+
+    @Test
+    fun `detalle deja de exponer un producto que ya no esta disponible`() = runTest {
+        val repository = FakeStoreOffers()
+        val store = store("store-1", "Miraflores")
+        repository.state(store.id).value = StoreOfferState.Ready(offer(store, "Ceviche", "category-1"))
+        val model = ProductDetailViewModel(
+            SavedStateHandle(mapOf("storeId" to store.id, "productId" to "product-Ceviche")),
+            repository,
+        ).also { viewModels.put("detail-unavailable", it) }
+        runCurrent()
+
+        repository.state(store.id).value = StoreOfferState.Ready(
+            StoreOffer(store, emptyList(), emptyList()),
+        )
+        runCurrent()
+
+        assertTrue(model.uiState.value is ProductDetailUiState.Unavailable)
+    }
+
     private fun ready(vararg stores: DiscoverableStore) = AvailableStoresState.Ready(
         SelectedDeliveryAddress("address-1", "Casa", "Av. Principal"),
         stores.toList(),

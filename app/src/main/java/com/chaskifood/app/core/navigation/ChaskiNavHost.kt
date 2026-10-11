@@ -66,6 +66,7 @@ import com.chaskifood.app.feature.profile.presentation.ReferFriendScreen
 import com.chaskifood.app.feature.restaurants.presentation.RestaurantsScreen
 import com.chaskifood.app.feature.search.presentation.FoodsPerCategoryScreen
 import com.chaskifood.app.feature.search.presentation.FilterScreen
+import com.chaskifood.app.feature.search.presentation.ProductDetailScreen
 import com.chaskifood.app.feature.search.presentation.StoreOfferScreen
 import com.chaskifood.app.feature.splash.presentation.SplashScreen
 import com.chaskifood.app.ui.components.ChaskiFlowBottomBar
@@ -481,10 +482,8 @@ fun ChaskiNavHost() {
                     navArgument("productId") { type = NavType.StringType },
                 ),
             ) {
-                MenuToppingScreen(
+                ProductDetailScreen(
                     onBack = { navController.popBackStack() },
-                    onTabSelected = onTabSelected,
-                    onAddToOrder = { navController.navigate(ChaskiDestinations.YOUR_ORDER) },
                 )
             }
             composable(
@@ -693,7 +692,7 @@ fun ChaskiNavHost() {
 // These destinations currently display local sample data, without a purchase/order backend.
 private val demoDestinations = setOf(
     ChaskiDestinations.SEARCH_CATEGORIES,
-    ChaskiDestinations.PRODUCT_DETAIL, ChaskiDestinations.FOODS_PER_CATEGORY,
+    ChaskiDestinations.FOODS_PER_CATEGORY,
     ChaskiDestinations.FILTER, ChaskiDestinations.MENU_TOPPING,
     ChaskiDestinations.YOUR_ORDER, ChaskiDestinations.CHECKOUT, ChaskiDestinations.PAYMENT,
     ChaskiDestinations.ORDER_PLACED, ChaskiDestinations.ORDER_TRACKING, ChaskiDestinations.ORDER_PROGRESS,
