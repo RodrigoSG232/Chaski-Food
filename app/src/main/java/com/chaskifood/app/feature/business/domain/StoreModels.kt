@@ -55,6 +55,7 @@ data class BusinessStore(
     val address: String = "",
     val latitude: Double = 0.0,
     val longitude: Double = 0.0,
+    val deliveryRadiusKm: Double = DEFAULT_DELIVERY_RADIUS_KM,
     val phone: String = "",
     val status: StoreStatus = StoreStatus.ACTIVE,
     val operationalStatus: OperationalStatus = OperationalStatus.OPEN,
@@ -86,6 +87,8 @@ data class BusinessStore(
         return covers(today, false) || covers(previous, true)
     }
 }
+
+const val DEFAULT_DELIVERY_RADIUS_KM = 5.0
 
 data class StoreManager(
     val id: String = "",
