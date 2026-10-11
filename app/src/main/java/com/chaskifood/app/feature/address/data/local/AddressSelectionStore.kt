@@ -1,4 +1,4 @@
-package com.chaskifood.app.feature.address.data
+package com.chaskifood.app.feature.address.data.local
 
 import kotlinx.coroutines.flow.Flow
 

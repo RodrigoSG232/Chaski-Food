@@ -1,5 +1,8 @@
 package com.chaskifood.app.feature.address.data
 
+import com.chaskifood.app.feature.address.data.remote.AddressDocumentMapper
+import com.chaskifood.app.feature.address.data.remote.addressPayloadHash
+import com.chaskifood.app.feature.address.data.remote.requireDocumentId
 import com.chaskifood.app.feature.address.domain.model.AddressCoordinates
 import com.chaskifood.app.feature.address.domain.model.AddressDraft
 import com.google.firebase.Timestamp

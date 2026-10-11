@@ -1,6 +1,11 @@
-package com.chaskifood.app.feature.address.data
+package com.chaskifood.app.feature.address.data.repository
 
 import com.chaskifood.app.core.common.ApiResult
+import com.chaskifood.app.feature.address.data.AddressSession
+import com.chaskifood.app.feature.address.data.AddressSessionSource
+import com.chaskifood.app.feature.address.data.local.AddressSelectionStore
+import com.chaskifood.app.feature.address.data.remote.AddressRemoteDataSource
+import com.chaskifood.app.feature.address.data.remote.requireDocumentId
 import com.chaskifood.app.feature.address.domain.model.Address
 import com.chaskifood.app.feature.address.domain.model.AddressBook
 import com.chaskifood.app.feature.address.domain.model.AddressBookState

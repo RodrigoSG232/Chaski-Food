@@ -1,5 +1,6 @@
 package com.chaskifood.app.feature.address.data
 
+import com.chaskifood.app.feature.address.data.location.firstAvailableLocation
 import com.chaskifood.app.feature.address.domain.model.AddressCoordinates
 import com.chaskifood.app.feature.address.domain.provider.DeviceLocationResult
 import kotlinx.coroutines.ExperimentalCoroutinesApi

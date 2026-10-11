@@ -1,5 +1,6 @@
 package com.chaskifood.app.feature.address.data
 
+import com.chaskifood.app.feature.address.data.remote.DeliveryMetadata
 import com.google.firebase.Timestamp
 import org.junit.Assert.*
 import org.junit.Test

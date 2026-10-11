@@ -1,4 +1,4 @@
-package com.chaskifood.app.feature.address.data
+package com.chaskifood.app.feature.address.data.remote
 
 import com.chaskifood.app.feature.address.domain.model.AddressDraft
 import com.google.firebase.Timestamp

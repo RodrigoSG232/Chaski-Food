@@ -1,6 +1,10 @@
 package com.chaskifood.app.feature.address.data
 
 import com.chaskifood.app.core.common.ApiResult
+import com.chaskifood.app.feature.address.data.local.AddressSelectionStore
+import com.chaskifood.app.feature.address.data.remote.AddressRemoteDataSource
+import com.chaskifood.app.feature.address.data.remote.RemoteAddressBook
+import com.chaskifood.app.feature.address.data.repository.FirebaseAddressRepository
 import com.chaskifood.app.feature.address.domain.model.Address
 import com.chaskifood.app.feature.address.domain.model.AddressBookState
 import com.chaskifood.app.feature.address.domain.model.AddressCoordinates

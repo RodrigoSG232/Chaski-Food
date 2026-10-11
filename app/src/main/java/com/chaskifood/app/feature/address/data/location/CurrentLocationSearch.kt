@@ -1,4 +1,4 @@
-package com.chaskifood.app.feature.address.data
+package com.chaskifood.app.feature.address.data.location
 
 import com.chaskifood.app.feature.address.domain.provider.DeviceLocationResult
 import kotlinx.coroutines.CancellationException

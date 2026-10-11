@@ -1,4 +1,4 @@
-package com.chaskifood.app.feature.address.data
+package com.chaskifood.app.feature.address.data.location
 
 import android.Manifest
 import android.annotation.SuppressLint
