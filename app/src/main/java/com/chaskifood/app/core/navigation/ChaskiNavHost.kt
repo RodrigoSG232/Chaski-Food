@@ -252,8 +252,10 @@ fun ChaskiNavHost() {
                     onOpenYourOrder = {
                         navController.navigate(ChaskiDestinations.YOUR_ORDER)
                     },
-                    onRestaurantClick = {
-                        navController.navigate(ChaskiDestinations.RESTAURANT_DETAIL)
+                    onRestaurantClick = { storeId ->
+                        navController.navigate(
+                            ChaskiDestinations.RESTAURANT_DETAIL.replace("{storeId}", Uri.encode(storeId)),
+                        )
                     },
                     onOpenCategories = {
                         navController.navigate(ChaskiDestinations.SEARCH_CATEGORIES)
@@ -443,14 +445,20 @@ fun ChaskiNavHost() {
                     onOpenLocations = {
                         navController.navigate(ChaskiDestinations.ADDRESS_BOOK) { launchSingleTop = true }
                     },
-                    onRestaurantClick = {
-                        navController.navigate(ChaskiDestinations.RESTAURANT_DETAIL)
+                    onRestaurantClick = { storeId ->
+                        navController.navigate(
+                            ChaskiDestinations.RESTAURANT_DETAIL.replace("{storeId}", Uri.encode(storeId)),
+                        )
                     },
                 )
             }
-            composable(ChaskiDestinations.RESTAURANT_DETAIL) {
+            composable(
+                route = ChaskiDestinations.RESTAURANT_DETAIL,
+                arguments = listOf(navArgument("storeId") { type = NavType.StringType }),
+            ) { backStackEntry ->
+                val storeId = backStackEntry.arguments?.getString("storeId").orEmpty()
                 RestaurantDetailScreen(
-                    restaurantName = "Garden Dining Room",
+                    restaurantName = storeId,
                     onBack = { navController.popBackStack() },
                     onTabSelected = onTabSelected,
                     onFoodClick = {

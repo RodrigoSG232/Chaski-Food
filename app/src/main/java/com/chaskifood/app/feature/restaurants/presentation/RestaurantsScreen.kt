@@ -134,7 +134,7 @@ fun RestaurantsScreen(
                         state = state,
                         onSelectAddress = onOpenLocations,
                         onRetry = viewModel::retry,
-                        onStoreClick = { onRestaurantClick(it.name) },
+                        onStoreClick = { onRestaurantClick(it.id) },
                         showTitle = false,
                     )
                 }

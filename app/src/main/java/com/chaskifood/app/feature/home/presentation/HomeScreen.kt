@@ -164,7 +164,7 @@ fun HomeScreen(
                 state = availableStoresState,
                 onSelectAddress = onOpenLocations,
                 onRetry = availableStoresViewModel::retry,
-                onStoreClick = { onRestaurantClick(it.name) },
+                onStoreClick = { onRestaurantClick(it.id) },
                 modifier = Modifier.padding(
                     horizontal = ChaskiDimens.ScreenPadding,
                     vertical = ChaskiDimens.SpacingLg,

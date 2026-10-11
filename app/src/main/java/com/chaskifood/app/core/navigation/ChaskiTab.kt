@@ -23,7 +23,7 @@ object ChaskiDestinations {
     const val MAIN = "main"
 
     const val RESTAURANTS = "restaurants"
-    const val RESTAURANT_DETAIL = "restaurant_detail"
+    const val RESTAURANT_DETAIL = "restaurant/{storeId}"
     const val MENU_TOPPING = "menu_topping"
     const val YOUR_ORDER = "your_order"
     const val CHECKOUT = "checkout"
