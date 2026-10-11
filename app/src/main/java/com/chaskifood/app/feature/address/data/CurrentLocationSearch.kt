@@ -1,6 +1,6 @@
 package com.chaskifood.app.feature.address.data
 
-import com.chaskifood.app.feature.address.domain.DeviceLocationResult
+import com.chaskifood.app.feature.address.domain.provider.DeviceLocationResult
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope

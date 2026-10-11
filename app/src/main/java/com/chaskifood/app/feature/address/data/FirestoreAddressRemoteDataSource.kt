@@ -1,7 +1,7 @@
 package com.chaskifood.app.feature.address.data
 
-import com.chaskifood.app.feature.address.domain.Address
-import com.chaskifood.app.feature.address.domain.AddressDraft
+import com.chaskifood.app.feature.address.domain.model.Address
+import com.chaskifood.app.feature.address.domain.model.AddressDraft
 import com.google.firebase.firestore.DocumentReference
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore

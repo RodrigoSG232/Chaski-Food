@@ -11,9 +11,9 @@ import android.os.CancellationSignal
 import android.os.SystemClock
 import androidx.core.content.ContextCompat
 import androidx.core.location.LocationManagerCompat
-import com.chaskifood.app.feature.address.domain.AddressCoordinates
-import com.chaskifood.app.feature.address.domain.DeviceLocationProvider
-import com.chaskifood.app.feature.address.domain.DeviceLocationResult
+import com.chaskifood.app.feature.address.domain.model.AddressCoordinates
+import com.chaskifood.app.feature.address.domain.provider.DeviceLocationProvider
+import com.chaskifood.app.feature.address.domain.provider.DeviceLocationResult
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import kotlin.coroutines.resume

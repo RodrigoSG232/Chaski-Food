@@ -1,6 +1,6 @@
 package com.chaskifood.app.feature.address.data
 
-import com.chaskifood.app.feature.address.domain.AddressDraft
+import com.chaskifood.app.feature.address.domain.model.AddressDraft
 import com.google.firebase.Timestamp
 import com.google.firebase.firestore.FieldValue
 import java.io.ByteArrayOutputStream

@@ -2,7 +2,7 @@ package com.chaskifood.app.feature.business.presentation
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import com.chaskifood.app.feature.address.domain.AddressCoordinates
+import com.chaskifood.app.feature.address.domain.model.AddressCoordinates
 import com.chaskifood.app.feature.address.presentation.AddressMapRequest
 import com.chaskifood.app.feature.address.presentation.AddressMapRoute
 import androidx.compose.foundation.layout.Arrangement

@@ -1,9 +1,9 @@
 package com.chaskifood.app.feature.address.data
 
-import com.chaskifood.app.feature.address.domain.Address
-import com.chaskifood.app.feature.address.domain.AddressCoordinates
-import com.chaskifood.app.feature.address.domain.AddressDraft
-import com.chaskifood.app.feature.address.domain.AddressValidator
+import com.chaskifood.app.feature.address.domain.model.Address
+import com.chaskifood.app.feature.address.domain.model.AddressCoordinates
+import com.chaskifood.app.feature.address.domain.model.AddressDraft
+import com.chaskifood.app.feature.address.domain.validation.AddressValidator
 import com.google.firebase.Timestamp
 import com.google.firebase.firestore.FieldValue
 

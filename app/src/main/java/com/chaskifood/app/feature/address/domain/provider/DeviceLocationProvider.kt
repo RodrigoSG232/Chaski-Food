@@ -1,4 +1,6 @@
-package com.chaskifood.app.feature.address.domain
+package com.chaskifood.app.feature.address.domain.provider
+
+import com.chaskifood.app.feature.address.domain.model.AddressCoordinates
 
 /** Una captura solicitada por el usuario; nunca rastreo en segundo plano. */
 interface DeviceLocationProvider {

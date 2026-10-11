@@ -1,12 +1,12 @@
 package com.chaskifood.app.feature.address.data
 
 import com.chaskifood.app.core.common.ApiResult
-import com.chaskifood.app.feature.address.domain.Address
-import com.chaskifood.app.feature.address.domain.AddressBook
-import com.chaskifood.app.feature.address.domain.AddressBookState
-import com.chaskifood.app.feature.address.domain.AddressDraft
-import com.chaskifood.app.feature.address.domain.AddressRepository
-import com.chaskifood.app.feature.address.domain.AddressValidator
+import com.chaskifood.app.feature.address.domain.model.Address
+import com.chaskifood.app.feature.address.domain.model.AddressBook
+import com.chaskifood.app.feature.address.domain.model.AddressBookState
+import com.chaskifood.app.feature.address.domain.model.AddressDraft
+import com.chaskifood.app.feature.address.domain.repository.AddressRepository
+import com.chaskifood.app.feature.address.domain.validation.AddressValidator
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow

@@ -1,6 +1,6 @@
 package com.chaskifood.app.feature.discover.domain
 
-import com.chaskifood.app.feature.address.domain.AddressCoordinates
+import com.chaskifood.app.feature.address.domain.model.AddressCoordinates
 import com.chaskifood.app.feature.business.domain.BusinessStore
 import com.chaskifood.app.feature.business.domain.DayOfWeekEnum
 import com.chaskifood.app.feature.business.domain.DayOperatingHours

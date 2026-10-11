@@ -1,4 +1,6 @@
-package com.chaskifood.app.feature.address.domain
+package com.chaskifood.app.feature.address.domain.validation
+
+import com.chaskifood.app.feature.address.domain.model.AddressDraft
 
 object AddressLimits {
     const val LABEL = 40

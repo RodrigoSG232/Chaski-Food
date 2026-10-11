@@ -1,4 +1,6 @@
-package com.chaskifood.app.feature.address.domain
+package com.chaskifood.app.feature.address.domain.provider
+
+import com.chaskifood.app.feature.address.domain.model.AddressCoordinates
 
 /** Traduce un punto confirmado a una sugerencia de texto, si el dispositivo dispone del servicio. */
 interface ReverseGeocodingProvider {

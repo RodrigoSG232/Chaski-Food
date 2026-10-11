@@ -4,9 +4,9 @@ import android.location.Address
 import android.location.Geocoder
 import android.os.Build
 import androidx.annotation.RequiresApi
-import com.chaskifood.app.feature.address.domain.AddressCoordinates
-import com.chaskifood.app.feature.address.domain.ReverseGeocodingProvider
-import com.chaskifood.app.feature.address.domain.ReverseGeocodingResult
+import com.chaskifood.app.feature.address.domain.model.AddressCoordinates
+import com.chaskifood.app.feature.address.domain.provider.ReverseGeocodingProvider
+import com.chaskifood.app.feature.address.domain.provider.ReverseGeocodingResult
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.util.Locale
 import javax.inject.Inject

@@ -1,7 +1,7 @@
 package com.chaskifood.app.feature.address.data
 
-import com.chaskifood.app.feature.address.domain.Address
-import com.chaskifood.app.feature.address.domain.AddressDraft
+import com.chaskifood.app.feature.address.domain.model.Address
+import com.chaskifood.app.feature.address.domain.model.AddressDraft
 import kotlinx.coroutines.flow.Flow
 
 data class RemoteAddressBook(val addresses: List<Address>, val defaultAddressId: String?)

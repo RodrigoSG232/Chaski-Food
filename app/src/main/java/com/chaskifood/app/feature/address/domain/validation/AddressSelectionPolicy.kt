@@ -1,4 +1,4 @@
-package com.chaskifood.app.feature.address.domain
+package com.chaskifood.app.feature.address.domain.validation
 
 object
 AddressSelectionPolicy {

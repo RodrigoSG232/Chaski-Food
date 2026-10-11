@@ -1,7 +1,11 @@
 package com.chaskifood.app.feature.address.data
 
 import com.chaskifood.app.core.common.ApiResult
-import com.chaskifood.app.feature.address.domain.*
+import com.chaskifood.app.feature.address.domain.model.Address
+import com.chaskifood.app.feature.address.domain.model.AddressBookState
+import com.chaskifood.app.feature.address.domain.model.AddressCoordinates
+import com.chaskifood.app.feature.address.domain.model.AddressDraft
+import com.chaskifood.app.feature.address.domain.validation.AddressSelectionPolicy
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi

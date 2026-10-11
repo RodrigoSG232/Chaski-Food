@@ -1,8 +1,8 @@
 package com.chaskifood.app.feature.address.presentation
 
 import androidx.lifecycle.SavedStateHandle
-import com.chaskifood.app.feature.address.domain.AddressCoordinates
-import com.chaskifood.app.feature.address.domain.AddressDraft
+import com.chaskifood.app.feature.address.domain.model.AddressCoordinates
+import com.chaskifood.app.feature.address.domain.model.AddressDraft
 
 /** Estado pequeño del formulario, no caché del catálogo. Nunca se escribe en logs. */
 internal class AddressEditorSavedState(private val handle: SavedStateHandle) {

@@ -1,5 +1,9 @@
 package com.chaskifood.app.feature.address.domain
 
+import com.chaskifood.app.feature.address.domain.model.Address
+import com.chaskifood.app.feature.address.domain.model.AddressCoordinates
+import com.chaskifood.app.feature.address.domain.model.AddressDraft
+import com.chaskifood.app.feature.address.domain.validation.AddressValidator
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue

@@ -4,9 +4,9 @@ import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.preferencesDataStore
-import com.chaskifood.app.feature.address.domain.AddressRepository
-import com.chaskifood.app.feature.address.domain.DeviceLocationProvider
-import com.chaskifood.app.feature.address.domain.ReverseGeocodingProvider
+import com.chaskifood.app.feature.address.domain.repository.AddressRepository
+import com.chaskifood.app.feature.address.domain.provider.DeviceLocationProvider
+import com.chaskifood.app.feature.address.domain.provider.ReverseGeocodingProvider
 import com.google.firebase.firestore.FirebaseFirestore
 import dagger.Binds
 import dagger.Module

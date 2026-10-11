@@ -1,6 +1,9 @@
-package com.chaskifood.app.feature.address.domain
+package com.chaskifood.app.feature.address.domain.repository
 
 import com.chaskifood.app.core.common.ApiResult
+import com.chaskifood.app.feature.address.domain.model.Address
+import com.chaskifood.app.feature.address.domain.model.AddressBookState
+import com.chaskifood.app.feature.address.domain.model.AddressDraft
 import kotlinx.coroutines.flow.Flow
 
 /**

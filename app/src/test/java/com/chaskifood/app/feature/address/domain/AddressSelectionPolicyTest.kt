@@ -1,5 +1,6 @@
 package com.chaskifood.app.feature.address.domain
 
+import com.chaskifood.app.feature.address.domain.validation.AddressSelectionPolicy
 import org.junit.Assert.assertEquals
 import org.junit.Test
 import org.junit.runner.RunWith

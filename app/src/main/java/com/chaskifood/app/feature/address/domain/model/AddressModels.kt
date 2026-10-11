@@ -1,4 +1,4 @@
-package com.chaskifood.app.feature.address.domain
+package com.chaskifood.app.feature.address.domain.model
 
 /** Coordenadas independientes de los SDK de ubicación, mapas y Firestore. */
 data class AddressCoordinates(

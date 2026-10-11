@@ -1,11 +1,11 @@
 package com.chaskifood.app.feature.address.presentation
 
-import com.chaskifood.app.feature.address.domain.AddressBook
-import com.chaskifood.app.feature.address.domain.AddressBookState
-import com.chaskifood.app.feature.address.domain.AddressCoordinates
-import com.chaskifood.app.feature.address.domain.AddressDraft
-import com.chaskifood.app.feature.address.domain.AddressField
-import com.chaskifood.app.feature.address.domain.AddressValidationError
+import com.chaskifood.app.feature.address.domain.model.AddressBook
+import com.chaskifood.app.feature.address.domain.model.AddressBookState
+import com.chaskifood.app.feature.address.domain.model.AddressCoordinates
+import com.chaskifood.app.feature.address.domain.model.AddressDraft
+import com.chaskifood.app.feature.address.domain.validation.AddressField
+import com.chaskifood.app.feature.address.domain.validation.AddressValidationError
 
 data class AddressEditorState(
     val ownerUid: String,

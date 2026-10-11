@@ -2,11 +2,11 @@ package com.chaskifood.app.feature.address.presentation
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.chaskifood.app.feature.address.domain.AddressCoordinates
-import com.chaskifood.app.feature.address.domain.DeviceLocationProvider
-import com.chaskifood.app.feature.address.domain.DeviceLocationResult
-import com.chaskifood.app.feature.address.domain.ReverseGeocodingProvider
-import com.chaskifood.app.feature.address.domain.ReverseGeocodingResult
+import com.chaskifood.app.feature.address.domain.model.AddressCoordinates
+import com.chaskifood.app.feature.address.domain.provider.DeviceLocationProvider
+import com.chaskifood.app.feature.address.domain.provider.DeviceLocationResult
+import com.chaskifood.app.feature.address.domain.provider.ReverseGeocodingProvider
+import com.chaskifood.app.feature.address.domain.provider.ReverseGeocodingResult
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.CancellationException
