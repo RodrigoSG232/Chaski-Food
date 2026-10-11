@@ -77,6 +77,7 @@ class FirebaseStoreRepository @Inject constructor(
                 "address" to newStore.address,
                 "latitude" to newStore.latitude,
                 "longitude" to newStore.longitude,
+                "deliveryRadiusKm" to newStore.deliveryRadiusKm,
                 "phone" to newStore.phone,
                 "status" to newStore.status.name,
                 "operationalStatus" to newStore.operationalStatus.name,
@@ -317,6 +318,8 @@ class FirebaseStoreRepository @Inject constructor(
             address = data["address"] as? String ?: "",
             latitude = (data["latitude"] as? Number)?.toDouble() ?: 0.0,
             longitude = (data["longitude"] as? Number)?.toDouble() ?: 0.0,
+            deliveryRadiusKm = (data["deliveryRadiusKm"] as? Number)?.toDouble()
+                ?: com.chaskifood.app.feature.business.domain.DEFAULT_DELIVERY_RADIUS_KM,
             phone = data["phone"] as? String ?: "",
             status = StoreStatus.entries.find { it.name == statusStr } ?: StoreStatus.INACTIVE,
             operationalStatus = OperationalStatus.entries.find { it.name == opStatusStr } ?: OperationalStatus.CLOSED,
