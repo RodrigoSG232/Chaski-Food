@@ -1,6 +1,7 @@
+@file:OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+
 package com.chaskifood.app.feature.discover.data
 
-import com.chaskifood.app.core.common.ApiResult
 import com.chaskifood.app.feature.address.domain.AddressBookState
 import com.chaskifood.app.feature.address.domain.AddressRepository
 import com.chaskifood.app.feature.business.domain.BusinessStore
@@ -13,13 +14,16 @@ import com.chaskifood.app.feature.business.domain.getCurrentDayOfWeek
 import com.chaskifood.app.feature.business.domain.getCurrentFormattedTime
 import com.chaskifood.app.feature.business.domain.validOperatingHours
 import com.chaskifood.app.feature.discover.domain.AvailableStoresRepository
+import com.chaskifood.app.feature.discover.domain.AvailableStoresState
+import com.chaskifood.app.feature.discover.domain.SelectedDeliveryAddress
 import com.chaskifood.app.feature.discover.domain.StoreDiscoveryCandidate
 import com.chaskifood.app.feature.discover.domain.discoverAvailableStores
 import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Source
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.tasks.await
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -30,40 +34,47 @@ class FirebaseAvailableStoresRepository @Inject constructor(
     private val addressRepository: AddressRepository,
 ) : AvailableStoresRepository {
 
-    override suspend fun getAvailableStores() = try {
-        val addressState = addressRepository.observeAddressBook().first { state ->
-            state !is AddressBookState.Loading
+    override fun observeAvailableStores(): Flow<AvailableStoresState> =
+        addressRepository.observeAddressBook().mapLatest { addressState ->
+            when (addressState) {
+                AddressBookState.SignedOut -> AvailableStoresState.SignedOut
+                is AddressBookState.Loading -> AvailableStoresState.Loading
+                is AddressBookState.Error -> AvailableStoresState.Error(addressState.message)
+                is AddressBookState.Ready -> loadStores(addressState)
+            }
         }
-        val book = when (addressState) {
-            is AddressBookState.Ready -> addressState.book
-            is AddressBookState.Error -> return ApiResult.Failure(addressState.message)
-            AddressBookState.SignedOut -> return ApiResult.Failure("Inicia sesión para consultar locales disponibles.")
-            is AddressBookState.Loading -> error("Estado de dirección inesperado.")
-        }
-        val selectedId = book.selectedAddressId
-            ?: return ApiResult.Failure("Selecciona una dirección de entrega para buscar locales.")
-        val selectedAddress = book.addresses.singleOrNull { it.id == selectedId }
-            ?: return ApiResult.Failure("La dirección seleccionada ya no está disponible. Selecciona otra.")
 
-        val snapshot = firestore.collection("stores")
-            .whereEqualTo("status", StoreStatus.ACTIVE.name)
-            .get(Source.SERVER)
-            .await()
-        val candidates = snapshot.documents.mapNotNull { document ->
-            document.toDiscoveryCandidate()
+    private suspend fun loadStores(addressState: AddressBookState.Ready): AvailableStoresState {
+        val book = addressState.book
+        val selectedId = book.selectedAddressId ?: return AvailableStoresState.AddressRequired
+        val selectedAddress = book.addresses.singleOrNull { it.id == selectedId }
+            ?: return AvailableStoresState.AddressRequired
+        return try {
+            val snapshot = firestore.collection("stores")
+                .whereEqualTo("status", StoreStatus.ACTIVE.name)
+                .get(Source.SERVER)
+                .await()
+            val candidates = snapshot.documents.mapNotNull { document ->
+                document.toDiscoveryCandidate()
+            }
+            AvailableStoresState.Ready(
+                selectedAddress = SelectedDeliveryAddress(
+                    id = selectedAddress.id,
+                    label = selectedAddress.label,
+                    addressText = selectedAddress.addressText,
+                ),
+                stores = discoverAvailableStores(
+                    candidates = candidates,
+                    selectedAddress = selectedAddress.location,
+                    currentDay = getCurrentDayOfWeek(),
+                    currentTime = getCurrentFormattedTime(),
+                ),
+            )
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            AvailableStoresState.Error("No se pudieron consultar los locales disponibles.")
         }
-        ApiResult.Success(
-            discoverAvailableStores(
-                candidates = candidates,
-                selectedAddress = selectedAddress.location,
-                currentDay = getCurrentDayOfWeek(),
-                currentTime = getCurrentFormattedTime(),
-            ),
-        )
-    } catch (cancelled: CancellationException) {
-        throw cancelled
-    } catch (error: Exception) {
-        ApiResult.Failure(error.localizedMessage ?: "No se pudieron consultar los locales disponibles.", error)
     }
 }
 
