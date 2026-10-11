@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModelStore
 import com.chaskifood.app.core.common.ApiResult
 import com.chaskifood.app.feature.business.domain.*
 import com.chaskifood.app.feature.business.testing.BusinessTestAuth
+import com.chaskifood.app.feature.business.testing.BusinessTestRepository
 import com.chaskifood.app.feature.business.testing.OperationTestStores
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
@@ -19,9 +20,34 @@ class StoreOperationsViewModelTest {
     private val dispatcher = StandardTestDispatcher()
     private val store = ViewModelStore()
     private val repo = OperationTestStores()
+    private val auth = BusinessTestAuth()
+    private val businesses = BusinessTestRepository()
     @Before fun setUp() { Dispatchers.setMain(dispatcher) }
     @After fun tearDown() { store.clear(); Dispatchers.resetMain() }
-    private fun model() = StoreOperationsViewModel(repo, BusinessTestAuth()).also { store.put("operations", it) }
+    private fun model() = StoreOperationsViewModel(repo, auth, businesses).also { store.put("operations", it) }
+
+    @Test fun `duenio aprobado carga todos los locales de su negocio`() = runTest {
+        businesses.existing = BusinessRequest(
+            id = "business-1",
+            ownerUid = "owner",
+            status = BusinessStatus.APPROVED,
+        )
+        repo.owned.value = ApiResult.Success(listOf(BusinessStore(id = "owner-store")))
+
+        val vm = model(); runCurrent()
+
+        assertEquals("owner-store", (vm.uiState.value as StoreOperationsUiState.Success).stores.single().id)
+        assertEquals(1, repo.ownerQueries)
+        assertEquals(0, repo.managerQueries)
+    }
+
+    @Test fun `responsable sin negocio aprobado conserva solo sus locales asignados`() = runTest {
+        val vm = model(); runCurrent()
+
+        assertEquals(listOf("a", "b"), (vm.uiState.value as StoreOperationsUiState.Success).stores.map { it.id })
+        assertEquals(0, repo.ownerQueries)
+        assertEquals(1, repo.managerQueries)
+    }
 
     @Test fun `doble toque y horario simultaneo del mismo local envian una sola operacion`() = runTest {
         repo.gates["a"] = CompletableDeferred()

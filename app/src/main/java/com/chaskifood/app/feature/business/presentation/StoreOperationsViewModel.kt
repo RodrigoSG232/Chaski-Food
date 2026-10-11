@@ -4,6 +4,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.chaskifood.app.core.common.ApiResult
 import com.chaskifood.app.feature.business.domain.BusinessStore
+import com.chaskifood.app.feature.business.domain.BusinessRepository
+import com.chaskifood.app.feature.business.domain.BusinessStatus
 import com.chaskifood.app.feature.business.domain.DayOperatingHours
 import com.chaskifood.app.feature.business.domain.OperationalStatus
 import com.chaskifood.app.feature.business.domain.StoreRepository
@@ -40,6 +42,7 @@ data class StoreOperationState(
 class StoreOperationsViewModel @Inject constructor(
     private val storeRepository: StoreRepository,
     private val authRepository: AuthRepository,
+    private val businessRepository: BusinessRepository,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<StoreOperationsUiState>(StoreOperationsUiState.Loading)
@@ -60,14 +63,44 @@ class StoreOperationsViewModel @Inject constructor(
         observation = viewModelScope.launch {
             _uiState.value = StoreOperationsUiState.Loading
             authRepository.currentUserFlow.collectLatest { user ->
-                val identifier = user?.email?.lowercase()
-                if (identifier.isNullOrBlank()) {
-                    _uiState.value = StoreOperationsUiState.Error("Inicia sesión con la cuenta asignada.")
-                } else storeRepository.getStoresForManager(identifier).collectLatest { result ->
-                    _uiState.value = when (result) {
-                        is ApiResult.Success -> if (result.data.isEmpty()) StoreOperationsUiState.NoStoresAssigned
-                            else StoreOperationsUiState.Success(result.data)
-                        is ApiResult.Failure -> StoreOperationsUiState.Error(result.message ?: "No se pudieron cargar los locales.")
+                if (user == null) {
+                    _uiState.value = StoreOperationsUiState.Error("Inicia sesión para gestionar locales.")
+                    return@collectLatest
+                }
+                businessRepository.getBusinessRequest(user.uid).collectLatest { businessResult ->
+                    when (businessResult) {
+                        is ApiResult.Failure -> _uiState.value = StoreOperationsUiState.Error(
+                            businessResult.message ?: "No se pudo comprobar el negocio.",
+                        )
+                        is ApiResult.Success -> {
+                            val ownedBusiness = businessResult.data?.takeIf {
+                                it.status == BusinessStatus.APPROVED
+                            }
+                            val stores = if (ownedBusiness != null) {
+                                storeRepository.getStoresByBusiness(ownedBusiness.id)
+                            } else {
+                                val email = user.email?.trim()?.lowercase()
+                                if (email.isNullOrBlank()) {
+                                    _uiState.value = StoreOperationsUiState.Error(
+                                        "Inicia sesión con la cuenta asignada.",
+                                    )
+                                    return@collectLatest
+                                }
+                                storeRepository.getStoresForManager(email)
+                            }
+                            stores.collectLatest { result ->
+                                _uiState.value = when (result) {
+                                    is ApiResult.Success -> if (result.data.isEmpty()) {
+                                        StoreOperationsUiState.NoStoresAssigned
+                                    } else {
+                                        StoreOperationsUiState.Success(result.data)
+                                    }
+                                    is ApiResult.Failure -> StoreOperationsUiState.Error(
+                                        result.message ?: "No se pudieron cargar los locales.",
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
             }

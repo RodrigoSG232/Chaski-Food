@@ -61,6 +61,9 @@ class OperationTestStores : StoreRepository {
     val assigned = MutableStateFlow<ApiResult<List<BusinessStore>>>(ApiResult.Success(listOf(
         BusinessStore(id = "a", name = "Local A"), BusinessStore(id = "b", name = "Local B"),
     )))
+    val owned = MutableStateFlow<ApiResult<List<BusinessStore>>>(ApiResult.Success(emptyList()))
+    var ownerQueries = 0
+    var managerQueries = 0
     var calls = 0
     val gates = mutableMapOf<String, CompletableDeferred<Unit>>()
     var result: ApiResult<Unit> = ApiResult.Success(Unit)
@@ -73,7 +76,10 @@ class OperationTestStores : StoreRepository {
         exception?.let { throw it }
         return result
     }
-    override fun getStoresForManager(managerEmailOrUid: String): Flow<ApiResult<List<BusinessStore>>> = assigned
+    override fun getStoresForManager(managerEmailOrUid: String): Flow<ApiResult<List<BusinessStore>>> {
+        managerQueries++
+        return assigned
+    }
     override suspend fun updateOperationalStatus(storeId: String, status: OperationalStatus, pauseReason: String?): ApiResult<Unit> {
         savedReason = pauseReason
         return save(storeId)
@@ -82,7 +88,10 @@ class OperationTestStores : StoreRepository {
         savedHours = hours
         return save(storeId)
     }
-    override fun getStoresByBusiness(businessId: String): Flow<ApiResult<List<BusinessStore>>> = error("unused")
+    override fun getStoresByBusiness(businessId: String): Flow<ApiResult<List<BusinessStore>>> {
+        ownerQueries++
+        return owned
+    }
     override suspend fun createStore(store: BusinessStore): ApiResult<BusinessStore> = error("unused")
     override suspend fun updateStore(store: BusinessStore): ApiResult<BusinessStore> = error("unused")
     override fun getManagersByBusiness(businessId: String): Flow<ApiResult<List<StoreManager>>> = error("unused")
