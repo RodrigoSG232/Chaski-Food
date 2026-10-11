@@ -16,7 +16,6 @@ import com.chaskifood.app.feature.address.data.repository.FirebaseAddressReposit
 import com.chaskifood.app.feature.address.domain.repository.AddressRepository
 import com.chaskifood.app.feature.address.domain.provider.DeviceLocationProvider
 import com.chaskifood.app.feature.address.domain.provider.ReverseGeocodingProvider
-import com.google.firebase.firestore.FirebaseFirestore
 import dagger.Binds
 import dagger.Module
 import dagger.Provides
@@ -60,10 +59,6 @@ abstract class AddressDataModule {
     abstract fun bindSelectionStore(impl: DataStoreAddressSelectionStore): AddressSelectionStore
 
     companion object {
-        @Provides
-        @Singleton
-        fun provideFirestore(): FirebaseFirestore = FirebaseFirestore.getInstance()
-
         @Provides
         @Singleton
         @AddressPreferences
