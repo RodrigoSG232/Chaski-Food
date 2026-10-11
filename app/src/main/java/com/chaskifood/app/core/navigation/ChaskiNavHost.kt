@@ -440,6 +440,9 @@ fun ChaskiNavHost() {
                 RestaurantsScreen(
                     onBack = { navController.popBackStack() },
                     onTabSelected = onTabSelected,
+                    onOpenLocations = {
+                        navController.navigate(ChaskiDestinations.ADDRESS_BOOK) { launchSingleTop = true }
+                    },
                     onRestaurantClick = {
                         navController.navigate(ChaskiDestinations.RESTAURANT_DETAIL)
                     },

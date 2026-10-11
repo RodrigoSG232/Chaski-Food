@@ -31,8 +31,8 @@ import androidx.compose.material.icons.outlined.ShoppingBag
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import com.chaskifood.app.ui.components.DemoNotice
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -48,6 +48,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.chaskifood.app.R
+import androidx.hilt.navigation.compose.hiltViewModel
+import com.chaskifood.app.feature.discover.presentation.AvailableStoresContent
+import com.chaskifood.app.feature.discover.presentation.AvailableStoresViewModel
+import com.chaskifood.app.ui.components.collectChaskiState
 import com.chaskifood.app.ui.components.HomeIcons
 import com.chaskifood.app.ui.theme.ChaskiBackground
 import com.chaskifood.app.ui.theme.ChaskiDimens
@@ -123,7 +127,9 @@ fun HomeScreen(
     onRestaurantClick: (String) -> Unit = {},
     onOpenLocations: () -> Unit = {},
     onOpenYourOrder: () -> Unit = {},
+    availableStoresViewModel: AvailableStoresViewModel = hiltViewModel(),
 ) {
+    val availableStoresState by collectChaskiState(availableStoresViewModel.uiState)
     LazyColumn(
         modifier = modifier
             .fillMaxSize()
@@ -153,59 +159,25 @@ fun HomeScreen(
             )
         }
 
-        item(key = "demo-notice") {
-            DemoNotice(description = stringResource(R.string.demo_catalog_description))
-        }
-        item(key = "featured-title") {
-            SectionTitle(title = "Restaurantes destacados", onSeeAllClick = onSeeAll)
-        }
-        item(key = "featured") {
-            LazyRow(
-                contentPadding = PaddingValues(
-                    start = ChaskiDimens.ScreenPadding,
-                    end = ChaskiDimens.ScreenPadding,
-                ),
-                horizontalArrangement = Arrangement.spacedBy(ChaskiDimens.SpacingXl),
-            ) {
-                items(featuredCards, key = { it.id }) { card ->
-                    FeaturedRestaurantCard(
-                        card = card,
-                        onClick = { onRestaurantClick(card.name) },
-                    )
-                }
-            }
-        }
-
-        item(key = "categories-title") {
-            SectionTitle(title = "Categorías")
-        }
-        item(key = "categories") {
-            LazyRow(
-                contentPadding = PaddingValues(
-                    start = ChaskiDimens.ScreenPadding,
-                    end = ChaskiDimens.ScreenPadding,
-                ),
-                horizontalArrangement = Arrangement.spacedBy(ChaskiDimens.SpacingMd),
-            ) {
-                items(categories, key = { it.label }) { category ->
-                    FoodCategoryCard(category = category)
-                }
-            }
-        }
-
-        item(key = "popular-title") {
-            SectionTitle(title = "Populares")
-        }
-        items(popularCards, key = { it.id }) { card ->
-            BigRestaurantCard(
-                card = card,
-                onClick = { onRestaurantClick(card.name) },
+        item(key = "available-stores") {
+            AvailableStoresContent(
+                state = availableStoresState,
+                onSelectAddress = onOpenLocations,
+                onRetry = availableStoresViewModel::retry,
+                onStoreClick = { onRestaurantClick(it.name) },
                 modifier = Modifier.padding(
-                    start = ChaskiDimens.ScreenPadding,
-                    end = ChaskiDimens.ScreenPadding,
-                    bottom = ChaskiDimens.SpacingXl,
+                    horizontal = ChaskiDimens.ScreenPadding,
+                    vertical = ChaskiDimens.SpacingLg,
                 ),
             )
+        }
+        if (availableStoresState is com.chaskifood.app.feature.discover.presentation.AvailableStoresUiState.Success) {
+            item(key = "see-all") {
+                TextButton(
+                    onClick = onSeeAll,
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = ChaskiDimens.ScreenPadding),
+                ) { Text("VER TODOS LOS LOCALES") }
+            }
         }
     }
 }

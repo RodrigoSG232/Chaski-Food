@@ -30,6 +30,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -45,6 +47,9 @@ import com.chaskifood.app.ui.theme.ChaskiDimens
 import com.chaskifood.app.ui.theme.ChaskiPrice
 import com.chaskifood.app.ui.theme.ChaskiTextMuted
 import com.chaskifood.app.ui.theme.ChaskiTextSubtle
+import com.chaskifood.app.feature.discover.presentation.AvailableStoresContent
+import com.chaskifood.app.feature.discover.presentation.AvailableStoresViewModel
+import com.chaskifood.app.ui.components.collectChaskiState
 
 private data class HotelCard(
     val name: String,
@@ -90,8 +95,11 @@ fun RestaurantsScreen(
     onBack: () -> Unit,
     onTabSelected: (FlowTab) -> Unit,
     onRestaurantClick: (String) -> Unit,
+    onOpenLocations: () -> Unit,
     modifier: Modifier = Modifier,
+    viewModel: AvailableStoresViewModel = hiltViewModel(),
 ) {
+    val state by collectChaskiState(viewModel.uiState)
     androidx.compose.material3.Scaffold(
         modifier = modifier,
         containerColor = ChaskiBackground,
@@ -102,75 +110,35 @@ fun RestaurantsScreen(
             )
         },
     ) { innerPadding ->
-        LazyColumn(
+        Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding).consumeWindowInsets(innerPadding),
-            contentPadding = PaddingValues(bottom = ChaskiDimens.SpacingXxl),
         ) {
-            item(key = "appbar") {
-                ChaskiAppBar(
-                    title = "Restaurantes",
-                    onBackClick = onBack,
-                )
-            }
-
-        items(horizontalCards, key = { it.name }) { card ->
-            HorizontalHotelCard(
-                hotel = card,
-                modifier = Modifier
-                    .padding(horizontal = ChaskiDimens.ScreenPadding)
-                    .padding(bottom = ChaskiDimens.SpacingMd),
-                onClick = { onRestaurantClick(card.name) },
+            ChaskiAppBar(
+                title = "Locales disponibles",
+                onBackClick = onBack,
             )
-        }
-
-        item(key = "masonry-title") {
-            Text(
-                text = "Todos los restaurantes",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Medium,
-                color = MaterialTheme.colorScheme.onBackground,
-                modifier = Modifier.padding(
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize(),
+                contentPadding = PaddingValues(
                     start = ChaskiDimens.ScreenPadding,
                     end = ChaskiDimens.ScreenPadding,
-                    top = ChaskiDimens.SpacingSm,
-                    bottom = ChaskiDimens.SpacingMd,
+                    top = ChaskiDimens.SpacingMd,
+                    bottom = ChaskiDimens.SpacingXxl,
                 ),
-            )
-        }
-
-        item(key = "masonry") {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = ChaskiDimens.ScreenPadding),
-                horizontalArrangement = Arrangement.spacedBy(ChaskiDimens.SpacingMd + 6.dp),
             ) {
-                Column(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(ChaskiDimens.SpacingLg),
-                ) {
-                    leftColumn.forEach { r ->
-                        MasonryRestaurantCard(
-                            restaurant = r,
-                            onClick = { onRestaurantClick(r.name) },
-                        )
-                    }
-                }
-                Column(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(ChaskiDimens.SpacingLg),
-                ) {
-                    rightColumn.forEach { r ->
-                        MasonryRestaurantCard(
-                            restaurant = r,
-                            onClick = { onRestaurantClick(r.name) },
-                        )
-                    }
+                item(key = "available-stores") {
+                    AvailableStoresContent(
+                        state = state,
+                        onSelectAddress = onOpenLocations,
+                        onRetry = viewModel::retry,
+                        onStoreClick = { onRestaurantClick(it.name) },
+                        showTitle = false,
+                    )
                 }
             }
-        }
         }
     }
 }
