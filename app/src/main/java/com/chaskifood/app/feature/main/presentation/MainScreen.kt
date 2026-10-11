@@ -14,7 +14,7 @@ import com.chaskifood.app.core.navigation.selectMainTab
 import com.chaskifood.app.feature.home.presentation.HomeScreen
 import com.chaskifood.app.feature.orders.presentation.OrdersScreen
 import com.chaskifood.app.feature.profile.presentation.AccountScreen
-import com.chaskifood.app.feature.search.presentation.SearchFoodScreen
+import com.chaskifood.app.feature.search.presentation.OfferSearchScreen
 import com.chaskifood.app.ui.components.ChaskiBottomNav
 import com.chaskifood.app.ui.theme.ChaskiSurface
 
@@ -30,6 +30,7 @@ fun MainScreen(
     onSeeAllRestaurants: () -> Unit = {},
     onOpenYourOrder: () -> Unit = {},
     onRestaurantClick: (String) -> Unit = {},
+    onProductClick: (String, String) -> Unit = { _, _ -> },
     onOpenCategories: () -> Unit = {},
     onOpenFood: (String) -> Unit = {},
     onTrack: (String) -> Unit = {},
@@ -81,10 +82,10 @@ fun MainScreen(
                 )
             }
             composable(ChaskiTab.SEARCH.route) {
-                SearchFoodScreen(
-                    onOpenCategories = onOpenCategories,
-                    onRestaurantClick = onRestaurantClick,
-                    onFoodClick = onOpenFood,
+                OfferSearchScreen(
+                    onStoreClick = onRestaurantClick,
+                    onProductClick = onProductClick,
+                    onSelectAddress = onOpenLocations,
                 )
             }
             composable(ChaskiTab.ORDERS.route) {

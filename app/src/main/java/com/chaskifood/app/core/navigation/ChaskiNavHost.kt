@@ -63,10 +63,10 @@ import com.chaskifood.app.feature.profile.presentation.LinkSocialAccountsScreen
 import com.chaskifood.app.feature.profile.presentation.LocationPickerScreen
 import com.chaskifood.app.feature.profile.presentation.PaymentMethodsScreen
 import com.chaskifood.app.feature.profile.presentation.ReferFriendScreen
-import com.chaskifood.app.feature.restaurants.presentation.RestaurantDetailScreen
 import com.chaskifood.app.feature.restaurants.presentation.RestaurantsScreen
 import com.chaskifood.app.feature.search.presentation.FoodsPerCategoryScreen
 import com.chaskifood.app.feature.search.presentation.FilterScreen
+import com.chaskifood.app.feature.search.presentation.StoreOfferScreen
 import com.chaskifood.app.feature.splash.presentation.SplashScreen
 import com.chaskifood.app.ui.components.ChaskiFlowBottomBar
 import com.chaskifood.app.ui.components.FlowTab
@@ -255,6 +255,13 @@ fun ChaskiNavHost() {
                     onRestaurantClick = { storeId ->
                         navController.navigate(
                             ChaskiDestinations.RESTAURANT_DETAIL.replace("{storeId}", Uri.encode(storeId)),
+                        )
+                    },
+                    onProductClick = { storeId, productId ->
+                        navController.navigate(
+                            ChaskiDestinations.PRODUCT_DETAIL
+                                .replace("{storeId}", Uri.encode(storeId))
+                                .replace("{productId}", Uri.encode(productId)),
                         )
                     },
                     onOpenCategories = {
@@ -455,18 +462,29 @@ fun ChaskiNavHost() {
             composable(
                 route = ChaskiDestinations.RESTAURANT_DETAIL,
                 arguments = listOf(navArgument("storeId") { type = NavType.StringType }),
-            ) { backStackEntry ->
-                val storeId = backStackEntry.arguments?.getString("storeId").orEmpty()
-                RestaurantDetailScreen(
-                    restaurantName = storeId,
+            ) {
+                StoreOfferScreen(
+                    onBack = { navController.popBackStack() },
+                    onProductClick = { storeId, productId ->
+                        navController.navigate(
+                            ChaskiDestinations.PRODUCT_DETAIL
+                                .replace("{storeId}", Uri.encode(storeId))
+                                .replace("{productId}", Uri.encode(productId)),
+                        )
+                    },
+                )
+            }
+            composable(
+                route = ChaskiDestinations.PRODUCT_DETAIL,
+                arguments = listOf(
+                    navArgument("storeId") { type = NavType.StringType },
+                    navArgument("productId") { type = NavType.StringType },
+                ),
+            ) {
+                MenuToppingScreen(
                     onBack = { navController.popBackStack() },
                     onTabSelected = onTabSelected,
-                    onFoodClick = {
-                        navController.navigate(ChaskiDestinations.MENU_TOPPING)
-                    },
-                    onOpenFilter = {
-                        navController.navigate(ChaskiDestinations.FILTER)
-                    },
+                    onAddToOrder = { navController.navigate(ChaskiDestinations.YOUR_ORDER) },
                 )
             }
             composable(
@@ -674,8 +692,8 @@ fun ChaskiNavHost() {
 
 // These destinations currently display local sample data, without a purchase/order backend.
 private val demoDestinations = setOf(
-    ChaskiDestinations.SEARCH_CATEGORIES, ChaskiDestinations.RESTAURANTS,
-    ChaskiDestinations.RESTAURANT_DETAIL, ChaskiDestinations.FOODS_PER_CATEGORY,
+    ChaskiDestinations.SEARCH_CATEGORIES,
+    ChaskiDestinations.PRODUCT_DETAIL, ChaskiDestinations.FOODS_PER_CATEGORY,
     ChaskiDestinations.FILTER, ChaskiDestinations.MENU_TOPPING,
     ChaskiDestinations.YOUR_ORDER, ChaskiDestinations.CHECKOUT, ChaskiDestinations.PAYMENT,
     ChaskiDestinations.ORDER_PLACED, ChaskiDestinations.ORDER_TRACKING, ChaskiDestinations.ORDER_PROGRESS,
