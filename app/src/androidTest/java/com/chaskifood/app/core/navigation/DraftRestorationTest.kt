@@ -36,7 +36,7 @@ class DraftRestorationTest {
                 showDialog = { visible = it }
                 if (visible) drafts.SaveableStateProvider("store") {
                     StoreDialog("business", BusinessStore(id = "store", name = "Local"), false, null,
-                        onDismiss = {}, onSave = { _, _, _, _, _, _, _, _ -> })
+                        onDismiss = {}, onSave = { _, _, _, _, _, _, _, _, _ -> })
                 }
             }
         }

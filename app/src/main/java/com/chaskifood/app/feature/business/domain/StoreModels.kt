@@ -52,6 +52,7 @@ data class BusinessStore(
     val id: String = "",
     val businessId: String = "",
     val name: String = "",
+    val imageUrl: String? = null,
     val address: String = "",
     val latitude: Double = 0.0,
     val longitude: Double = 0.0,
