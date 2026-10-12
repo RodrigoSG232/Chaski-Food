@@ -27,8 +27,8 @@ import androidx.compose.material.icons.filled.SoupKitchen
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import com.chaskifood.app.ui.components.DemoNotice
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -51,40 +51,12 @@ data class OrderSummary(
     val status: String = "Preparando",
 )
 
-val mockOrders = listOf(
-    OrderSummary(
-        id = "001",
-        restaurant = "Ocean bistro",
-        date = "El 2/3/24",
-        arrival = "Llegada est.: 2:45 p. m.",
-        total = "$30",
-        items = listOf("Carne molida con puré de papas", "Chapati con res"),
-    ),
-    OrderSummary(
-        id = "002",
-        restaurant = "Silver bistro",
-        date = "El 2/1/24",
-        arrival = "Llegada est.: 1:20 p. m.",
-        total = "$18",
-        items = listOf("Bistec y papas", "Ensalada César con pollo"),
-        status = "Entregado",
-    ),
-    OrderSummary(
-        id = "003",
-        restaurant = "Ocean bistro",
-        date = "El 1/28/24",
-        arrival = "Llegada est.: 12:30 p. m.",
-        total = "$24",
-        items = listOf("Hamburguesa y papas", "Carne molida con puré de papas"),
-    ),
-)
-
 @Composable
 fun OrdersScreen(
     onTrack: (String) -> Unit,
     onDelivered: (String) -> Unit,
     modifier: Modifier = Modifier,
-    orders: List<OrderSummary> = mockOrders,
+    orders: List<OrderSummary> = emptyList(),
     onMoreClick: (() -> Unit)? = null,
 ) {
     Column(
@@ -93,8 +65,6 @@ fun OrdersScreen(
             .background(ChaskiSurface),
     ) {
         OrdersHeader(onMoreClick = onMoreClick)
-        DemoNotice()
-
         if (orders.isEmpty()) {
             EmptyOrdersState()
         } else {
@@ -292,19 +262,19 @@ private fun EmptyOrdersState() {
         )
         Spacer(Modifier.size(ChaskiDimens.SpacingXl))
         Text(
-            text = "Tus pedidos están vacíos",
+            text = "Aún no tienes pedidos",
             fontSize = 18.sp,
             fontWeight = FontWeight.Bold,
             letterSpacing = 0.5.sp,
-            color = Color(0xFF212121),
+            color = MaterialTheme.colorScheme.onSurface,
         )
         Spacer(Modifier.size(ChaskiDimens.SpacingSm))
         Text(
-            text = "Todavía no tienes pedidos. Aquí aparecerán cuando hagas tu primero.",
+            text = "Cuando realices tu primer pedido, podrás consultar su información aquí",
             fontSize = 14.sp,
             lineHeight = 22.sp,
             fontWeight = FontWeight.Medium,
-            color = Color(0xFF757575),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
             modifier = Modifier
                 .padding(horizontal = ChaskiDimens.SpacingLg)

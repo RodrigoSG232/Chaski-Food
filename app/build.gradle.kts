@@ -7,6 +7,10 @@ plugins {
     alias(libs.plugins.google.services)
 }
 
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
+}
+
 android {
     namespace = "com.chaskifood.app"
     compileSdk {
@@ -39,6 +43,9 @@ android {
     buildFeatures {
         compose = true
         buildConfig = true
+    }
+    sourceSets {
+        getByName("androidTest").assets.directories.add("$projectDir/schemas")
     }
 }
 
@@ -103,6 +110,7 @@ dependencies {
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(libs.androidx.junit)
+    androidTestImplementation(libs.androidx.room.testing)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
     debugImplementation(libs.androidx.compose.ui.tooling)
 }

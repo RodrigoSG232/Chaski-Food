@@ -2,6 +2,8 @@ package com.chaskifood.app.feature.search.presentation
 
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotDisplayed
+import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -75,7 +77,7 @@ class OfferScreensTest {
             }
         }
 
-        compose.onNodeWithText("Postres").performClick()
+        compose.onNode(hasText("Postres") and hasClickAction()).performClick()
         compose.onNodeWithText("Suspiro limeño").assertIsDisplayed()
         compose.onNodeWithText("Ají de gallina").assertIsNotDisplayed()
     }

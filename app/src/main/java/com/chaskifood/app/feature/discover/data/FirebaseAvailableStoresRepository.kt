@@ -2,8 +2,8 @@
 
 package com.chaskifood.app.feature.discover.data
 
-import com.chaskifood.app.feature.address.domain.AddressBookState
-import com.chaskifood.app.feature.address.domain.AddressRepository
+import com.chaskifood.app.feature.address.domain.model.AddressBookState
+import com.chaskifood.app.feature.address.domain.repository.AddressRepository
 import com.chaskifood.app.feature.business.domain.BusinessStore
 import com.chaskifood.app.feature.business.domain.DEFAULT_DELIVERY_RADIUS_KM
 import com.chaskifood.app.feature.business.domain.DayOfWeekEnum

@@ -1,0 +1,68 @@
+package com.chaskifood.app.feature.address.data.di
+
+import android.content.Context
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.preferencesDataStore
+import com.chaskifood.app.feature.address.data.AddressSessionSource
+import com.chaskifood.app.feature.address.data.FirebaseAddressSessionSource
+import com.chaskifood.app.feature.address.data.local.AddressSelectionStore
+import com.chaskifood.app.feature.address.data.local.DataStoreAddressSelectionStore
+import com.chaskifood.app.feature.address.data.location.AndroidDeviceLocationProvider
+import com.chaskifood.app.feature.address.data.location.AndroidReverseGeocodingProvider
+import com.chaskifood.app.feature.address.data.remote.AddressRemoteDataSource
+import com.chaskifood.app.feature.address.data.remote.FirestoreAddressRemoteDataSource
+import com.chaskifood.app.feature.address.data.repository.FirebaseAddressRepository
+import com.chaskifood.app.feature.address.domain.repository.AddressRepository
+import com.chaskifood.app.feature.address.domain.provider.DeviceLocationProvider
+import com.chaskifood.app.feature.address.domain.provider.ReverseGeocodingProvider
+import dagger.Binds
+import dagger.Module
+import dagger.Provides
+import dagger.hilt.InstallIn
+import dagger.hilt.android.qualifiers.ApplicationContext
+import dagger.hilt.components.SingletonComponent
+import javax.inject.Qualifier
+import javax.inject.Singleton
+
+@Qualifier
+@Retention(AnnotationRetention.BINARY)
+annotation class AddressPreferences
+
+private val Context.addressDataStore by preferencesDataStore(name = "chaski_address_selection")
+
+@Module
+@InstallIn(SingletonComponent::class)
+abstract class AddressDataModule {
+    @Binds
+    @Singleton
+    abstract fun bindDeviceLocationProvider(impl: AndroidDeviceLocationProvider): DeviceLocationProvider
+
+    @Binds
+    @Singleton
+    abstract fun bindReverseGeocodingProvider(impl: AndroidReverseGeocodingProvider): ReverseGeocodingProvider
+
+    @Binds
+    @Singleton
+    abstract fun bindAddressRepository(impl: FirebaseAddressRepository): AddressRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindRemoteSource(impl: FirestoreAddressRemoteDataSource): AddressRemoteDataSource
+
+    @Binds
+    @Singleton
+    abstract fun bindSessionSource(impl: FirebaseAddressSessionSource): AddressSessionSource
+
+    @Binds
+    @Singleton
+    abstract fun bindSelectionStore(impl: DataStoreAddressSelectionStore): AddressSelectionStore
+
+    companion object {
+        @Provides
+        @Singleton
+        @AddressPreferences
+        fun provideAddressPreferences(@ApplicationContext context: Context): DataStore<Preferences> =
+            context.addressDataStore
+    }
+}

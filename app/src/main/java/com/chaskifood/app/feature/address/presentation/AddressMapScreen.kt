@@ -68,7 +68,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.chaskifood.app.R
-import com.chaskifood.app.feature.address.domain.AddressCoordinates
+import com.chaskifood.app.feature.address.domain.model.AddressCoordinates
 import com.chaskifood.app.ui.theme.ChaskiDimens
 import com.chaskifood.app.ui.theme.ChaskiPrimary
 import com.chaskifood.app.ui.theme.ChaskiSurface

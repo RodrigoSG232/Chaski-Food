@@ -5,6 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Box
 import androidx.navigation.compose.currentBackStackEntryAsState
 import com.chaskifood.app.ui.components.DemoNotice
 import androidx.compose.foundation.layout.safeDrawingPadding
@@ -44,6 +45,9 @@ import com.chaskifood.app.feature.business.presentation.ManageStoresScreen
 import com.chaskifood.app.feature.business.presentation.RegisterBusinessScreen
 import com.chaskifood.app.feature.business.presentation.StoreOperationsScreen
 import com.chaskifood.app.feature.cart.presentation.YourOrderScreen
+import com.chaskifood.app.feature.cart.presentation.CartScreen
+import com.chaskifood.app.feature.cart.presentation.CartViewModel
+import com.chaskifood.app.feature.cart.presentation.CartConfirmationHost
 import com.chaskifood.app.feature.catalog.presentation.ManageCatalogScreen
 import com.chaskifood.app.feature.catalog.presentation.StoreProductConfigurationScreen
 import com.chaskifood.app.feature.checkout.presentation.AddCardScreen
@@ -80,10 +84,11 @@ fun ChaskiNavHost() {
     val backStackEntry by navController.currentBackStackEntryAsState()
     Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).safeDrawingPadding()) {
         if (backStackEntry?.destination?.route in demoDestinations) DemoNotice()
+        Box(Modifier.weight(1f)) {
         NavHost(
             navController = navController,
             startDestination = ChaskiDestinations.SPLASH,
-            modifier = Modifier.weight(1f),
+            modifier = Modifier.fillMaxSize(),
         ) {
             composable(ChaskiDestinations.SPLASH) {
                 SplashScreen(
@@ -238,6 +243,8 @@ fun ChaskiNavHost() {
                     .getStateFlow<String?>(MAIN_TAB_REQUEST, null).collectAsStateWithLifecycle()
                 val addressViewModel: AddressViewModel = hiltViewModel()
                 val addressState by addressViewModel.uiState.collectAsStateWithLifecycle()
+                val cartViewModel: CartViewModel = hiltViewModel(mainEntry)
+                val cartState by cartViewModel.uiState.collectAsStateWithLifecycle()
                 MainScreen(
                     requestedTab = ChaskiTab.entries.find { it.route == requestedRoute },
                     onTabRequestHandled = { mainEntry.savedStateHandle[MAIN_TAB_REQUEST] = null },
@@ -250,8 +257,9 @@ fun ChaskiNavHost() {
                     onSeeAllRestaurants = {
                         navController.navigate(ChaskiDestinations.RESTAURANTS)
                     },
-                    onOpenYourOrder = {
-                        navController.navigate(ChaskiDestinations.YOUR_ORDER)
+                    cartUnits = cartState.totalUnits,
+                    onOpenCart = {
+                        navController.navigate(ChaskiDestinations.CART) { launchSingleTop = true }
                     },
                     onRestaurantClick = { storeId ->
                         navController.navigate(
@@ -481,9 +489,43 @@ fun ChaskiNavHost() {
                     navArgument("storeId") { type = NavType.StringType },
                     navArgument("productId") { type = NavType.StringType },
                 ),
-            ) {
+            ) { entry ->
+                val mainEntry = remember(entry) { navController.getBackStackEntry(ChaskiDestinations.MAIN) }
+                val cartViewModel: CartViewModel = hiltViewModel(mainEntry)
+                val cartState by cartViewModel.uiState.collectAsStateWithLifecycle()
                 ProductDetailScreen(
                     onBack = { navController.popBackStack() },
+                    onOpenCart = {
+                        navController.navigate(ChaskiDestinations.CART) { launchSingleTop = true }
+                    },
+                    onSignIn = {
+                        navController.navigate(ChaskiDestinations.SIGN_IN) {
+                            popUpTo(0) { inclusive = true }
+                        }
+                    },
+                    onSelectAddress = {
+                        navController.navigate(ChaskiDestinations.ADDRESS_BOOK) { launchSingleTop = true }
+                    },
+                    cartState = cartState,
+                    onAddToCart = cartViewModel::addProduct,
+                    onDismissCartMessage = cartViewModel::dismissMessage,
+                )
+            }
+            composable(ChaskiDestinations.CART) { entry ->
+                val mainEntry = remember(entry) { navController.getBackStackEntry(ChaskiDestinations.MAIN) }
+                val cartViewModel: CartViewModel = hiltViewModel(mainEntry)
+                CartScreen(
+                    viewModel = cartViewModel,
+                    onBack = { navController.popBackStack() },
+                    onExploreProducts = { navController.openMainTab(FlowTab.Search) },
+                    onSignIn = {
+                        navController.navigate(ChaskiDestinations.SIGN_IN) {
+                            popUpTo(0) { inclusive = true }
+                        }
+                    },
+                    onSelectAddress = {
+                        navController.navigate(ChaskiDestinations.ADDRESS_BOOK) { launchSingleTop = true }
+                    },
                 )
             }
             composable(
@@ -685,6 +727,14 @@ fun ChaskiNavHost() {
                     )
                 }
             }
+        }
+        if (backStackEntry?.destination?.route == ChaskiDestinations.PRODUCT_DETAIL ||
+            backStackEntry?.destination?.route == ChaskiDestinations.CART) {
+            val mainEntry = remember(backStackEntry) { navController.getBackStackEntry(ChaskiDestinations.MAIN) }
+            val cartViewModel: CartViewModel = hiltViewModel(mainEntry)
+            val cartState by cartViewModel.uiState.collectAsStateWithLifecycle()
+            CartConfirmationHost(cartState, cartViewModel::confirmStoreChange, cartViewModel::cancelStoreChange)
+        }
         }
     }
 }

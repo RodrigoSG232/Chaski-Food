@@ -29,6 +29,8 @@ class BusinessTestRepository : BusinessRepository {
     var submissionCount = 0
     var resubmissions = 0
     var evaluations = 0
+    var suspensions = 0
+    var suspensionResult: ApiResult<BusinessSuspensionResult> = ApiResult.Success(BusinessSuspensionResult.VERIFIED)
     var reviewer: String? = null
     var gate: CompletableDeferred<Unit>? = null
     var result: ApiResult<Unit> = ApiResult.Success(Unit)
@@ -52,7 +54,10 @@ class BusinessTestRepository : BusinessRepository {
         gate?.await()
         return result
     }
-    override suspend fun suspendBusiness(requestId: String, reason: String, adminEmail: String, businessName: String, ruc: String): ApiResult<Unit> = error("unused")
+    override suspend fun suspendBusiness(requestId: String, reason: String, adminEmail: String, businessName: String, ruc: String): ApiResult<BusinessSuspensionResult> {
+        suspensions++
+        return suspensionResult
+    }
     override suspend fun reactivateBusiness(requestId: String, adminEmail: String, businessName: String, ruc: String): ApiResult<Unit> = error("unused")
     override fun getAuditLogs(): Flow<ApiResult<List<AuditLog>>> = error("unused")
 }
@@ -65,6 +70,9 @@ class OperationTestStores : StoreRepository {
     var ownerQueries = 0
     var managerQueries = 0
     var calls = 0
+    var administrativeStatusCalls = 0
+    var lastAdministrativeStatus: StoreStatus? = null
+    var administrativeStatusResult: ApiResult<Unit> = ApiResult.Success(Unit)
     val gates = mutableMapOf<String, CompletableDeferred<Unit>>()
     var result: ApiResult<Unit> = ApiResult.Success(Unit)
     var exception: Exception? = null
@@ -96,5 +104,9 @@ class OperationTestStores : StoreRepository {
     override suspend fun updateStore(store: BusinessStore): ApiResult<BusinessStore> = error("unused")
     override fun getManagersByBusiness(businessId: String): Flow<ApiResult<List<StoreManager>>> = error("unused")
     override suspend fun assignManager(manager: StoreManager): ApiResult<StoreManager> = error("unused")
-    override suspend fun setAdministrativeStatus(storeId: String, status: StoreStatus, reason: String?): ApiResult<Unit> = error("unused")
+    override suspend fun setAdministrativeStatus(storeId: String, status: StoreStatus, reason: String?): ApiResult<Unit> {
+        administrativeStatusCalls++
+        lastAdministrativeStatus = status
+        return administrativeStatusResult
+    }
 }

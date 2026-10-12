@@ -4,12 +4,12 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.chaskifood.app.core.common.ApiResult
-import com.chaskifood.app.feature.address.domain.AddressBook
-import com.chaskifood.app.feature.address.domain.AddressBookState
-import com.chaskifood.app.feature.address.domain.AddressCoordinates
-import com.chaskifood.app.feature.address.domain.AddressField
-import com.chaskifood.app.feature.address.domain.AddressRepository
-import com.chaskifood.app.feature.address.domain.AddressValidator
+import com.chaskifood.app.feature.address.domain.model.AddressBook
+import com.chaskifood.app.feature.address.domain.model.AddressBookState
+import com.chaskifood.app.feature.address.domain.model.AddressCoordinates
+import com.chaskifood.app.feature.address.domain.validation.AddressField
+import com.chaskifood.app.feature.address.domain.repository.AddressRepository
+import com.chaskifood.app.feature.address.domain.validation.AddressValidator
 import dagger.hilt.android.lifecycle.HiltViewModel
 import java.util.UUID
 import javax.inject.Inject
@@ -203,7 +203,7 @@ class AddressViewModel @Inject constructor(
             editor = AddressEditorState(
                 ownerUid = book.ownerUid, addressId = addressId,
                 operationId = UUID.randomUUID().toString(),
-                draft = address?.toDraft() ?: com.chaskifood.app.feature.address.domain.AddressDraft(),
+                draft = address?.toDraft() ?: com.chaskifood.app.feature.address.domain.model.AddressDraft(),
             ), optionsId = null, deletion = null, message = null, mapRequest = null,
         ))
     }

@@ -5,9 +5,13 @@ import com.chaskifood.app.feature.business.domain.AuditLog
 import com.chaskifood.app.feature.business.domain.BusinessRepository
 import com.chaskifood.app.feature.business.domain.BusinessRequest
 import com.chaskifood.app.feature.business.domain.BusinessStatus
+import com.chaskifood.app.feature.business.domain.BusinessSuspensionResult
+import com.chaskifood.app.feature.business.domain.StoreStatus
 import com.chaskifood.app.core.firebase.FirebaseAccessControl
 import kotlinx.coroutines.CancellationException
 import com.google.firebase.firestore.FieldValue
+import com.google.firebase.firestore.FirebaseFirestoreException
+import com.google.firebase.firestore.Source
 import com.google.firebase.Timestamp
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.channels.awaitClose
@@ -24,6 +28,7 @@ class FirebaseBusinessRepository @Inject constructor(
 ) : BusinessRepository {
     private val collectionRef by lazy { firestore.collection("business_requests") }
     private val auditLogsRef by lazy { firestore.collection("audit_logs") }
+    private val storesRef by lazy { firestore.collection("stores") }
 
     override fun getBusinessRequest(ownerUid: String): Flow<ApiResult<BusinessRequest?>> = callbackFlow {
         val targetUid = try { access.requireUser().uid } catch (error: Exception) {
@@ -145,10 +150,106 @@ class FirebaseBusinessRepository @Inject constructor(
     }
 
     override suspend fun suspendBusiness(requestId: String, reason: String, adminEmail: String,
-        businessName: String, ruc: String): ApiResult<Unit> = operation {
+        businessName: String, ruc: String): ApiResult<BusinessSuspensionResult> = operation {
         require(reason.isNotBlank()) { "Indica el motivo de suspensión." }
-        auditedTransition(requestId, BusinessStatus.APPROVED, BusinessStatus.SUSPENDED,
-            "SUSPENDER_NEGOCIO", reason.trim(), mapOf("suspensionReason" to reason.trim()))
+        val admin = access.requireAdmin()
+        // La consulta obtiene los IDs; la transacción vuelve a leer cada local antes de escribir.
+        val listedStores = storesRef.whereEqualTo("businessId", requestId).get(Source.SERVER).await()
+        check(!listedStores.metadata.isFromCache && !listedStores.metadata.hasPendingWrites()) {
+            "No se pudieron verificar los locales del negocio en el servidor."
+        }
+        val storeReferences = listedStores.documents.map { it.reference }
+        val businessReference = collectionRef.document(requestId)
+        val businessAudit = auditLogsRef.document()
+        val suspensionTask = firestore.runTransaction { transaction ->
+            val business = transaction.get(businessReference)
+            check(business.exists() && business.getString("status") == BusinessStatus.APPROVED.name) {
+                "El estado del negocio cambió. Actualiza la lista antes de continuar."
+            }
+            val stores = storeReferences.map(transaction::get)
+            check(stores.all { it.exists() && it.getString("businessId") == requestId }) {
+                "Los locales del negocio cambiaron. Actualiza la lista antes de continuar."
+            }
+            val activeStores = stores.filter { it.getString("status") == StoreStatus.ACTIVE.name }
+            // Límite conservador: cada local activo exige su actualización y auditoría
+            // dentro del máximo de lecturas de documentos impuesto por las reglas.
+            check(activeStores.size <= 8) {
+                "Hay demasiados locales activos para suspenderlos en una sola operación segura."
+            }
+            check(access.requireUser().uid == admin.uid) { "La sesión cambió." }
+
+            transaction.update(businessReference, mapOf(
+                "status" to BusinessStatus.SUSPENDED.name,
+                "suspensionReason" to reason.trim(),
+                "reviewedBy" to (admin.email ?: admin.uid),
+                "reviewedAt" to FieldValue.serverTimestamp(),
+                "updatedAt" to FieldValue.serverTimestamp(),
+                "lastAuditId" to businessAudit.id,
+            ))
+            transaction.set(businessAudit, mapOf(
+                "adminUid" to admin.uid, "adminEmail" to (admin.email ?: admin.uid),
+                "action" to "SUSPENDER_NEGOCIO", "targetBusinessId" to requestId,
+                "targetBusinessName" to business.getString("businessName").orEmpty(),
+                "targetRuc" to business.getString("ruc").orEmpty(), "details" to reason.trim(),
+                "previousStatus" to BusinessStatus.APPROVED.name,
+                "newStatus" to BusinessStatus.SUSPENDED.name,
+                "timestamp" to FieldValue.serverTimestamp(),
+            ))
+            activeStores.forEach { store ->
+                val audit = auditLogsRef.document()
+                transaction.update(store.reference, mapOf(
+                    "status" to StoreStatus.INACTIVE.name,
+                    "lastAuditId" to audit.id,
+                    "updatedAt" to FieldValue.serverTimestamp(),
+                ))
+                transaction.set(audit, mapOf(
+                    "adminUid" to admin.uid, "adminEmail" to (admin.email ?: admin.uid),
+                    "action" to "INACTIVAR_LOCAL_POR_SUSPENSION_NEGOCIO",
+                    "targetStoreId" to store.id, "targetBusinessId" to requestId,
+                    "targetBusinessName" to store.getString("name").orEmpty(),
+                    "targetRuc" to "", "details" to reason.trim(),
+                    "previousStatus" to StoreStatus.ACTIVE.name,
+                    "newStatus" to StoreStatus.INACTIVE.name,
+                    "timestamp" to FieldValue.serverTimestamp(),
+                ))
+            }
+        }
+        try {
+            suspensionTask.await()
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: FirebaseFirestoreException) {
+            if (error.code in setOf(
+                    FirebaseFirestoreException.Code.UNAVAILABLE,
+                    FirebaseFirestoreException.Code.DEADLINE_EXCEEDED,
+                    FirebaseFirestoreException.Code.UNKNOWN,
+                    FirebaseFirestoreException.Code.INTERNAL,
+                )) {
+                throw IllegalStateException(
+                    "No se pudo confirmar si la suspensión se aplicó. Actualiza el negocio y sus locales antes de repetir la operación.",
+                    error,
+                )
+            }
+            throw error
+        }
+
+        // Una creación posterior a la consulta inicial no formó parte de la transacción.
+        // La transacción ya fue confirmada: un problema aquí no revierte la suspensión.
+        try {
+            val remaining = storesRef.whereEqualTo("businessId", requestId)
+                .get(Source.SERVER).await()
+            when {
+                remaining.metadata.isFromCache || remaining.metadata.hasPendingWrites() ->
+                    BusinessSuspensionResult.COMMITTED_UNVERIFIED
+                remaining.documents.any { it.getString("status") == StoreStatus.ACTIVE.name } ->
+                    BusinessSuspensionResult.COMMITTED_ACTIVE_STORES
+                else -> BusinessSuspensionResult.VERIFIED
+            }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            BusinessSuspensionResult.COMMITTED_UNVERIFIED
+        }
     }
 
     override suspend fun reactivateBusiness(requestId: String, adminEmail: String,

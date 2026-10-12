@@ -27,7 +27,6 @@ import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material.icons.filled.AddPhotoAlternate
 import androidx.compose.material.icons.filled.DeliveryDining
 import androidx.compose.material.icons.filled.Star
-import androidx.compose.material.icons.outlined.ShoppingBag
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -51,6 +50,7 @@ import com.chaskifood.app.R
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.chaskifood.app.feature.discover.presentation.AvailableStoresContent
 import com.chaskifood.app.feature.discover.presentation.AvailableStoresViewModel
+import com.chaskifood.app.feature.cart.presentation.CartAccessButton
 import com.chaskifood.app.ui.components.collectChaskiState
 import com.chaskifood.app.ui.components.HomeIcons
 import com.chaskifood.app.ui.theme.ChaskiBackground
@@ -126,7 +126,8 @@ fun HomeScreen(
     onSeeAll: () -> Unit = {},
     onRestaurantClick: (String) -> Unit = {},
     onOpenLocations: () -> Unit = {},
-    onOpenYourOrder: () -> Unit = {},
+    onOpenCart: () -> Unit = {},
+    cartUnits: Long? = null,
     availableStoresViewModel: AvailableStoresViewModel = hiltViewModel(),
 ) {
     val availableStoresState by collectChaskiState(availableStoresViewModel.uiState)
@@ -139,7 +140,8 @@ fun HomeScreen(
         item(key = "appbar") {
             HomeAppBar(
                 onLocationClick = onOpenLocations,
-                onCartClick = onOpenYourOrder,
+                onCartClick = onOpenCart,
+                cartUnits = cartUnits,
                 deliveryAddress = deliveryAddress,
                 unavailable = deliveryAddressUnavailable,
             )
@@ -187,6 +189,7 @@ private fun HomeAppBar(
     modifier: Modifier = Modifier,
     onLocationClick: () -> Unit = {},
     onCartClick: () -> Unit = {},
+    cartUnits: Long? = null,
     deliveryAddress: String? = null,
     unavailable: Boolean = false,
 ) {
@@ -232,37 +235,7 @@ private fun HomeAppBar(
 
         Spacer(Modifier.width(16.dp))
 
-        Box(
-            modifier = Modifier
-                .clip(RoundedCornerShape(12.dp))
-                .clickable(onClick = onCartClick)
-                .padding(6.dp),
-        ) {
-            Box(contentAlignment = Alignment.TopEnd) {
-                Icon(
-                    imageVector = Icons.Outlined.ShoppingBag,
-                    contentDescription = stringResource(R.string.your_order_title),
-                    tint = ChaskiTextPrimary,
-                    modifier = Modifier
-                        .padding(top = 4.dp, end = 4.dp)
-                        .size(26.dp),
-                )
-                Box(
-                    modifier = Modifier
-                        .size(18.dp)
-                        .clip(CircleShape)
-                        .background(ChaskiPrimary),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        text = "3",
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White,
-                    )
-                }
-            }
-        }
+        CartAccessButton(totalUnits = cartUnits, onClick = onCartClick, showLabel = true)
     }
 }
 

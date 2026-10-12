@@ -3,6 +3,13 @@ package com.chaskifood.app.feature.business.domain
 import com.chaskifood.app.core.common.ApiResult
 import kotlinx.coroutines.flow.Flow
 
+/** Resultado de una suspensión cuya transacción ya fue confirmada. */
+enum class BusinessSuspensionResult {
+    VERIFIED,
+    COMMITTED_UNVERIFIED,
+    COMMITTED_ACTIVE_STORES,
+}
+
 interface BusinessRepository {
     fun getBusinessRequest(ownerUid: String): Flow<ApiResult<BusinessRequest?>>
     fun getAllBusinessRequests(): Flow<ApiResult<List<BusinessRequest>>>
@@ -20,7 +27,7 @@ interface BusinessRepository {
         adminEmail: String,
         businessName: String,
         ruc: String,
-    ): ApiResult<Unit>
+    ): ApiResult<BusinessSuspensionResult>
     suspend fun reactivateBusiness(
         requestId: String,
         adminEmail: String,
