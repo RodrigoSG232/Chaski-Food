@@ -133,7 +133,7 @@ private class TestBusinesses : BusinessRepository {
     override suspend fun submitBusinessRequest(request: BusinessRequest): ApiResult<BusinessRequest> = error("unused")
     override suspend fun resubmitBusinessRequest(request: BusinessRequest): ApiResult<BusinessRequest> = error("unused")
     override suspend fun evaluateBusinessRequest(requestId: String, status: BusinessStatus, observations: String?, reviewerEmail: String): ApiResult<Unit> = error("unused")
-    override suspend fun suspendBusiness(requestId: String, reason: String, adminEmail: String, businessName: String, ruc: String): ApiResult<Unit> = error("unused")
+    override suspend fun suspendBusiness(requestId: String, reason: String, adminEmail: String, businessName: String, ruc: String) = error("unused")
     override suspend fun reactivateBusiness(requestId: String, adminEmail: String, businessName: String, ruc: String): ApiResult<Unit> = error("unused")
     override fun getAuditLogs(): Flow<ApiResult<List<AuditLog>>> = error("unused")
 }

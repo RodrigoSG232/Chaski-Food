@@ -9,6 +9,7 @@ import com.chaskifood.app.feature.auth.domain.AuthRepository
 import com.chaskifood.app.feature.business.domain.BusinessRepository
 import com.chaskifood.app.feature.business.domain.BusinessRequest
 import com.chaskifood.app.feature.business.domain.BusinessStatus
+import com.chaskifood.app.feature.business.domain.BusinessSuspensionResult
 import com.chaskifood.app.feature.business.domain.BusinessStore
 import com.chaskifood.app.feature.business.domain.StoreRepository
 import com.chaskifood.app.feature.business.domain.StoreStatus
@@ -116,11 +117,20 @@ class AdminBusinessSupervisionViewModel @Inject constructor(
         viewModelScope.launch {
             when (val result = businessRepository.suspendBusiness(request.id, reason.trim(), adminEmail, request.businessName, request.ruc)) {
                 is ApiResult.Success -> {
-                    _actionState.value = UiState.Success(Unit)
+                    _actionState.value = when (result.data) {
+                        BusinessSuspensionResult.VERIFIED -> UiState.Success(Unit)
+                        BusinessSuspensionResult.COMMITTED_UNVERIFIED -> UiState.Error(
+                            "El negocio quedó suspendido, pero no se pudo verificar el estado final de sus locales. Revísalos antes de realizar otra acción."
+                        )
+                        BusinessSuspensionResult.COMMITTED_ACTIVE_STORES -> UiState.Error(
+                            "El negocio quedó suspendido, pero aún hay locales activos. Requiere revisión administrativa."
+                        )
+                    }
+                    // Cierra el diálogo también cuando el commit se confirmó con advertencia.
                     onSuccess()
                 }
                 is ApiResult.Failure -> {
-                    _actionState.value = UiState.Error(result.message) {
+                    _actionState.value = UiState.Error(result.message ?: "No se pudo confirmar la suspensión. Actualiza la lista antes de intentarlo otra vez.") {
                         _actionState.value = UiState.Success(null)
                     }
                 }
