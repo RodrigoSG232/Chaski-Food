@@ -4,6 +4,7 @@ package com.chaskifood.app.feature.cart.data.local
 
 import androidx.room.withTransaction
 import com.chaskifood.app.core.database.ChaskiDatabase
+import com.chaskifood.app.feature.address.domain.model.Address
 import com.chaskifood.app.feature.cart.data.CartSession
 import com.chaskifood.app.feature.cart.data.CartSessionSource
 import com.chaskifood.app.feature.cart.data.mapper.toDomain
@@ -36,11 +37,12 @@ internal data class PendingCartConfirmation(
     val session: CartSession,
     val expectedCart: Cart,
     val incomingItem: CartProductSnapshot,
+    val address: Address?,
 )
 
 /**
  * Coordina todas las escrituras locales. Las operaciones con productos validados solo son
- * internas: 3B consultará la oferta antes de invocarlas y no existe aún un binding del Repository.
+ * internas: el repositorio consulta la oferta antes de invocarlas.
  */
 @Singleton
 internal class CartLocalCoordinator @Inject constructor(
@@ -74,15 +76,53 @@ internal class CartLocalCoordinator @Inject constructor(
         }
     }.buffer(0)
 
-    /** Solo debe recibir una referencia comprobada por la futura fuente remota de 3B. */
+    /** Lectura puntual para preparar un aumento; la escritura posterior vuelve a leer en Room. */
+    suspend fun currentCart(session: CartSession): CartState {
+        return try {
+            val uid = session.uid ?: return CartState.SignedOut
+            if (!sessions.isCurrent(session)) return CartState.SignedOut
+            val cart = dao.getCart(uid)?.toDomain() ?: Cart(uid)
+            if (sessions.isCurrent(session)) CartState.Ready(cart) else CartState.SignedOut
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            CartState.ReadError
+        }
+    }
+
+    /** Solo recibe referencias comprobadas por la fuente remota. */
     suspend fun addValidatedItem(
         session: CartSession,
         item: CartProductSnapshot,
-    ): CartOperationResult = mutate(session) { cart -> fromPolicy(policy.add(cart, item)) }
+        address: Address? = null,
+    ): CartOperationResult = mutate(session, address) { cart -> fromPolicy(policy.add(cart, item)) }
+
+    /** La cantidad objetivo se calcula con el carrito leído dentro de la transacción. */
+    suspend fun setValidatedQuantity(
+        session: CartSession,
+        productId: String,
+        quantity: Int,
+        validatedItem: CartProductSnapshot,
+    ): CartOperationResult = mutate(session) { cart ->
+        val previous = cart.items.firstOrNull { it.productId == productId }
+            ?: return@mutate CartOperationResult.RuleRejected(CartChangeRejectionReason.PRODUCT_NOT_IN_CART)
+        if (previous.storeId != validatedItem.storeId || previous.businessId != validatedItem.businessId ||
+            validatedItem.productId != productId) {
+            return@mutate CartOperationResult.ConfirmationStale
+        }
+        when {
+            quantity <= 0 -> CartOperationResult.RuleRejected(CartChangeRejectionReason.INVALID_QUANTITY)
+            quantity > previous.quantity -> fromPolicy(policy.add(cart,
+                validatedItem.copy(quantity = quantity - previous.quantity)))
+            else -> fromPolicy(policy.changeQuantity(cart, productId, quantity))
+        }
+    }
 
     /** Reducir no cambia el precio provisional; aumentar requiere la validación de 3B. */
-    suspend fun decreaseQuantity(productId: String, quantity: Int): CartOperationResult =
-        mutate(sessions.current()) { cart ->
+    suspend fun decreaseQuantity(
+        productId: String, quantity: Int, session: CartSession = sessions.current(),
+    ): CartOperationResult =
+        mutate(session) { cart ->
             when {
                 quantity <= 0 -> CartOperationResult.RuleRejected(CartChangeRejectionReason.INVALID_QUANTITY)
                 cart.items.none { it.productId == productId } ->
@@ -93,10 +133,10 @@ internal class CartLocalCoordinator @Inject constructor(
             }
         }
 
-    suspend fun removeProduct(productId: String): CartOperationResult =
-        mutate(sessions.current()) { cart -> fromPolicy(policy.remove(cart, productId)) }
+    suspend fun removeProduct(productId: String, session: CartSession = sessions.current()): CartOperationResult =
+        mutate(session) { cart -> fromPolicy(policy.remove(cart, productId)) }
 
-    /** 3B consulta la oferta después de obtener esta solicitud y antes de confirmar. */
+    /** El repositorio consulta la oferta después de obtener esta solicitud y antes de confirmar. */
     suspend fun pendingConfirmation(token: String): PendingCartConfirmation? = pendingMutex.withLock {
         val request = pending
         if (request != null && !sessions.isCurrent(request.session)) pending = null
@@ -110,11 +150,12 @@ internal class CartLocalCoordinator @Inject constructor(
         true
     }
 
-    /** La nueva referencia debe haber sido revalidada por 3B; un precio distinto exige otro diálogo. */
-    suspend fun confirmValidatedItem(
+    /** Una oferta cambiada exige otro token y conserva el carrito actual intacto. */
+    suspend fun renewConfirmation(
         session: CartSession,
         token: String,
         refreshedItem: CartProductSnapshot,
+        address: Address?,
     ): CartOperationResult = withStorageResult {
         pendingMutex.withLock {
             val request = pending
@@ -122,6 +163,44 @@ internal class CartLocalCoordinator @Inject constructor(
             if (request.session != session || !sessions.isCurrent(session)) {
                 pending = null
                 return@withLock CartOperationResult.SessionChanged
+            }
+            if (request.address != address) {
+                pending = null
+                return@withLock CartOperationResult.AddressChanged
+            }
+            val uid = session.uid ?: return@withLock CartOperationResult.SignedOut
+            val current = database.withTransaction { dao.getCart(uid)?.toDomain() ?: Cart(uid) }
+            if (!sessions.isCurrent(session)) {
+                pending = null
+                return@withLock CartOperationResult.SessionChanged
+            }
+            if (current != request.expectedCart) {
+                pending = null
+                return@withLock CartOperationResult.ConfirmationStale
+            }
+            val newToken = UUID.randomUUID().toString()
+            pending = request.copy(token = newToken, incomingItem = refreshedItem)
+            CartOperationResult.ConfirmationRequired(newToken, current, refreshedItem, offerChanged = true)
+        }
+    }
+
+    /** La nueva referencia debe haber sido revalidada por 3B; un precio distinto exige otro diálogo. */
+    suspend fun confirmValidatedItem(
+        session: CartSession,
+        token: String,
+        refreshedItem: CartProductSnapshot,
+        address: Address? = null,
+    ): CartOperationResult = withStorageResult {
+        pendingMutex.withLock {
+            val request = pending
+            if (request == null || request.token != token) return@withLock CartOperationResult.ConfirmationStale
+            if (request.session != session || !sessions.isCurrent(session)) {
+                pending = null
+                return@withLock CartOperationResult.SessionChanged
+            }
+            if (request.address != address) {
+                pending = null
+                return@withLock CartOperationResult.AddressChanged
             }
             if (request.incomingItem != refreshedItem) {
                 pending = null
@@ -145,6 +224,7 @@ internal class CartLocalCoordinator @Inject constructor(
 
     private suspend fun mutate(
         session: CartSession,
+        address: Address? = null,
         action: (Cart) -> CartOperationResult,
     ): CartOperationResult = withStorageResult {
         val uid = session.uid ?: return@withStorageResult CartOperationResult.SignedOut
@@ -171,7 +251,7 @@ internal class CartLocalCoordinator @Inject constructor(
             }
             if (result is CartOperationResult.ConfirmationRequired) {
                 val token = UUID.randomUUID().toString()
-                pending = PendingCartConfirmation(token, session, result.currentCart, result.incomingItem)
+                pending = PendingCartConfirmation(token, session, result.currentCart, result.incomingItem, address)
                 result.copy(token = token)
             } else {
                 result

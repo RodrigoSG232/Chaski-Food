@@ -17,10 +17,19 @@ sealed interface CartOperationResult {
         val token: String,
         val currentCart: Cart,
         val incomingItem: CartProductSnapshot,
+        val offerChanged: Boolean = false,
     ) : CartOperationResult
     data class RuleRejected(val reason: CartChangeRejectionReason) : CartOperationResult
     data class OfferRejected(val reason: AddToCartRejectionReason) : CartOperationResult
     data object OfferUnavailable : CartOperationResult
+    data object OfferNotFound : CartOperationResult
+    data object OfferNetworkError : CartOperationResult
+    data object OfferPermissionDenied : CartOperationResult
+    data object OfferUnverified : CartOperationResult
+    data object OfferInvalidData : CartOperationResult
+    data object AddressRequired : CartOperationResult
+    data object AddressUnavailable : CartOperationResult
+    data object AddressChanged : CartOperationResult
     data object RemoteValidationRequired : CartOperationResult
     data object SignedOut : CartOperationResult
     data object SessionChanged : CartOperationResult
@@ -28,7 +37,7 @@ sealed interface CartOperationResult {
     data object StorageError : CartOperationResult
 }
 
-/** 3B conectará este contrato con la oferta remota y el coordinador local. */
+/** Contrato del carrito por sesión; las ofertas se revalidan al incorporar o aumentar. */
 interface CartRepository {
     fun observeCart(): Flow<CartState>
 
