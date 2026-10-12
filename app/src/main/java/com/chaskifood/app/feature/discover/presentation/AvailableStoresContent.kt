@@ -30,6 +30,8 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.layout.ContentScale
+import coil.compose.AsyncImage
 import com.chaskifood.app.feature.discover.domain.DiscoverableStore
 import com.chaskifood.app.ui.components.ChaskiButton
 import com.chaskifood.app.ui.components.ChaskiButtonVariant
@@ -152,20 +154,26 @@ private fun AvailableStoreCard(
         color = MaterialTheme.colorScheme.surface,
         shadowElevation = 1.dp,
     ) {
-        Row(
-            modifier = Modifier.padding(ChaskiDimens.SpacingMd),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(ChaskiDimens.SpacingMd),
-        ) {
+        Column {
             Box(
                 modifier = Modifier
-                    .size(56.dp)
-                    .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(10.dp)),
+                    .fillMaxWidth()
+                    .height(156.dp)
+                    .background(MaterialTheme.colorScheme.surfaceVariant),
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(Icons.Filled.Storefront, contentDescription = null, tint = ChaskiPrimary)
+                if (!store.imageUrl.isNullOrBlank()) AsyncImage(
+                    model = store.imageUrl,
+                    contentDescription = "Imagen de ${store.name}",
+                    modifier = Modifier.fillMaxWidth().height(156.dp),
+                    contentScale = ContentScale.Crop,
+                )
             }
-            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Column(
+                modifier = Modifier.fillMaxWidth().padding(ChaskiDimens.SpacingMd),
+                verticalArrangement = Arrangement.spacedBy(3.dp),
+            ) {
                 Text(store.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                 if (store.businessName != store.name) {
                     Text(store.businessName, style = MaterialTheme.typography.bodyMedium)
