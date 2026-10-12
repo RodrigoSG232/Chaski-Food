@@ -141,6 +141,7 @@ internal fun storeDiscoveryCandidate(
             id = id,
             businessId = businessId,
             name = name,
+            imageUrl = (data["imageUrl"] as? String)?.takeIf { it.isNotBlank() },
             address = address,
             latitude = latitude,
             longitude = longitude,

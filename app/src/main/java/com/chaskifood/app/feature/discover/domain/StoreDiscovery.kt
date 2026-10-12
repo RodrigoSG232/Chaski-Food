@@ -26,6 +26,7 @@ data class DiscoverableStore(
     val address: String,
     val phone: String,
     val distanceKm: Double,
+    val imageUrl: String? = null,
 )
 
 enum class StoreExclusionReason {
@@ -78,6 +79,7 @@ fun evaluateStoreEligibility(
             address = store.address,
             phone = store.phone,
             distanceKm = distanceKm,
+            imageUrl = store.imageUrl,
         ),
     )
 }

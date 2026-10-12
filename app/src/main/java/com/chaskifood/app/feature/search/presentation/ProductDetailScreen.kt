@@ -62,15 +62,9 @@ fun ProductDetailContent(product: StoreOfferProduct, modifier: Modifier = Modifi
     ) {
         ProductImage(product)
         Column(
-            modifier = Modifier.padding(horizontal = ChaskiDimens.ScreenPadding),
+            modifier = Modifier.padding(horizontal = ChaskiDimens.ScreenPadding, vertical = ChaskiDimens.SpacingSm),
             verticalArrangement = Arrangement.spacedBy(ChaskiDimens.SpacingMd),
         ) {
-            Text(
-                product.name,
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.semantics { heading() },
-            )
             Text(
                 "S/ %.2f".format(Locale.ROOT, product.price),
                 style = MaterialTheme.typography.titleLarge,
@@ -78,14 +72,17 @@ fun ProductDetailContent(product: StoreOfferProduct, modifier: Modifier = Modifi
                 color = ChaskiPrice,
             )
             Text(
+                product.name,
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.semantics { heading() },
+            )
+            Text(
                 "${product.categoryName} · ${product.storeName}",
                 style = MaterialTheme.typography.titleSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            Column(verticalArrangement = Arrangement.spacedBy(ChaskiDimens.SpacingXs)) {
-                Text("Descripción", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                Text(product.description, style = MaterialTheme.typography.bodyLarge)
-            }
+            Text(product.description, style = MaterialTheme.typography.bodyLarge)
             androidx.compose.foundation.layout.Row(
                 horizontalArrangement = Arrangement.spacedBy(ChaskiDimens.SpacingSm),
                 verticalAlignment = Alignment.CenterVertically,
@@ -100,7 +97,7 @@ fun ProductDetailContent(product: StoreOfferProduct, modifier: Modifier = Modifi
 @Composable
 private fun ProductImage(product: StoreOfferProduct) {
     Box(
-        modifier = Modifier.fillMaxWidth().height(240.dp)
+        modifier = Modifier.fillMaxWidth().height(300.dp)
             .background(MaterialTheme.colorScheme.surfaceVariant),
         contentAlignment = Alignment.Center,
     ) {

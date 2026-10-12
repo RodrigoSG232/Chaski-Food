@@ -96,6 +96,7 @@ class ManageStoresViewModel @Inject constructor(
         longitudeStr: String,
         phone: String,
         status: StoreStatus,
+        imageUrl: String? = null,
         onComplete: () -> Unit,
     ) {
         if (_saving.value) return
@@ -132,6 +133,7 @@ class ManageStoresViewModel @Inject constructor(
                     id = id,
                     businessId = businessId,
                     name = trimmedName,
+                    imageUrl = imageUrl,
                     address = trimmedAddress,
                     latitude = latitude,
                     longitude = longitude,

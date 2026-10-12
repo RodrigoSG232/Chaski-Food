@@ -1,5 +1,13 @@
 package com.chaskifood.app.feature.business.presentation
 
+import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.net.Uri
+import android.util.Base64
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import com.chaskifood.app.feature.address.domain.model.AddressCoordinates
@@ -21,6 +29,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -29,6 +38,7 @@ import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.Store
+import androidx.compose.material.icons.filled.Image
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -50,6 +60,7 @@ import java.util.UUID
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -62,6 +73,8 @@ import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -83,6 +96,10 @@ import com.chaskifood.app.ui.theme.ChaskiStatusRejectedBg
 import com.chaskifood.app.ui.theme.ChaskiStatusRejectedFg
 import com.chaskifood.app.ui.theme.ChaskiTextMuted
 import com.chaskifood.app.ui.theme.ChaskiTextPrimary
+import coil.compose.AsyncImage
+import java.io.ByteArrayOutputStream
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 @Composable
 fun ManageStoresScreen(
@@ -274,11 +291,12 @@ fun ManageStoresScreen(
                             saving = saving,
                             message = actionMessage,
                             onDismiss = { if (!saving) { showStoreDialog = false; draftStates.removeState("store") } },
-                            onSave = { id, busId, name, address, lat, lng, phone, status ->
+                            onSave = { id, busId, name, imageUrl, address, lat, lng, phone, status ->
                                 viewModel.saveStore(
                                     id = id,
                                     businessId = busId,
                                     name = name,
+                                    imageUrl = imageUrl,
                                     address = address,
                                     latitudeStr = lat,
                                     longitudeStr = lng,
@@ -567,14 +585,33 @@ internal fun StoreDialog(
     saving: Boolean,
     message: String?,
     onDismiss: () -> Unit,
-    onSave: (id: String, businessId: String, name: String, address: String, lat: String, lng: String, phone: String, status: StoreStatus) -> Unit,
+    onSave: (id: String, businessId: String, name: String, imageUrl: String?, address: String, lat: String, lng: String, phone: String, status: StoreStatus) -> Unit,
 ) {
+    val context = LocalContext.current
     var name by rememberSaveable(storeToEdit?.id) { mutableStateOf(storeToEdit?.name ?: "") }
     var address by rememberSaveable(storeToEdit?.id) { mutableStateOf(storeToEdit?.address ?: "") }
     var latitude by rememberSaveable(storeToEdit?.id) { mutableStateOf(storeToEdit?.latitude?.toString() ?: "") }
     var longitude by rememberSaveable(storeToEdit?.id) { mutableStateOf(storeToEdit?.longitude?.toString() ?: "") }
     var phone by rememberSaveable(storeToEdit?.id) { mutableStateOf(storeToEdit?.phone ?: "") }
     var isActive by rememberSaveable(storeToEdit?.id) { mutableStateOf(storeToEdit?.status == StoreStatus.ACTIVE || storeToEdit == null) }
+    var photoSource by rememberSaveable(storeToEdit?.id) { mutableStateOf<String?>(null) }
+    var imageUrl by remember(storeToEdit?.id) { mutableStateOf(storeToEdit?.imageUrl) }
+    var imageLoading by remember { mutableStateOf(false) }
+    var imageError by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(photoSource) {
+        val source = photoSource ?: return@LaunchedEffect
+        imageLoading = true
+        imageError = null
+        val encoded = withContext(Dispatchers.IO) { Uri.parse(source).toStoreImageDataUri(context) }
+        if (encoded == null) imageError = "No se pudo procesar la imagen seleccionada."
+        else imageUrl = encoded
+        imageLoading = false
+    }
+
+    val photoPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri: Uri? ->
+        if (uri != null) photoSource = uri.toString()
+    }
 
     var showMapPicker by rememberSaveable { mutableStateOf(false) }
 
@@ -617,7 +654,8 @@ internal fun StoreDialog(
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(text = if (storeToEdit == null) "Agregar Local" else "Editar Local")
                 message?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-                if (saving) LinearProgressIndicator(Modifier.fillMaxWidth())
+                imageError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                if (saving || imageLoading) LinearProgressIndicator(Modifier.fillMaxWidth())
             }
         },
         text = {
@@ -627,6 +665,30 @@ internal fun StoreDialog(
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
+                Text("Imagen o logo del local", fontWeight = FontWeight.SemiBold)
+                Box(
+                    modifier = Modifier.fillMaxWidth().height(150.dp).clip(RoundedCornerShape(12.dp))
+                        .background(Color(0xFFEEEEEE)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    if (!imageUrl.isNullOrBlank()) {
+                        AsyncImage(
+                            model = storeImageModel(imageUrl),
+                            contentDescription = "Imagen del local",
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Crop,
+                        )
+                    } else Icon(Icons.Default.Store, contentDescription = null, modifier = Modifier.size(48.dp))
+                }
+                OutlinedButton(
+                    onClick = { photoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+                    enabled = !saving && !imageLoading,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Icon(Icons.Default.Image, contentDescription = null)
+                    Spacer(Modifier.width(8.dp))
+                    Text(if (imageUrl.isNullOrBlank()) "Seleccionar imagen" else "Cambiar imagen")
+                }
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
@@ -709,6 +771,7 @@ internal fun StoreDialog(
                         storeToEdit?.id ?: "",
                         businessId,
                         name,
+                        imageUrl,
                         address,
                         latitude,
                         longitude,
@@ -724,6 +787,44 @@ internal fun StoreDialog(
             }
         },
     )
+}
+
+private fun Uri.toStoreImageDataUri(context: Context): String? {
+    return try {
+        val maxDimension = 1200
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        context.contentResolver.openInputStream(this)?.use { BitmapFactory.decodeStream(it, null, bounds) }
+        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
+        var sample = 1
+        while (maxOf(bounds.outWidth, bounds.outHeight) / sample > maxDimension * 2) sample *= 2
+        val options = BitmapFactory.Options().apply { inSampleSize = sample }
+        val bitmap = context.contentResolver.openInputStream(this)?.use {
+            BitmapFactory.decodeStream(it, null, options)
+        } ?: return null
+        val scale = minOf(1f, maxDimension.toFloat() / maxOf(bitmap.width, bitmap.height))
+        val resized = if (scale < 1f) Bitmap.createScaledBitmap(
+            bitmap,
+            (bitmap.width * scale).toInt(),
+            (bitmap.height * scale).toInt(),
+            true,
+        ) else bitmap
+        try {
+            val output = ByteArrayOutputStream()
+            resized.compress(Bitmap.CompressFormat.JPEG, 82, output)
+            "data:image/jpeg;base64," + Base64.encodeToString(output.toByteArray(), Base64.NO_WRAP)
+        } finally {
+            if (resized !== bitmap) resized.recycle()
+            bitmap.recycle()
+        }
+    } catch (_: Exception) { null }
+}
+
+private fun storeImageModel(value: String?): Any? {
+    if (value.isNullOrBlank() || !value.startsWith("data:image")) return value
+    return runCatching {
+        val bytes = Base64.decode(value.substringAfter(","), Base64.NO_WRAP)
+        BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+    }.getOrNull()
 }
 
 @Composable

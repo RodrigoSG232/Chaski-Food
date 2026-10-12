@@ -15,6 +15,12 @@ import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FieldPath
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
+import com.google.firebase.storage.FirebaseStorage
+import com.google.firebase.storage.StorageMetadata
+import android.util.Base64
+import java.util.UUID
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
@@ -25,6 +31,7 @@ import javax.inject.Singleton
 @Singleton
 class FirebaseStoreRepository @Inject constructor(
     private val firestore: FirebaseFirestore,
+    private val storage: FirebaseStorage,
     private val access: FirebaseAccessControl,
 ) : StoreRepository {
 
@@ -60,7 +67,8 @@ class FirebaseStoreRepository @Inject constructor(
             access.requireBusinessOwner(store.businessId)
             val docRef = storesRef.document()
             val storeId = docRef.id
-            val newStore = store.copy(id = storeId)
+            val imageUrl = uploadStoreImage(store.imageUrl, store.businessId, storeId)
+            val newStore = store.copy(id = storeId, imageUrl = imageUrl)
 
             val hoursData = newStore.operatingHours.map { h ->
                 mapOf(
@@ -74,6 +82,7 @@ class FirebaseStoreRepository @Inject constructor(
             val data = mapOf(
                 "businessId" to newStore.businessId,
                 "name" to newStore.name,
+                "imageUrl" to (newStore.imageUrl ?: ""),
                 "address" to newStore.address,
                 "latitude" to newStore.latitude,
                 "longitude" to newStore.longitude,
@@ -104,8 +113,11 @@ class FirebaseStoreRepository @Inject constructor(
             access.requireBusinessOwner(store.businessId)
             val existing = storesRef.document(store.id).get().await()
             check(existing.getString("businessId") == store.businessId) { "Local no autorizado." }
+            val oldImageUrl = existing.getString("imageUrl").orEmpty()
+            val imageUrl = uploadStoreImage(store.imageUrl, store.businessId, store.id)
             val data = mapOf(
                 "name" to store.name,
+                "imageUrl" to imageUrl,
                 "address" to store.address,
                 "latitude" to store.latitude,
                 "longitude" to store.longitude,
@@ -114,7 +126,10 @@ class FirebaseStoreRepository @Inject constructor(
             )
 
             storesRef.document(store.id).update(data).await()
-            ApiResult.Success(store)
+            if (imageUrl != oldImageUrl && oldImageUrl.startsWith("https://")) {
+                runCatching { storage.getReferenceFromUrl(oldImageUrl).delete().await() }
+            }
+            ApiResult.Success(store.copy(imageUrl = imageUrl))
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (e: Exception) {
@@ -315,6 +330,7 @@ class FirebaseStoreRepository @Inject constructor(
             id = id,
             businessId = data["businessId"] as? String ?: "",
             name = data["name"] as? String ?: "",
+            imageUrl = (data["imageUrl"] as? String)?.takeIf { it.isNotBlank() },
             address = data["address"] as? String ?: "",
             latitude = (data["latitude"] as? Number)?.toDouble() ?: 0.0,
             longitude = (data["longitude"] as? Number)?.toDouble() ?: 0.0,
@@ -328,6 +344,28 @@ class FirebaseStoreRepository @Inject constructor(
             createdAt = (data["createdAt"] as? Number)?.toLong() ?: System.currentTimeMillis(),
             suspensionReason = data["suspensionReason"] as? String,
         )
+    }
+
+    private suspend fun uploadStoreImage(source: String?, businessId: String, storeId: String): String {
+        val value = source.orEmpty()
+        if (!value.startsWith("data:image/jpeg;base64,")) {
+            require(value.isBlank() || value.startsWith("https://")) { "Formato de imagen no válido." }
+            return value
+        }
+        val bytes = withContext(Dispatchers.Default) {
+            Base64.decode(value.substringAfter(","), Base64.NO_WRAP)
+        }
+        require(bytes.isNotEmpty() && bytes.size <= 5 * 1024 * 1024) {
+            "La imagen debe pesar menos de 5 MB."
+        }
+        val reference = storage.reference.child(
+            "businesses/$businessId/stores/$storeId/${UUID.randomUUID()}.jpg",
+        )
+        reference.putBytes(
+            bytes,
+            StorageMetadata.Builder().setContentType("image/jpeg").build(),
+        ).await()
+        return reference.downloadUrl.await().toString()
     }
 
     override suspend fun setAdministrativeStatus(storeId: String, status: StoreStatus, reason: String?): ApiResult<Unit> {

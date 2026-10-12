@@ -3,12 +3,14 @@ package com.chaskifood.app.feature.search.presentation
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -30,7 +32,9 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.layout.ContentScale
 import androidx.hilt.navigation.compose.hiltViewModel
+import coil.compose.AsyncImage
 import com.chaskifood.app.feature.discover.domain.DiscoverableStore
 import com.chaskifood.app.feature.search.domain.StoreOfferProduct
 import com.chaskifood.app.ui.components.ChaskiButton
@@ -204,12 +208,24 @@ fun ProductResultCard(product: StoreOfferProduct, onClick: () -> Unit, modifier:
             horizontalArrangement = Arrangement.spacedBy(ChaskiDimens.SpacingMd),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Surface(shape = RoundedCornerShape(8.dp), color = MaterialTheme.colorScheme.surfaceVariant) {
+            Surface(
+                modifier = Modifier.size(76.dp),
+                shape = RoundedCornerShape(8.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant,
+            ) {
+                Box(contentAlignment = Alignment.Center) {
                 Icon(
                     Icons.Filled.AddPhotoAlternate,
-                    contentDescription = "Imagen pendiente de ${product.name}",
+                    contentDescription = null,
                     modifier = Modifier.padding(18.dp),
                 )
+                    if (!product.imageUrl.isNullOrBlank()) AsyncImage(
+                        model = product.imageUrl,
+                        contentDescription = "Imagen de ${product.name}",
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop,
+                    )
+                }
             }
             Column(Modifier.weight(1f)) {
                 Text(product.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
