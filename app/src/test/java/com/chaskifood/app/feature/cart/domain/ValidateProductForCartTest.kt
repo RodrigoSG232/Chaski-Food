@@ -25,7 +25,7 @@ class ValidateProductForCartTest {
                 storeId = "store-1",
                 productId = "product-1",
                 productName = "Ceviche",
-                unitPrice = 12.50,
+                unitPriceMinor = 1250,
                 quantity = 2,
             ),
             (result as AddToCartValidationResult.Allowed).item,
@@ -79,6 +79,10 @@ class ValidateProductForCartTest {
         val result = validate("store-1", product(), configuration(price = 0.0))
 
         assertRejected(AddToCartRejectionReason.CONFIGURATION_INVALID, result)
+        assertRejected(
+            AddToCartRejectionReason.CONFIGURATION_INVALID,
+            validate("store-1", product(), configuration(price = 1.0E17)),
+        )
     }
 
     @Test
@@ -102,6 +106,10 @@ class ValidateProductForCartTest {
         assertRejected(
             AddToCartRejectionReason.INVALID_QUANTITY,
             validate("store-1", product(), configuration(), quantity = 0),
+        )
+        assertRejected(
+            AddToCartRejectionReason.INVALID_QUANTITY,
+            validate("store-1", product(), configuration(), quantity = -1),
         )
     }
 

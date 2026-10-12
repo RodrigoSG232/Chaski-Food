@@ -5,16 +5,6 @@ import com.chaskifood.app.feature.catalog.domain.StoreProductAvailability
 import com.chaskifood.app.feature.catalog.domain.StoreProductConfiguration
 import com.chaskifood.app.feature.catalog.domain.isValid
 
-/** Datos inmutables que el carrito conserva al aceptar un producto. */
-data class CartProductSnapshot(
-    val businessId: String,
-    val storeId: String,
-    val productId: String,
-    val productName: String,
-    val unitPrice: Double,
-    val quantity: Int,
-)
-
 enum class AddToCartRejectionReason {
     INVALID_QUANTITY,
     PRODUCT_INACTIVE,
@@ -59,6 +49,8 @@ class ValidateProductForCart {
         if (configuration.availability == StoreProductAvailability.OUT_OF_STOCK) {
             return rejected(AddToCartRejectionReason.OUT_OF_STOCK)
         }
+        val unitPriceMinor = penMinorUnitsOrNull(configuration.price)
+            ?: return rejected(AddToCartRejectionReason.CONFIGURATION_INVALID)
 
         return AddToCartValidationResult.Allowed(
             CartProductSnapshot(
@@ -66,7 +58,7 @@ class ValidateProductForCart {
                 storeId = configuration.storeId,
                 productId = product.id,
                 productName = product.name,
-                unitPrice = configuration.price,
+                unitPriceMinor = unitPriceMinor,
                 quantity = quantity,
             ),
         )
