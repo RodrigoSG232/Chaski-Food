@@ -235,7 +235,7 @@ private fun HomeAppBar(
 
         Spacer(Modifier.width(16.dp))
 
-        CartAccessButton(totalUnits = cartUnits, onClick = onCartClick)
+        CartAccessButton(totalUnits = cartUnits, onClick = onCartClick, showLabel = true)
     }
 }
 

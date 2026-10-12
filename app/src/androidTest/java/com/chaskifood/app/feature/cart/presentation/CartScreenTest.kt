@@ -3,10 +3,13 @@ package com.chaskifood.app.feature.cart.presentation
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.chaskifood.app.feature.cart.domain.Cart
 import com.chaskifood.app.feature.cart.domain.CartOperationResult
@@ -29,8 +32,9 @@ class CartScreenTest {
         val units = mutableStateOf<Long?>(3)
         var opened = 0
         compose.setContent {
-            ChaskiTheme { CartAccessButton(units.value, onClick = { opened++ }) }
+            ChaskiTheme { CartAccessButton(units.value, onClick = { opened++ }, showLabel = true) }
         }
+        compose.onNodeWithText("Carrito").assertIsDisplayed()
         compose.onNodeWithContentDescription("Ver carrito, 3 unidades").performClick()
         compose.onNodeWithText("3").assertIsDisplayed()
         compose.runOnIdle { units.value = null }
@@ -63,17 +67,26 @@ class CartScreenTest {
     }
 
     @Test fun carritoPresentaImportesExactosYActualizaSubtotalObservado() {
-        val state = mutableStateOf(CartUiState(source = CartState.Ready(cart)))
+        val bread = CartProductSnapshot("business", "store", "bread", "Pan integral", 400, 1)
+        val state = mutableStateOf(CartUiState(source = CartState.Ready(Cart("uid", listOf(cookie, bread)))))
         show(state.value, stateOverride = state)
         compose.onNodeWithText("Cookie Sandwich").assertIsDisplayed()
+        compose.onAllNodesWithText("Precio unitario provisional").assertCountEquals(2)
         compose.onNodeWithText("S/ 10.50").assertIsDisplayed()
-        compose.onNodeWithText("S/ 21.00").assertIsDisplayed()
+        compose.onNodeWithText("Cantidad: 2").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Subtotal de Cookie Sandwich: S/ 21.00")
+            .performScrollTo().assertIsDisplayed()
+        compose.onNodeWithContentDescription("Subtotal de Pan integral: S/ 4.00")
+            .performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("S/ 25.00").assertIsDisplayed()
         compose.onNodeWithContentDescription("Imagen no disponible de Cookie Sandwich").assertIsDisplayed()
         compose.runOnIdle {
-            state.value = CartUiState(source = CartState.Ready(Cart("uid", listOf(cookie.copy(quantity = 3)))))
+            state.value = CartUiState(source = CartState.Ready(Cart("uid", listOf(cookie.copy(quantity = 3), bread))))
         }
-        compose.onNodeWithText("S/ 31.50").assertIsDisplayed()
-        compose.onNodeWithText("S/ 21.00").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Subtotal de Cookie Sandwich: S/ 31.50")
+            .performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("S/ 35.50").assertIsDisplayed()
+        compose.onNodeWithText("S/ 25.00").assertDoesNotExist()
     }
 
     @Test fun controlesEnvíanCantidadesObjetivoYEliminación() {

@@ -257,6 +257,7 @@ private fun CartLine(
     onIncrease: () -> Unit,
     onRemove: () -> Unit,
 ) {
+    val lineSubtotal = formatCartPrice(Math.multiplyExact(item.unitPriceMinor, item.quantity.toLong()))
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),
@@ -277,12 +278,14 @@ private fun CartLine(
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(ChaskiDimens.SpacingXs)) {
                     Text(item.productName, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold,
                         maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    Text("Precio unitario provisional", style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Text(formatCartPrice(item.unitPriceMinor), style = MaterialTheme.typography.bodyMedium,
                         color = ChaskiPrice, fontWeight = FontWeight.SemiBold)
-                    Text("Precio provisional por unidad", style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
+            Text("Cantidad: ${item.quantity}", style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
@@ -308,6 +311,16 @@ private fun CartLine(
                     Spacer(Modifier.width(ChaskiDimens.SpacingXs))
                     Text("Eliminar")
                 }
+            }
+            HorizontalDivider()
+            Column(Modifier.fillMaxWidth().semantics {
+                contentDescription = "Subtotal de ${item.productName}: $lineSubtotal"
+            }) {
+                Text("Subtotal del producto", style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(lineSubtotal,
+                    style = MaterialTheme.typography.titleMedium, color = ChaskiPrice,
+                    fontWeight = FontWeight.SemiBold)
             }
         }
     }
