@@ -12,6 +12,7 @@ data class CartUiState(
     val message: CartUiMessage? = null,
 ) {
     val cart: Cart? get() = (source as? CartState.Ready)?.cart
+    val totalUnits: Long? get() = cart?.items?.sumOf { it.quantity.toLong() }
     val isEmpty: Boolean get() = cart?.items?.isEmpty() == true
     val isBusy: Boolean get() = operation != null
 }
@@ -25,4 +26,13 @@ sealed interface CartUiOperation {
 }
 
 /** Aviso persistente hasta descartarlo; el ID evita descartar un aviso posterior por error. */
-data class CartUiMessage(val id: Long, val text: String)
+enum class CartUiMessageKind { Error, Success }
+
+enum class CartUiMessageAction { SelectAddress }
+
+data class CartUiMessage(
+    val id: Long,
+    val text: String,
+    val kind: CartUiMessageKind = CartUiMessageKind.Error,
+    val action: CartUiMessageAction? = null,
+)

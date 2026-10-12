@@ -150,7 +150,12 @@ class CartViewModel @Inject constructor(
         when (result) {
             is CartOperationResult.Updated -> {
                 // No sustituir el flujo por una respuesta que podría ser anterior a otra escritura.
-                _uiState.value = _uiState.value.copy(confirmation = null, message = null)
+                val added = _uiState.value.operation == CartUiOperation.Confirm ||
+                    _uiState.value.operation is CartUiOperation.Add
+                _uiState.value = _uiState.value.copy(
+                    confirmation = null,
+                    message = if (added) message("Producto agregado al carrito.", CartUiMessageKind.Success) else null,
+                )
             }
             is CartOperationResult.ConfirmationRequired -> {
                 _uiState.value = if (result.currentCart == _uiState.value.cart) {
@@ -168,13 +173,18 @@ class CartViewModel @Inject constructor(
                     result == CartOperationResult.AddressChanged
                 _uiState.value = _uiState.value.copy(
                     confirmation = _uiState.value.confirmation.takeUnless { invalidatesConfirmation },
-                    message = message(result.message()),
+                    message = message(result.message(), action =
+                        if (result == CartOperationResult.AddressRequired) CartUiMessageAction.SelectAddress else null),
                 )
             }
         }
     }
 
-    private fun message(text: String) = CartUiMessage(++nextMessageId, text)
+    private fun message(
+        text: String,
+        kind: CartUiMessageKind = CartUiMessageKind.Error,
+        action: CartUiMessageAction? = null,
+    ) = CartUiMessage(++nextMessageId, text, kind, action)
 }
 
 private fun CartOperationResult.message(): String = when (this) {

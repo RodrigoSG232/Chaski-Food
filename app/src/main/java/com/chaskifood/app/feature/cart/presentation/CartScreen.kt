@@ -1,8 +1,6 @@
 package com.chaskifood.app.feature.cart.presentation
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -25,7 +23,6 @@ import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material.icons.filled.WarningAmber
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -47,11 +44,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.chaskifood.app.feature.cart.domain.Cart
-import com.chaskifood.app.feature.cart.domain.CartOperationResult
 import com.chaskifood.app.feature.cart.domain.CartProductSnapshot
 import com.chaskifood.app.feature.cart.domain.CartState
 import com.chaskifood.app.ui.components.ChaskiAppBar
@@ -63,11 +58,12 @@ import com.chaskifood.app.ui.theme.ChaskiPrice
 import com.chaskifood.app.ui.theme.ChaskiTheme
 import androidx.compose.ui.tooling.preview.Preview
 
-/** La conexión con el grafo de navegación se hará en la fase 5. */
 @Composable
 fun CartScreen(
     onBack: () -> Unit,
     onExploreProducts: () -> Unit,
+    onSignIn: () -> Unit = onBack,
+    onSelectAddress: () -> Unit = {},
     modifier: Modifier = Modifier,
     viewModel: CartViewModel = hiltViewModel(),
 ) {
@@ -81,11 +77,11 @@ fun CartScreen(
             state = state,
             onBack = onBack,
             onExploreProducts = onExploreProducts,
+            onSignIn = onSignIn,
+            onSelectAddress = onSelectAddress,
             onRetry = viewModel::retryLoading,
             onChangeQuantity = viewModel::changeQuantity,
             onRemoveProduct = viewModel::removeProduct,
-            onConfirmStoreChange = viewModel::confirmStoreChange,
-            onCancelStoreChange = viewModel::cancelStoreChange,
             onDismissMessage = viewModel::dismissMessage,
             modifier = Modifier.padding(padding),
         )
@@ -98,11 +94,11 @@ internal fun CartContent(
     state: CartUiState,
     onBack: () -> Unit,
     onExploreProducts: () -> Unit,
+    onSignIn: () -> Unit = onBack,
+    onSelectAddress: () -> Unit = {},
     onRetry: () -> Unit,
     onChangeQuantity: (String, Int) -> Unit,
     onRemoveProduct: (String) -> Unit,
-    onConfirmStoreChange: (String) -> Unit,
-    onCancelStoreChange: (String) -> Unit,
     onDismissMessage: (Long) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -123,8 +119,8 @@ internal fun CartContent(
             CartState.SignedOut -> CartPageState(
                 title = "Inicia sesión para ver tu carrito",
                 description = "Tus productos se conservan en este dispositivo para cuando vuelvas a entrar con tu cuenta.",
-                action = "Volver",
-                onAction = onBack,
+                action = "Iniciar sesión",
+                onAction = onSignIn,
             )
             is CartState.Ready -> if (source.cart.items.isEmpty()) {
                 CartPageState(
@@ -133,8 +129,9 @@ internal fun CartContent(
                     action = "Explorar productos",
                     onAction = onExploreProducts,
                     busy = state.isBusy,
-                    message = state.message,
+                    message = state.message.takeIf { state.confirmation == null },
                     onDismissMessage = onDismissMessage,
+                    onSelectAddress = onSelectAddress,
                 )
             } else {
                 CartReadyContent(
@@ -144,17 +141,9 @@ internal fun CartContent(
                     onChangeQuantity = onChangeQuantity,
                     onRemoveProduct = onRemoveProduct,
                     onDismissMessage = onDismissMessage,
+                    onSelectAddress = onSelectAddress,
                 )
             }
-        }
-        state.confirmation?.let { confirmation ->
-            CartStoreChangeDialog(
-                confirmation = confirmation,
-                busy = state.isBusy,
-                message = state.message?.text,
-                onConfirm = { onConfirmStoreChange(confirmation.token) },
-                onCancel = { onCancelStoreChange(confirmation.token) },
-            )
         }
     }
 }
@@ -170,6 +159,7 @@ private fun CartPageState(
     onAction: (() -> Unit)? = null,
     message: CartUiMessage? = null,
     onDismissMessage: (Long) -> Unit = {},
+    onSelectAddress: () -> Unit = {},
 ) {
     Column(
         modifier = Modifier.fillMaxSize().padding(ChaskiDimens.SpacingXl),
@@ -189,7 +179,8 @@ private fun CartPageState(
         Spacer(Modifier.height(ChaskiDimens.SpacingSm))
         Text(description, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center,
             style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        message?.let { CartMessage(it, onDismiss = { onDismissMessage(it.id) }) }
+        message?.let { CartFeedbackBanner(it, onDismiss = { onDismissMessage(it.id) },
+            onSelectAddress = onSelectAddress) }
         if (busy) {
             Spacer(Modifier.height(ChaskiDimens.SpacingSm))
             CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
@@ -210,6 +201,7 @@ private fun CartReadyContent(
     onChangeQuantity: (String, Int) -> Unit,
     onRemoveProduct: (String) -> Unit,
     onDismissMessage: (Long) -> Unit,
+    onSelectAddress: () -> Unit,
 ) {
     Column(Modifier.fillMaxSize()) {
         LazyColumn(
@@ -229,7 +221,8 @@ private fun CartReadyContent(
             }
             state.message?.takeIf { state.confirmation == null }?.let { message ->
                 item(key = "message-${message.id}") {
-                    CartMessage(message, onDismiss = { onDismissMessage(message.id) })
+                    CartFeedbackBanner(message, onDismiss = { onDismissMessage(message.id) },
+                        onSelectAddress = onSelectAddress)
                 }
             }
             if (state.isBusy) item(key = "operation") {
@@ -344,72 +337,6 @@ private fun CartSummary(subtotalMinor: Long, enabled: Boolean, onExploreProducts
     }
 }
 
-@Composable
-private fun CartMessage(message: CartUiMessage, onDismiss: () -> Unit) {
-    Surface(
-        modifier = Modifier.semantics { liveRegion = LiveRegionMode.Assertive },
-        color = MaterialTheme.colorScheme.errorContainer,
-        shape = RoundedCornerShape(12.dp),
-    ) {
-        Row(Modifier.fillMaxWidth().padding(start = ChaskiDimens.SpacingMd), verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Filled.WarningAmber, contentDescription = null, tint = MaterialTheme.colorScheme.onErrorContainer)
-            Text(message.text, modifier = Modifier.weight(1f).padding(ChaskiDimens.SpacingSm),
-                style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onErrorContainer)
-            IconButton(onClick = onDismiss) {
-                Icon(Icons.Filled.Close, contentDescription = "Descartar aviso")
-            }
-        }
-    }
-}
-
-@Composable
-private fun CartStoreChangeDialog(
-    confirmation: CartOperationResult.ConfirmationRequired,
-    busy: Boolean,
-    message: String?,
-    onConfirm: () -> Unit,
-    onCancel: () -> Unit,
-) {
-    val incoming = confirmation.incomingItem
-    Dialog(onDismissRequest = { if (!busy) onCancel() }) {
-        Surface(
-            modifier = Modifier.fillMaxWidth(),
-            shape = MaterialTheme.shapes.large,
-            color = MaterialTheme.colorScheme.surface,
-        ) {
-            Column(
-                modifier = Modifier.verticalScroll(rememberScrollState()).padding(ChaskiDimens.SpacingLg),
-                verticalArrangement = Arrangement.spacedBy(ChaskiDimens.SpacingMd),
-            ) {
-                Text(if (confirmation.offerChanged) "La oferta cambió" else "¿Cambiar de local?",
-                    style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
-                Text(
-                    if (confirmation.offerChanged)
-                        "Las condiciones de la oferta cambiaron. Revísalas antes de reemplazar el carrito."
-                    else "Este producto es de otro local. Si continúas, reemplazará los productos de tu carrito.",
-                )
-                Text("${incoming.quantity} × ${incoming.productName}", fontWeight = FontWeight.SemiBold)
-                Text("Precio provisional por unidad: ${formatCartPrice(incoming.unitPriceMinor)}", color = ChaskiPrice)
-                Text("Tu carrito se conserva hasta que confirmes.", style = MaterialTheme.typography.bodySmall)
-                if (busy) Row(verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(ChaskiDimens.SpacingSm)) {
-                    CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
-                    Text("Validando oferta…")
-                }
-                if (message != null) Text(message, color = MaterialTheme.colorScheme.error,
-                    style = MaterialTheme.typography.bodyMedium)
-                ChaskiButton(
-                    text = if (confirmation.offerChanged) "Confirmar oferta actualizada" else "Reemplazar carrito",
-                    onClick = onConfirm,
-                    enabled = !busy,
-                )
-                ChaskiButton(text = "Conservar mi carrito", onClick = onCancel,
-                    enabled = !busy, variant = ChaskiButtonVariant.Outlined)
-            }
-        }
-    }
-}
-
 @Preview(name = "Carrito con productos", showBackground = true, widthDp = 360, heightDp = 800)
 @Composable
 private fun CartFilledPreview() {
@@ -419,7 +346,7 @@ private fun CartFilledPreview() {
                 CartProductSnapshot("business", "store", "product", "Producto de ejemplo", 1050, 2),
             )))),
             onBack = {}, onExploreProducts = {}, onRetry = {}, onChangeQuantity = { _, _ -> },
-            onRemoveProduct = {}, onConfirmStoreChange = {}, onCancelStoreChange = {}, onDismissMessage = {},
+            onRemoveProduct = {}, onDismissMessage = {},
         )
     }
 }
@@ -431,7 +358,7 @@ private fun CartEmptyPreview() {
         CartContent(
             state = CartUiState(source = CartState.Ready(Cart("preview"))),
             onBack = {}, onExploreProducts = {}, onRetry = {}, onChangeQuantity = { _, _ -> },
-            onRemoveProduct = {}, onConfirmStoreChange = {}, onCancelStoreChange = {}, onDismissMessage = {},
+            onRemoveProduct = {}, onDismissMessage = {},
         )
     }
 }

@@ -28,7 +28,8 @@ fun MainScreen(
     deliveryNotice: String? = null,
     onDismissDeliveryNotice: () -> Unit = {},
     onSeeAllRestaurants: () -> Unit = {},
-    onOpenYourOrder: () -> Unit = {},
+    onOpenCart: () -> Unit = {},
+    cartUnits: Long? = null,
     onRestaurantClick: (String) -> Unit = {},
     onProductClick: (String, String) -> Unit = { _, _ -> },
     onOpenCategories: () -> Unit = {},
@@ -78,7 +79,8 @@ fun MainScreen(
                     onSeeAll = onSeeAllRestaurants,
                     onRestaurantClick = onRestaurantClick,
                     onOpenLocations = onOpenLocations,
-                    onOpenYourOrder = onOpenYourOrder,
+                    onOpenCart = onOpenCart,
+                    cartUnits = cartUnits,
                 )
             }
             composable(ChaskiTab.SEARCH.route) {

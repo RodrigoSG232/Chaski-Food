@@ -58,6 +58,22 @@ class CartViewModelTest {
         runCurrent()
         assertNull(model.uiState.value.cart)
         assertFalse(model.uiState.value.isEmpty)
+        assertNull(model.uiState.value.totalUnits)
+    }
+
+    @Test fun `contador suma unidades del carrito de la sesion observada`() = runTest {
+        val model = model()
+        runCurrent()
+        repository.states.value = CartState.Ready(Cart("a", listOf(item(quantity = 2),
+            item(quantity = 4).copy(productId = "otro"))))
+        runCurrent()
+        assertEquals(6L, model.uiState.value.totalUnits)
+        repository.states.value = CartState.SignedOut
+        runCurrent()
+        assertNull(model.uiState.value.totalUnits)
+        repository.states.value = CartState.Ready(Cart("b"))
+        runCurrent()
+        assertEquals(0L, model.uiState.value.totalUnits)
     }
 
     @Test fun `observa productos y subtotal exacto sin crear otra fuente de datos`() = runTest {
@@ -70,6 +86,7 @@ class CartViewModelTest {
         runCurrent()
         assertEquals(3150L, model.uiState.value.cart?.subtotalMinor)
         assertEquals(3, model.uiState.value.cart?.items?.single()?.quantity)
+        assertEquals(3L, model.uiState.value.totalUnits)
         assertEquals(1, repository.activeCollectors)
     }
 
@@ -90,6 +107,23 @@ class CartViewModelTest {
         repository.states.value = CartState.Ready(Cart("a"))
         runCurrent()
         assertTrue(model.uiState.value.isEmpty)
+    }
+
+    @Test fun `solo una incorporacion confirmada muestra exito`() = runTest {
+        val model = model()
+        runCurrent()
+        repository.answer = CartOperationResult.OfferNetworkError
+        model.addProduct("store", "product", 2)
+        runCurrent()
+        assertEquals(CartUiMessageKind.Error, model.uiState.value.message?.kind)
+        repository.answer = CartOperationResult.Updated(original)
+        model.addProduct("store", "product", 2)
+        runCurrent()
+        assertEquals(CartUiMessageKind.Success, model.uiState.value.message?.kind)
+        assertEquals(original, model.uiState.value.cart)
+        model.changeQuantity("product", 3)
+        runCurrent()
+        assertNull(model.uiState.value.message)
     }
 
     @Test fun `reserva la operacion antes del launch y evita pulsaciones simultaneas`() = runTest {

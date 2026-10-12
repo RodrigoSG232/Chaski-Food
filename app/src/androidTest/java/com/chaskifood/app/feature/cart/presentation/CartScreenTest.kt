@@ -25,6 +25,20 @@ class CartScreenTest {
     private val cookie = CartProductSnapshot("business", "store", "cookie", "Cookie Sandwich", 1050, 2)
     private val cart = Cart("uid", listOf(cookie))
 
+    @Test fun accesoMuestraUnidadesRealesYOcultaContadorSinSesion() {
+        val units = mutableStateOf<Long?>(3)
+        var opened = 0
+        compose.setContent {
+            ChaskiTheme { CartAccessButton(units.value, onClick = { opened++ }) }
+        }
+        compose.onNodeWithContentDescription("Ver carrito, 3 unidades").performClick()
+        compose.onNodeWithText("3").assertIsDisplayed()
+        compose.runOnIdle { units.value = null }
+        compose.onNodeWithContentDescription("Ver carrito").assertIsDisplayed()
+        compose.onNodeWithText("3").assertDoesNotExist()
+        compose.runOnIdle { assertEquals(1, opened) }
+    }
+
     @Test fun carritoVacioOfreceExplorar() {
         var explored = 0
         show(CartUiState(source = CartState.Ready(Cart("uid"))), onExplore = { explored++ })
@@ -84,7 +98,7 @@ class CartScreenTest {
         compose.onNodeWithText("Cargando tu carrito").assertIsDisplayed()
         compose.runOnIdle { state.value = CartUiState(source = CartState.SignedOut) }
         compose.onNodeWithText("Inicia sesión para ver tu carrito").assertIsDisplayed()
-        compose.onNodeWithText("Volver").performClick()
+        compose.onNodeWithText("Iniciar sesión").performClick()
         compose.runOnIdle { state.value = CartUiState(source = CartState.ReadError) }
         compose.onNodeWithText("No pudimos cargar tu carrito").assertIsDisplayed()
         compose.onNodeWithText("Reintentar").performClick()
@@ -159,17 +173,17 @@ class CartScreenTest {
     ) {
         compose.setContent {
             ChaskiTheme {
+                val current = stateOverride?.value ?: state
                 CartContent(
-                    state = stateOverride?.value ?: state,
+                    state = current,
                     onBack = onBack,
                     onExploreProducts = onExplore,
                     onRetry = onRetry,
                     onChangeQuantity = onChange,
                     onRemoveProduct = onRemove,
-                    onConfirmStoreChange = onConfirm,
-                    onCancelStoreChange = onCancel,
                     onDismissMessage = onDismiss,
                 )
+                CartConfirmationHost(current, onConfirm, onCancel)
             }
         }
     }
