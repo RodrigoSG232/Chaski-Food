@@ -185,7 +185,7 @@ private class SubmissionAuth : AuthRepository {
         phoneGate.await()
         return ApiResult.Success(Unit)
     }
-    override suspend fun signUpWithEmail(email: String, password: String): ApiResult<AuthUser> = error("unused")
+    override suspend fun signUpWithEmail(email: String, password: String, displayName: String): ApiResult<AuthUser> = error("unused")
     override suspend fun signInWithGoogle(idToken: String): ApiResult<AuthUser> = error("unused")
     override suspend fun sendPhoneVerificationCode(activity: Activity, phoneNumber: String): ApiResult<String> = error("unused")
     override suspend fun sendPasswordResetEmail(email: String): ApiResult<Unit> = error("unused")

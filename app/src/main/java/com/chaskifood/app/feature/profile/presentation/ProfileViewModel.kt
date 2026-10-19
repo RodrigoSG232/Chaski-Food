@@ -39,6 +39,12 @@ class ProfileViewModel @Inject constructor(
             }
             return
         }
+        if (trimmedName.length > 200) {
+            _uiState.value = UiState.Error("El nombre no puede superar 200 caracteres.") {
+                _uiState.value = UiState.Success(null)
+            }
+            return
+        }
 
         _uiState.value = UiState.Loading
         viewModelScope.launch {

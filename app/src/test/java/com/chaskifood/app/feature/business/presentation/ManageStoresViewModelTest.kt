@@ -117,7 +117,7 @@ class ManageStoresViewModelTest {
 private class TestAuth : AuthRepository {
     override val currentUserFlow = MutableStateFlow<AuthUser?>(AuthUser(uid = "owner", email = "owner@example.com", displayName = "Owner"))
     override suspend fun loginWithEmail(email: String, password: String): ApiResult<AuthUser> = error("unused")
-    override suspend fun signUpWithEmail(email: String, password: String): ApiResult<AuthUser> = error("unused")
+    override suspend fun signUpWithEmail(email: String, password: String, displayName: String): ApiResult<AuthUser> = error("unused")
     override suspend fun signInWithGoogle(idToken: String): ApiResult<AuthUser> = error("unused")
     override suspend fun sendPhoneVerificationCode(activity: Activity, phoneNumber: String): ApiResult<String> = error("unused")
     override suspend fun verifyPhoneCode(verificationId: String, code: String): ApiResult<Unit> = error("unused")

@@ -17,6 +17,7 @@ import com.google.firebase.auth.PhoneAuthCredential
 import com.google.firebase.auth.PhoneAuthOptions
 import com.google.firebase.auth.PhoneAuthProvider
 import com.google.firebase.auth.userProfileChangeRequest
+import com.google.firebase.firestore.FirebaseFirestoreException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.mapLatest
@@ -35,6 +36,7 @@ import kotlin.coroutines.resume
 class FirebaseAuthRepository @Inject constructor(
     private val firebaseAuth: FirebaseAuth,
     private val sessionDataStore: SessionDataStore,
+    private val profileStore: FirebaseUserProfileStore,
 ) : AuthRepository {
 
     private var resendToken: PhoneAuthProvider.ForceResendingToken? = null
@@ -55,9 +57,11 @@ class FirebaseAuthRepository @Inject constructor(
     override suspend fun loginWithEmail(email: String, password: String): ApiResult<AuthUser> {
         return try {
             val result = firebaseAuth.signInWithEmailAndPassword(email, password).await()
-            val user = result.user?.toAuthUser()
-            if (user != null) {
-                val token = result.user?.getIdToken(false)?.await()?.token ?: ""
+            val firebaseUser = result.user
+            val user = firebaseUser?.toAuthUser()
+            if (user != null && firebaseUser != null) {
+                profileStore.ensure(firebaseUser)
+                val token = firebaseUser.getIdToken(false).await().token ?: ""
                 sessionDataStore.setSession(user.uid, token)
                 ApiResult.Success(user)
             } else {
@@ -65,6 +69,8 @@ class FirebaseAuthRepository @Inject constructor(
             }
         } catch (e: FirebaseAuthInvalidCredentialsException) {
             ApiResult.Failure("Correo o contraseña incorrectos.")
+        } catch (e: FirebaseFirestoreException) {
+            ApiResult.Failure("Se inició sesión, pero no se pudo preparar tu perfil. Inténtalo de nuevo.", e)
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (e: Exception) {
@@ -72,14 +78,22 @@ class FirebaseAuthRepository @Inject constructor(
         }
     }
 
-    override suspend fun signUpWithEmail(email: String, password: String): ApiResult<AuthUser> {
+    override suspend fun signUpWithEmail(email: String, password: String, displayName: String): ApiResult<AuthUser> {
+        val normalizedName = displayName.trim()
+        if (normalizedName.isBlank() || normalizedName.length > 200) {
+            return ApiResult.Failure("El nombre debe tener entre 1 y 200 caracteres.")
+        }
+        var accountCreated = false
         return try {
             val result = firebaseAuth.createUserWithEmailAndPassword(email, password).await()
-            // La cuenta ya existe aunque el envío falle; no repetir el alta.
+            accountCreated = true
             result.user?.sendEmailVerification()
-            val user = result.user?.toAuthUser()
-            if (user != null) {
-                val token = result.user?.getIdToken(false)?.await()?.token ?: ""
+            val firebaseUser = result.user
+            if (firebaseUser != null) {
+                firebaseUser.updateProfile(userProfileChangeRequest { this.displayName = normalizedName }).await()
+                profileStore.updateDisplayName(firebaseUser, normalizedName)
+                val user = firebaseUser.toAuthUser().copy(displayName = normalizedName)
+                val token = firebaseUser.getIdToken(false).await().token ?: ""
                 sessionDataStore.setSession(user.uid, token)
                 ApiResult.Success(user)
             } else {
@@ -87,10 +101,16 @@ class FirebaseAuthRepository @Inject constructor(
             }
         } catch (e: FirebaseAuthUserCollisionException) {
             ApiResult.Failure("Este correo electrónico ya está registrado. Por favor inicia sesión.")
+        } catch (e: FirebaseFirestoreException) {
+            ApiResult.Failure("La cuenta se creó, pero no se pudo guardar el perfil. Inicia sesión para reintentarlo.", e)
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (e: Exception) {
-            ApiResult.Failure(e.localizedMessage ?: "Error al registrarse.", e)
+            ApiResult.Failure(
+                if (accountCreated) "La cuenta se creó, pero no se pudo completar el perfil. Inicia sesión y edita tu nombre si hace falta."
+                else e.localizedMessage ?: "Error al registrarse.",
+                e,
+            )
         }
     }
 
@@ -98,9 +118,11 @@ class FirebaseAuthRepository @Inject constructor(
         return try {
             val credential = GoogleAuthProvider.getCredential(idToken, null)
             val result = firebaseAuth.signInWithCredential(credential).await()
-            val user = result.user?.toAuthUser()
-            if (user != null) {
-                val token = result.user?.getIdToken(false)?.await()?.token ?: ""
+            val firebaseUser = result.user
+            val user = firebaseUser?.toAuthUser()
+            if (user != null && firebaseUser != null) {
+                profileStore.ensure(firebaseUser)
+                val token = firebaseUser.getIdToken(false).await().token ?: ""
                 sessionDataStore.setSession(user.uid, token)
                 ApiResult.Success(user)
             } else {
@@ -108,6 +130,8 @@ class FirebaseAuthRepository @Inject constructor(
             }
         } catch (e: FirebaseAuthUserCollisionException) {
             ApiResult.Failure("Este correo ya está asociado a otra cuenta.")
+        } catch (e: FirebaseFirestoreException) {
+            ApiResult.Failure("Se inició sesión con Google, pero no se pudo preparar tu perfil. Inténtalo de nuevo.", e)
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (e: Exception) {
@@ -137,16 +161,20 @@ class FirebaseAuthRepository @Inject constructor(
             .setActivity(activity)
             .setCallbacks(object : PhoneAuthProvider.OnVerificationStateChangedCallbacks() {
                 override fun onVerificationCompleted(credential: PhoneAuthCredential) {
-                    // También puede llegar después de onCodeSent. La renovación del token
-                    // informa a la pantalla de código de que Firebase ya verificó el teléfono.
                     if (firebaseAuth.currentUser?.uid != requestedUser?.uid) return
                     val task = if (requestedUser == null) firebaseAuth.signInWithCredential(credential)
                         else requestedUser.linkWithCredential(credential)
                     task.addOnCompleteListener { completed ->
                         if (completed.isSuccessful) {
                             if (firebaseAuth.currentUser?.uid != completed.result?.user?.uid) return@addOnCompleteListener
-                            completed.result?.user?.getIdToken(true)?.addOnCompleteListener {
-                                if (continuation.isActive) continuation.resume(ApiResult.Success(""))
+                            val verifiedUser = completed.result?.user ?: return@addOnCompleteListener
+                            verifiedUser.getIdToken(true).addOnCompleteListener {
+                                profileStore.ensureTask(verifiedUser).addOnCompleteListener { saved ->
+                                    if (continuation.isActive) {
+                                        continuation.resume(if (saved.isSuccessful) ApiResult.Success("")
+                                            else ApiResult.Failure("No se pudo guardar tu perfil. Inténtalo de nuevo.", saved.exception))
+                                    }
+                                }
                             }
                         } else if (continuation.isActive) {
                             continuation.resume(ApiResult.Failure("No se pudo verificar automáticamente el teléfono.", completed.exception))
@@ -206,6 +234,7 @@ class FirebaseAuthRepository @Inject constructor(
                 firebaseAuth.signInWithCredential(credential).await()
             }
             firebaseAuth.currentUser?.let { user ->
+                profileStore.ensure(user)
                 val token = user.getIdToken(false).await().token ?: error("No se pudo renovar la sesión.")
                 sessionDataStore.setSession(user.uid, token)
             }
@@ -237,6 +266,9 @@ class FirebaseAuthRepository @Inject constructor(
     }
 
     override suspend fun updateProfile(displayName: String): ApiResult<Unit> {
+        if (displayName.isBlank() || displayName.length > 200) {
+            return ApiResult.Failure("El nombre debe tener entre 1 y 200 caracteres.")
+        }
         return try {
             val user = firebaseAuth.currentUser
             if (user != null) {
@@ -244,6 +276,7 @@ class FirebaseAuthRepository @Inject constructor(
                     this.displayName = displayName
                 }
                 user.updateProfile(profileUpdates).await()
+                profileStore.updateDisplayName(user, displayName)
                 user.getIdToken(true).await()
                 ApiResult.Success(Unit)
             } else {
@@ -251,6 +284,8 @@ class FirebaseAuthRepository @Inject constructor(
             }
         } catch (cancelled: CancellationException) {
             throw cancelled
+        } catch (e: FirebaseFirestoreException) {
+            ApiResult.Failure("El nombre cambió en tu cuenta, pero no se guardó en el perfil. Inténtalo de nuevo.", e)
         } catch (e: Exception) {
             ApiResult.Failure(e.localizedMessage ?: "Error al actualizar el perfil.", e)
         }

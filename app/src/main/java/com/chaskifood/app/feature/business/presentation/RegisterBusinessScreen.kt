@@ -207,7 +207,9 @@ fun RegisterBusinessScreen(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier
                             .background(Color(0xFFEEEEEE), shape = RoundedCornerShape(8.dp))
-                            .clickable(enabled = uiState !is UiState.Loading) { expandedCountryDropdown = !expandedCountryDropdown }
+                            .clickable(enabled = uiState !is UiState.Loading) {
+                                expandedCountryDropdown = !expandedCountryDropdown
+                            }
                             .padding(horizontal = 12.dp, vertical = 14.dp),
                     ) {
                         Text(

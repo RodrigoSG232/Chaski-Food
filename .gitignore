@@ -58,4 +58,6 @@ app/google-services.json
 # Carpetas y revisión excluidas del repositorio
 /firebase/
 /Export/
+/docs/
+/contexto/
 /revision-ux.md

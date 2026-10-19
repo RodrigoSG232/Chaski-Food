@@ -11,6 +11,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -18,6 +19,9 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -37,6 +41,7 @@ fun RegisterScreen(
     modifier: Modifier = Modifier,
     viewModel: RegisterViewModel = hiltViewModel(),
 ) {
+    var displayName by rememberSaveable { mutableStateOf("") }
     val email by viewModel.email.collectAsState()
     val password by viewModel.password.collectAsState()
     val confirmPassword by viewModel.confirmPassword.collectAsState()
@@ -76,6 +81,17 @@ fun RegisterScreen(
             )
 
             Spacer(Modifier.height(ChaskiDimens.SpacingXxl))
+
+            ChaskiTextField(
+                value = displayName,
+                onValueChange = { displayName = it },
+                label = "Nombre completo",
+                placeholder = "Laura Díaz",
+                leadingIcon = Icons.Filled.Person,
+                modifier = Modifier.fillMaxWidth(),
+            )
+
+            Spacer(Modifier.height(ChaskiDimens.SpacingMd))
 
             ChaskiTextField(
                 value = email,
@@ -127,7 +143,7 @@ fun RegisterScreen(
             } else {
                 ChaskiButton(
                     text = "REGISTRARSE",
-                    onClick = { viewModel.register(onRegisterSuccess) },
+                    onClick = { viewModel.register(displayName, onRegisterSuccess) },
                 )
             }
 

@@ -3,7 +3,6 @@ package com.chaskifood.app.feature.business.domain
 import com.chaskifood.app.core.common.ApiResult
 import kotlinx.coroutines.flow.Flow
 
-/** Resultado de una suspensión cuya transacción ya fue confirmada. */
 enum class BusinessSuspensionResult {
     VERIFIED,
     COMMITTED_UNVERIFIED,

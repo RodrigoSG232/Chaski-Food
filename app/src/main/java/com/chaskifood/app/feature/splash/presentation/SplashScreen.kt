@@ -21,6 +21,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.chaskifood.app.ui.components.ChaskiLogo
 import com.chaskifood.app.ui.theme.ChaskiSurface
 import com.chaskifood.app.ui.theme.ChaskiTextPrimary
+import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 
 @Composable
@@ -31,9 +32,9 @@ fun SplashScreen(
     viewModel: SplashViewModel = hiltViewModel(),
 ) {
     LaunchedEffect(Unit) {
-        val isLoggedIn = viewModel.isUserLoggedIn()
+        val loginCheck = async { viewModel.isUserLoggedIn() }
         delay(1400)
-        if (isLoggedIn) {
+        if (loginCheck.await()) {
             onNavigateToMain()
         } else {
             onNavigateToOnboarding()

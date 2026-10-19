@@ -36,14 +36,22 @@ class RegisterViewModel @Inject constructor(
     private val _uiState = MutableStateFlow<UiState<AuthUser?>>(UiState.Success(null))
     val uiState: StateFlow<UiState<AuthUser?>> = _uiState.asStateFlow()
 
-    fun register(onSuccess: (hasPhoneNumber: Boolean) -> Unit) {
+    fun register(displayName: String, onSuccess: (hasPhoneNumber: Boolean) -> Unit) {
         if (_uiState.value is UiState.Loading) return
+        val currentDisplayName = displayName.trim()
         val currentEmail = email.value.trim()
         val currentPassword = password.value
         val currentConfirmPassword = confirmPassword.value
 
-        if (currentEmail.isBlank() || currentPassword.isBlank() || currentConfirmPassword.isBlank()) {
+        if (currentDisplayName.isBlank() || currentEmail.isBlank() || currentPassword.isBlank() || currentConfirmPassword.isBlank()) {
             _uiState.value = UiState.Error("Por favor completa todos los campos obligatorios.") {
+                _uiState.value = UiState.Success(null)
+            }
+            return
+        }
+
+        if (currentDisplayName.length > 200) {
+            _uiState.value = UiState.Error("El nombre debe tener como máximo 200 caracteres.") {
                 _uiState.value = UiState.Success(null)
             }
             return
@@ -72,7 +80,7 @@ class RegisterViewModel @Inject constructor(
 
         _uiState.value = UiState.Loading
         viewModelScope.launch {
-            when (val result = authRepository.signUpWithEmail(currentEmail, currentPassword)) {
+            when (val result = authRepository.signUpWithEmail(currentEmail, currentPassword, currentDisplayName)) {
                 is ApiResult.Success -> {
                     _uiState.value = UiState.Success(result.data)
                     val hasPhone = !result.data.phoneNumber.isNullOrBlank()

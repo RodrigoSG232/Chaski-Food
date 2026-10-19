@@ -90,7 +90,7 @@ fun SignUpScreen(
             AuthTextField(
                 value = username,
                 onValueChange = { username = it },
-                label = "Nombre de usuario",
+                label = "Nombre completo",
                 placeholder = "Laura Díaz",
                 trailingIcon = {
                     Icon(
@@ -167,7 +167,7 @@ fun SignUpScreen(
             } else {
                 AuthSubmitButton(
                     text = stringResource(R.string.sign_up_button),
-                    onClick = { viewModel.register(onSuccess = { hasPhone -> onSignUp(hasPhone) }) },
+                    onClick = { viewModel.register(username, onSuccess = { hasPhone -> onSignUp(hasPhone) }) },
                 )
             }
 

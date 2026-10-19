@@ -7,7 +7,7 @@ import kotlinx.coroutines.flow.Flow
 interface AuthRepository {
     val currentUserFlow: Flow<AuthUser?>
     suspend fun loginWithEmail(email: String, password: String): ApiResult<AuthUser>
-    suspend fun signUpWithEmail(email: String, password: String): ApiResult<AuthUser>
+    suspend fun signUpWithEmail(email: String, password: String, displayName: String): ApiResult<AuthUser>
     suspend fun signInWithGoogle(idToken: String): ApiResult<AuthUser>
     suspend fun sendPhoneVerificationCode(activity: Activity, phoneNumber: String): ApiResult<String>
     suspend fun resendPhoneVerificationCode(activity: Activity, phoneNumber: String): ApiResult<String> =
