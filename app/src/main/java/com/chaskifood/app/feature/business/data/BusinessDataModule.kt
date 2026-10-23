@@ -12,6 +12,8 @@ import javax.inject.Singleton
 @Module
 @InstallIn(SingletonComponent::class)
 abstract class BusinessDataModule {
+    @Binds
+    abstract fun bindStoreAppeals(impl: FirebaseStoreAppealRepository): com.chaskifood.app.feature.business.domain.StoreAppealRepository
 
     @Binds
     abstract fun bindBusinessPhoneNormalizer(impl: AndroidBusinessPhoneNormalizer): BusinessPhoneNormalizer

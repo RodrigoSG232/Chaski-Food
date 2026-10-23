@@ -343,6 +343,9 @@ class FirebaseStoreRepository @Inject constructor(
             operatingHours = parsedHours,
             createdAt = (data["createdAt"] as? Number)?.toLong() ?: System.currentTimeMillis(),
             suspensionReason = data["suspensionReason"] as? String,
+            suspendedAt = if (statusStr == StoreStatus.SUSPENDED.name)
+                (data["updatedAt"] as? com.google.firebase.Timestamp)?.toDate()?.time else null,
+            suspensionId = if (statusStr == StoreStatus.SUSPENDED.name) data["lastAuditId"] as? String else null,
         )
     }
 
@@ -378,6 +381,9 @@ class FirebaseStoreRepository @Inject constructor(
             firestore.runTransaction { transaction ->
                 val existing = transaction.get(reference)
                 check(existing.exists()) { "El local ya no existe." }
+                val businessId = checkNotNull(existing.getString("businessId"))
+                val business = transaction.get(firestore.collection("business_requests").document(businessId))
+                val ownerUid = checkNotNull(business.getString("ownerUid"))
                 val previous = existing.getString("status")
                 check(if (status == StoreStatus.ACTIVE) previous == "SUSPENDED" else previous in listOf("ACTIVE", "INACTIVE")) {
                     "El estado del local cambió. Actualiza la lista."
@@ -394,6 +400,12 @@ class FirebaseStoreRepository @Inject constructor(
                     "targetBusinessName" to existing.getString("name"), "targetRuc" to "", "details" to reason?.trim(),
                     "previousStatus" to previous, "newStatus" to status.name,
                     "timestamp" to com.google.firebase.firestore.FieldValue.serverTimestamp(),
+                ))
+                transaction.set(firestore.collection("store_notices").document(audit.id), mapOf(
+                    "ownerUid" to ownerUid, "storeId" to storeId, "businessId" to businessId,
+                    "title" to "${existing.getString("name")}: ${if (status == StoreStatus.SUSPENDED) "local suspendido" else "local reactivado"}",
+                    "message" to if (status == StoreStatus.SUSPENDED) reason.orEmpty().trim() else "Administración reactivó tu local.",
+                    "read" to false, "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp(), "auditId" to audit.id,
                 ))
             }.await()
             ApiResult.Success(Unit)

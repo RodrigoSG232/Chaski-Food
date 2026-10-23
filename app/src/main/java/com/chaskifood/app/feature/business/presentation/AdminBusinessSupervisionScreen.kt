@@ -51,6 +51,7 @@ import com.chaskifood.app.core.common.UiState
 import com.chaskifood.app.feature.auth.presentation.AuthAppBar
 import com.chaskifood.app.feature.business.domain.BusinessRequest
 import com.chaskifood.app.feature.business.domain.BusinessStatus
+import com.chaskifood.app.ui.components.ChaskiStatusPill
 import com.chaskifood.app.ui.theme.ChaskiBackground
 import com.chaskifood.app.ui.theme.ChaskiDimens
 
@@ -62,9 +63,12 @@ fun AdminBusinessSupervisionScreen(
 ) {
     val selectedFilter by viewModel.selectedFilter.collectAsState()
     val filteredResult by viewModel.filteredRequests.collectAsState()
+    val pendingAppeals by viewModel.pendingAppeals.collectAsState()
     val actionState by viewModel.actionState.collectAsState()
     val selectedBusiness by viewModel.selectedBusiness.collectAsState()
     val stores by viewModel.stores.collectAsState()
+    var showAppeals by rememberSaveable { mutableStateOf(false) }
+    if (showAppeals) StoreAppealsPanel(admin = true, onDismiss = { showAppeals = false })
 
     var suspendRequestId by rememberSaveable { mutableStateOf<String?>(null) }
     var suspendReasonInput by rememberSaveable { mutableStateOf("") }
@@ -78,6 +82,14 @@ fun AdminBusinessSupervisionScreen(
             .navigationBarsPadding(),
     ) {
         AuthAppBar(onBackClick = onBack)
+        TextButton(onClick = { showAppeals = true }) {
+            val count = (pendingAppeals as? ApiResult.Success)?.data
+            Text(if (count != null && count > 0) "APELACIONES PENDIENTES ($count)" else "REVISAR APELACIONES DE LOCALES")
+        }
+        if (pendingAppeals is ApiResult.Failure) {
+            Text("No se pudo cargar el número de apelaciones.",
+                color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(horizontal = ChaskiDimens.ScreenPadding))
+        }
 
         Column(
             modifier = Modifier
@@ -268,20 +280,14 @@ private fun SupervisionBusinessCard(
         modifier = Modifier.fillMaxWidth(),
     ) {
         Column(modifier = Modifier.padding(ChaskiDimens.SpacingLg)) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text(
-                    text = request.businessName,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 18.sp,
-                    color = Color(0xFF212121),
-                    modifier = Modifier.weight(1f),
-                )
-                SupervisionStatusBadge(status = request.status)
-            }
+            Text(
+                text = request.businessName,
+                fontWeight = FontWeight.Bold,
+                fontSize = 18.sp,
+                color = Color(0xFF212121),
+            )
+            Spacer(Modifier.height(8.dp))
+            SupervisionStatusBadge(status = request.status)
 
             Spacer(Modifier.height(ChaskiDimens.SpacingSm))
 
@@ -365,16 +371,5 @@ private fun SupervisionStatusBadge(status: BusinessStatus) {
         else -> Triple(Color(0xFFEEEEEE), Color(0xFF616161), status.name)
     }
 
-    Surface(
-        color = bg,
-        shape = RoundedCornerShape(12.dp),
-    ) {
-        Text(
-            text = label,
-            fontSize = 11.sp,
-            fontWeight = FontWeight.Bold,
-            color = fg,
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-        )
-    }
+    ChaskiStatusPill(text = label, backgroundColor = bg, contentColor = fg)
 }

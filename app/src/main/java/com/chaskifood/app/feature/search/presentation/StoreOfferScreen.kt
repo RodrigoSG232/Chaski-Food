@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -125,7 +126,7 @@ fun StoreOfferContent(
                     FilterChip(
                         selected = selectedCategoryId == category.id,
                         onClick = { selectedCategoryId = category.id },
-                        label = { Text(category.name) },
+                        label = { Text(category.name, modifier = Modifier.widthIn(max = 220.dp)) },
                     )
                 }
             }

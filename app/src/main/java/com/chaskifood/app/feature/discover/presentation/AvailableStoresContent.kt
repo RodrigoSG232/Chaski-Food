@@ -101,6 +101,13 @@ fun AvailableStoresContent(
                 state.stores.forEach { store ->
                     AvailableStoreCard(store = store, onClick = { onStoreClick(store) })
                 }
+                if (state.stores.any { it.roadDistanceKm != null }) {
+                    Text(
+                        text = "Rutas estimadas con OSRM · © OpenStreetMap contributors",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
         }
     }
@@ -179,7 +186,7 @@ private fun AvailableStoreCard(
                     Text(store.businessName, style = MaterialTheme.typography.bodyMedium)
                 }
                 Text(
-                    text = "${store.businessCategory} · ${formatDistance(store.distanceKm)}",
+                    text = "${store.businessCategory} · ${distanceSummary(store)}",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -197,3 +204,13 @@ private fun AvailableStoreCard(
 
 private fun formatDistance(distanceKm: Double): String =
     String.format(Locale.forLanguageTag("es-PE"), "%.1f km", distanceKm)
+
+private fun distanceSummary(store: DiscoverableStore): String {
+    val routeKm = store.roadDistanceKm
+    val routeMinutes = store.roadDurationMinutes
+    return if (routeKm != null && routeMinutes != null) {
+        "${formatDistance(routeKm)} por ruta · $routeMinutes min aprox."
+    } else {
+        "${formatDistance(store.distanceKm)} en línea recta"
+    }
+}

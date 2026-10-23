@@ -38,6 +38,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.chaskifood.app.core.common.ApiResult
 import com.chaskifood.app.feature.auth.presentation.AuthAppBar
 import com.chaskifood.app.feature.business.domain.AuditLog
+import com.chaskifood.app.ui.components.ChaskiStatusPill
 import com.chaskifood.app.ui.theme.ChaskiBackground
 import com.chaskifood.app.ui.theme.ChaskiDimens
 import java.text.SimpleDateFormat
@@ -140,9 +141,8 @@ private fun AuditLogCard(log: AuditLog) {
         modifier = Modifier.fillMaxWidth(),
     ) {
         Column(modifier = Modifier.padding(ChaskiDimens.SpacingLg)) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
+            Column(
+                verticalArrangement = Arrangement.spacedBy(4.dp),
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 ActionBadge(action = log.action)
@@ -156,7 +156,8 @@ private fun AuditLogCard(log: AuditLog) {
             Spacer(Modifier.height(ChaskiDimens.SpacingSm))
 
             Text(
-                text = "Negocio: ${log.targetBusinessName} (RUC: ${log.targetRuc})",
+                text = if (log.action.endsWith("_LOCAL")) "Local: ${log.targetBusinessName}"
+                    else "Negocio: ${log.targetBusinessName}" + if (log.targetRuc.isNotBlank()) " (RUC: ${log.targetRuc})" else "",
                 fontWeight = FontWeight.Bold,
                 fontSize = 15.sp,
                 color = Color(0xFF212121),
@@ -194,21 +195,14 @@ private fun ActionBadge(action: String) {
         "RECHAZAR_NEGOCIO" -> Triple(Color(0xFFFFEBEE), Color(0xFFC62828), "RECHAZO")
         "SUSPENDER_NEGOCIO" -> Triple(Color(0xFFFFEBEE), Color(0xFFD32F2F), "SUSPENSIÓN")
         "REACTIVAR_NEGOCIO" -> Triple(Color(0xE8E8F5E9), Color(0xFF2E7D32), "REACTIVACIÓN")
+        "SUSPENDER_LOCAL" -> Triple(Color(0xFFFFEBEE), Color(0xFFD32F2F), "LOCAL SUSPENDIDO")
+        "REACTIVAR_LOCAL" -> Triple(Color(0xFFE8F5E9), Color(0xFF2E7D32), "LOCAL REACTIVADO")
+        "APROBAR_APELACION_LOCAL" -> Triple(Color(0xFFE8F5E9), Color(0xFF2E7D32), "APELACIÓN ACEPTADA")
+        "RECHAZAR_APELACION_LOCAL" -> Triple(Color(0xFFFFEBEE), Color(0xFFC62828), "APELACIÓN RECHAZADA")
         else -> Triple(Color(0xFFEEEEEE), Color(0xFF616161), action)
     }
 
-    Surface(
-        color = bg,
-        shape = RoundedCornerShape(12.dp),
-    ) {
-        Text(
-            text = label,
-            fontSize = 11.sp,
-            fontWeight = FontWeight.Bold,
-            color = fg,
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-        )
-    }
+    ChaskiStatusPill(text = label, backgroundColor = bg, contentColor = fg)
 }
 
 private fun rememberDateFormat(): SimpleDateFormat {

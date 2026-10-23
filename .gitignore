@@ -49,6 +49,7 @@ Thumbs.db
 
 # Assistant artifacts
 .artifacts/
+**/node_modules/
 
 # Firebase / Credenciales
 google-services.json
@@ -61,3 +62,4 @@ app/google-services.json
 /docs/
 /contexto/
 /revision-ux.md
+/firestore.rules

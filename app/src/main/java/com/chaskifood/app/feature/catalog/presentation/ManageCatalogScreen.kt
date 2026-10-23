@@ -92,6 +92,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import com.chaskifood.app.feature.auth.presentation.AuthAppBar
 import com.chaskifood.app.feature.auth.presentation.AuthSubmitButton
+import com.chaskifood.app.ui.components.ChaskiStatusPill
 import com.chaskifood.app.feature.catalog.domain.Product
 import com.chaskifood.app.feature.catalog.domain.ProductCategory
 import com.chaskifood.app.feature.catalog.domain.formatProductPrice
@@ -495,22 +496,14 @@ private fun ProductsTabContent(
 
                             Spacer(Modifier.height(6.dp))
 
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            Column(
+                                verticalArrangement = Arrangement.spacedBy(6.dp),
                             ) {
-                                Surface(
-                                    color = Color(0xFFE3F2FD),
-                                    shape = RoundedCornerShape(12.dp),
-                                ) {
-                                    Text(
-                                        text = product.categoryName.ifBlank { "General" },
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = Color(0xFF1565C0),
-                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
-                                    )
-                                }
+                                ChaskiStatusPill(
+                                    text = product.categoryName.ifBlank { "General" },
+                                    backgroundColor = Color(0xFFE3F2FD),
+                                    contentColor = Color(0xFF1565C0),
+                                )
 
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Icon(

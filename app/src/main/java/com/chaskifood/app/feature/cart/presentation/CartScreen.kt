@@ -64,6 +64,7 @@ fun CartScreen(
     onExploreProducts: () -> Unit,
     onSignIn: () -> Unit = onBack,
     onSelectAddress: () -> Unit = {},
+    onCheckout: () -> Unit = {},
     modifier: Modifier = Modifier,
     viewModel: CartViewModel = hiltViewModel(),
 ) {
@@ -79,6 +80,7 @@ fun CartScreen(
             onExploreProducts = onExploreProducts,
             onSignIn = onSignIn,
             onSelectAddress = onSelectAddress,
+            onCheckout = onCheckout,
             onRetry = viewModel::retryLoading,
             onChangeQuantity = viewModel::changeQuantity,
             onRemoveProduct = viewModel::removeProduct,
@@ -96,6 +98,7 @@ internal fun CartContent(
     onExploreProducts: () -> Unit,
     onSignIn: () -> Unit = onBack,
     onSelectAddress: () -> Unit = {},
+    onCheckout: () -> Unit = {},
     onRetry: () -> Unit,
     onChangeQuantity: (String, Int) -> Unit,
     onRemoveProduct: (String) -> Unit,
@@ -142,6 +145,7 @@ internal fun CartContent(
                     onRemoveProduct = onRemoveProduct,
                     onDismissMessage = onDismissMessage,
                     onSelectAddress = onSelectAddress,
+                    onCheckout = onCheckout,
                 )
             }
         }
@@ -202,6 +206,7 @@ private fun CartReadyContent(
     onRemoveProduct: (String) -> Unit,
     onDismissMessage: (Long) -> Unit,
     onSelectAddress: () -> Unit,
+    onCheckout: () -> Unit,
 ) {
     Column(Modifier.fillMaxSize()) {
         LazyColumn(
@@ -245,7 +250,8 @@ private fun CartReadyContent(
                 )
             }
         }
-        CartSummary(cart.subtotalMinor, enabled = !state.isBusy, onExploreProducts = onExploreProducts)
+        CartSummary(cart.subtotalMinor, enabled = !state.isBusy,
+            onExploreProducts = onExploreProducts, onCheckout = onCheckout)
     }
 }
 
@@ -327,7 +333,8 @@ private fun CartLine(
 }
 
 @Composable
-private fun CartSummary(subtotalMinor: Long, enabled: Boolean, onExploreProducts: () -> Unit) {
+private fun CartSummary(subtotalMinor: Long, enabled: Boolean,
+    onExploreProducts: () -> Unit, onCheckout: () -> Unit) {
     Surface(color = MaterialTheme.colorScheme.surface, shadowElevation = 4.dp) {
         Column(
             modifier = Modifier.fillMaxWidth().padding(ChaskiDimens.ScreenPadding),
@@ -346,6 +353,8 @@ private fun CartSummary(subtotalMinor: Long, enabled: Boolean, onExploreProducts
             )
             ChaskiButton(text = "Seguir explorando", onClick = onExploreProducts,
                 enabled = enabled, variant = ChaskiButtonVariant.Outlined)
+            ChaskiButton(text = "REVISAR COMPRA", onClick = onCheckout, enabled = enabled,
+                variant = ChaskiButtonVariant.Primary)
         }
     }
 }

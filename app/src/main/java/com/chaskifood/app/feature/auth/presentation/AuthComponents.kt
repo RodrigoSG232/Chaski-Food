@@ -282,16 +282,19 @@ fun AuthSubmitButton(
             contentColor = Color.White,
         ),
         contentPadding = PaddingValues(
-            horizontal = 48.dp,
-            vertical = ChaskiDimens.SpacingLg,
+            horizontal = 16.dp,
+            vertical = 12.dp,
         ),
     ) {
         Text(
             text = text,
+            modifier = Modifier.fillMaxWidth(),
             fontSize = 14.sp,
             fontWeight = FontWeight.SemiBold,
             letterSpacing = 0.84.sp,
             color = Color.White,
+            textAlign = TextAlign.Center,
+            softWrap = true,
         )
     }
 }

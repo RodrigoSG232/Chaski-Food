@@ -32,6 +32,7 @@ object ChaskiDestinations {
     const val PAYMENT = "payment"
     const val ADD_CARD = "add_card"
     const val ORDER_PLACED = "order_placed"
+    const val ORDER_CONFIRMED = "order_confirmed/{orderId}"
     const val ORDER_TRACKING = "order_tracking"
     const val ORDER_PROGRESS = "order_progress"
     const val ORDER_DELIVERED = "order_delivered"

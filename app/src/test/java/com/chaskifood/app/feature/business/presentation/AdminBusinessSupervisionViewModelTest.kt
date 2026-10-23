@@ -8,12 +8,15 @@ import com.chaskifood.app.feature.business.domain.BusinessStatus
 import com.chaskifood.app.feature.business.domain.BusinessStore
 import com.chaskifood.app.feature.business.domain.BusinessSuspensionResult
 import com.chaskifood.app.feature.business.domain.StoreStatus
+import com.chaskifood.app.feature.business.domain.StoreAppeal
+import com.chaskifood.app.feature.business.domain.StoreAppealRepository
 import com.chaskifood.app.feature.business.testing.BusinessTestAuth
 import com.chaskifood.app.feature.business.testing.BusinessTestRepository
 import com.chaskifood.app.feature.business.testing.OperationTestStores
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -35,6 +38,12 @@ class AdminBusinessSupervisionViewModelTest {
     private val stores = OperationTestStores()
     private val auth = BusinessTestAuth()
     private val approved = BusinessRequest(id = "business", status = BusinessStatus.APPROVED)
+    private val appealUpdates = MutableStateFlow<ApiResult<List<StoreAppeal>>>(ApiResult.Success(emptyList()))
+    private val appeals = object : StoreAppealRepository {
+        override fun observeAppeals(admin: Boolean) = appealUpdates
+        override suspend fun submit(storeId: String, explanation: String) = ApiResult.Success(Unit)
+        override suspend fun resolve(id: String, accepted: Boolean, response: String) = ApiResult.Success(Unit)
+    }
 
     @Before fun setUp() {
         Dispatchers.setMain(dispatcher)
@@ -46,10 +55,21 @@ class AdminBusinessSupervisionViewModelTest {
         Dispatchers.resetMain()
     }
 
-    private fun TestScope.model() = AdminBusinessSupervisionViewModel(businesses, auth, stores).also { model ->
+    private fun TestScope.model() = AdminBusinessSupervisionViewModel(businesses, auth, stores, appeals).also { model ->
         viewModelStore.put("supervision", model)
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { model.filteredRequests.collect {} }
         runCurrent()
+    }
+
+    @Test fun `appeal indicator updates when a new pending appeal arrives`() = runTest {
+        val model = model()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { model.pendingAppeals.collect {} }
+        appealUpdates.value = ApiResult.Success(listOf(
+            StoreAppeal(id = "one", status = "PENDING"),
+            StoreAppeal(id = "two", status = "ACCEPTED"),
+        ))
+        runCurrent()
+        assertEquals(1, (model.pendingAppeals.value as ApiResult.Success).data)
     }
 
     @Test fun `suspension verificada cierra el dialogo y presenta exito`() = runTest {

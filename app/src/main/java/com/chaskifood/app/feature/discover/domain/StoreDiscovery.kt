@@ -27,6 +27,8 @@ data class DiscoverableStore(
     val phone: String,
     val distanceKm: Double,
     val imageUrl: String? = null,
+    val roadDistanceKm: Double? = null,
+    val roadDurationMinutes: Int? = null,
 )
 
 enum class StoreExclusionReason {

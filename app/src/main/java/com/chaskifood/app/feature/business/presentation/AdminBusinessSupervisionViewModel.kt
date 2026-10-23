@@ -12,6 +12,7 @@ import com.chaskifood.app.feature.business.domain.BusinessStatus
 import com.chaskifood.app.feature.business.domain.BusinessSuspensionResult
 import com.chaskifood.app.feature.business.domain.BusinessStore
 import com.chaskifood.app.feature.business.domain.StoreRepository
+import com.chaskifood.app.feature.business.domain.StoreAppealRepository
 import com.chaskifood.app.feature.business.domain.StoreStatus
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.flatMapLatest
@@ -22,6 +23,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -32,7 +34,16 @@ class AdminBusinessSupervisionViewModel @Inject constructor(
     private val businessRepository: BusinessRepository,
     private val authRepository: AuthRepository,
     private val storeRepository: StoreRepository,
+    private val appealsRepository: StoreAppealRepository,
 ) : ViewModel() {
+
+    val pendingAppeals: StateFlow<ApiResult<Int>?> = appealsRepository.observeAppeals(admin = true)
+        .map { result ->
+            when (result) {
+                is ApiResult.Success -> ApiResult.Success(result.data.count { it.status == "PENDING" })
+                is ApiResult.Failure -> result
+            }
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     val selectedFilter = MutableStateFlow<BusinessStatus?>(BusinessStatus.APPROVED)
 
