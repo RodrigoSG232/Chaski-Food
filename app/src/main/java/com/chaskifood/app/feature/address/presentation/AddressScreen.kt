@@ -61,7 +61,6 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.chaskifood.app.R
@@ -544,16 +543,14 @@ internal fun AddressButton(
         onClick, modifier, enabled = enabled,
         shape = RoundedCornerShape(8.dp), border = BorderStroke(1.dp, ChaskiTextPrimary),
         colors = ButtonDefaults.outlinedButtonColors(contentColor = ChaskiTextPrimary),
-        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
-    ) { Text(text, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center) }
+    ) { Text(text) }
     else Button(
         onClick, modifier, enabled = enabled, shape = RoundedCornerShape(8.dp),
         colors = ButtonDefaults.buttonColors(
             containerColor = if (destructive) ChaskiPrimary else ChaskiTextPrimary,
             contentColor = Color.White,
         ),
-        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
-    ) { Text(text, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center) }
+    ) { Text(text) }
 }
 
 @Composable

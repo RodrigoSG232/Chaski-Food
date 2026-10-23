@@ -58,7 +58,6 @@ import com.chaskifood.app.feature.catalog.domain.StoreProductAvailability
 import com.chaskifood.app.feature.catalog.domain.formatProductPrice
 import com.chaskifood.app.feature.catalog.domain.parseProductPrice
 import com.chaskifood.app.feature.catalog.domain.storeProductConfigurationId
-import com.chaskifood.app.ui.components.ChaskiStatusPill
 import com.chaskifood.app.ui.theme.ChaskiBackground
 import com.chaskifood.app.ui.theme.ChaskiDimens
 import com.chaskifood.app.ui.theme.ChaskiPrimary
@@ -279,8 +278,8 @@ internal fun ProductConfigurationCard(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
     ) {
         Column(Modifier.padding(16.dp)) {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Column(Modifier.fillMaxWidth()) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
                     Text(
                         text = item.product.name,
                         style = MaterialTheme.typography.titleMedium,
@@ -293,10 +292,17 @@ internal fun ProductConfigurationCard(
                         color = ChaskiTextMuted,
                     )
                 }
-                ChaskiStatusPill(
+                Text(
                     text = if (item.isConfigured) "CONFIGURADO" else "SIN CONFIGURAR",
-                    backgroundColor = if (item.isConfigured) ChaskiStatusApprovedBg else ChaskiStatusRejectedBg,
-                    contentColor = if (item.isConfigured) ChaskiStatusApprovedFg else ChaskiStatusRejectedFg,
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = if (item.isConfigured) ChaskiStatusApprovedFg else ChaskiStatusRejectedFg,
+                    modifier = Modifier
+                        .background(
+                            if (item.isConfigured) ChaskiStatusApprovedBg else ChaskiStatusRejectedBg,
+                            RoundedCornerShape(20.dp),
+                        )
+                        .padding(horizontal = 10.dp, vertical = 5.dp),
                 )
             }
 

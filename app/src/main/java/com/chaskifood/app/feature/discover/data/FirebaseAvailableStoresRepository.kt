@@ -2,9 +2,7 @@
 
 package com.chaskifood.app.feature.discover.data
 
-import com.chaskifood.app.BuildConfig
 import com.chaskifood.app.feature.address.domain.model.AddressBookState
-import com.chaskifood.app.feature.address.domain.model.AddressCoordinates
 import com.chaskifood.app.feature.address.domain.repository.AddressRepository
 import com.chaskifood.app.feature.business.domain.BusinessStore
 import com.chaskifood.app.feature.business.domain.DEFAULT_DELIVERY_RADIUS_KM
@@ -17,9 +15,6 @@ import com.chaskifood.app.feature.business.domain.getCurrentFormattedTime
 import com.chaskifood.app.feature.business.domain.validOperatingHours
 import com.chaskifood.app.feature.discover.domain.AvailableStoresRepository
 import com.chaskifood.app.feature.discover.domain.AvailableStoresState
-import com.chaskifood.app.feature.discover.domain.RoadEstimate
-import com.chaskifood.app.feature.discover.domain.RouteDestination
-import com.chaskifood.app.feature.discover.domain.RouteDistanceProvider
 import com.chaskifood.app.feature.discover.domain.SelectedDeliveryAddress
 import com.chaskifood.app.feature.discover.domain.StoreDiscoveryCandidate
 import com.chaskifood.app.feature.discover.domain.discoverAvailableStores
@@ -33,8 +28,6 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
-import kotlinx.coroutines.flow.transformLatest
-import kotlinx.coroutines.CancellationException
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -42,7 +35,6 @@ import javax.inject.Singleton
 class FirebaseAvailableStoresRepository @Inject constructor(
     private val firestore: FirebaseFirestore,
     private val addressRepository: AddressRepository,
-    private val routeDistanceProvider: RouteDistanceProvider,
 ) : AvailableStoresRepository {
 
     override fun observeAvailableStores(): Flow<AvailableStoresState> =
@@ -67,38 +59,8 @@ class FirebaseAvailableStoresRepository @Inject constructor(
             addressText = selectedAddress.addressText,
         )
 
-        val candidatesWithRoutes = observeStoreCandidates().transformLatest { result ->
-            emit(CandidatesWithRoutes(result, emptyMap()))
-            if (BuildConfig.DEBUG && result is StoreCandidatesResult.Success) {
-                val eligible = discoverAvailableStores(
-                    candidates = result.candidates,
-                    selectedAddress = selectedAddress.location,
-                    currentDay = getCurrentDayOfWeek(),
-                    currentTime = getCurrentFormattedTime(),
-                ).take(20)
-                val candidatesById = result.candidates.associateBy { it.store.id }
-                val destinations = eligible.mapNotNull { store ->
-                    candidatesById[store.id]?.store?.let { candidate ->
-                        RouteDestination(store.id, AddressCoordinates(
-                            candidate.latitude, candidate.longitude,
-                        ))
-                    }
-                }
-                if (destinations.isNotEmpty()) {
-                    try {
-                        val estimates = routeDistanceProvider.estimate(selectedAddress.location, destinations)
-                        if (estimates.isNotEmpty()) emit(CandidatesWithRoutes(result, estimates))
-                    } catch (cancelled: CancellationException) {
-                        throw cancelled
-                    } catch (_: Exception) {
-                        // La lista y la cobertura local siguen disponibles sin el servicio externo.
-                    }
-                }
-            }
-        }
-
-        return combine(candidatesWithRoutes, minuteTicker()) { routed, _ ->
-            when (val result = routed.candidates) {
+        return combine(observeStoreCandidates(), minuteTicker()) { result, _ ->
+            when (result) {
                 is StoreCandidatesResult.Error -> AvailableStoresState.Error(result.message)
                 is StoreCandidatesResult.Success -> AvailableStoresState.Ready(
                     selectedAddress = addressInfo,
@@ -107,13 +69,7 @@ class FirebaseAvailableStoresRepository @Inject constructor(
                         selectedAddress = selectedAddress.location,
                         currentDay = getCurrentDayOfWeek(),
                         currentTime = getCurrentFormattedTime(),
-                    ).map { store ->
-                        val road = routed.estimates[store.id]
-                        if (road == null) store else store.copy(
-                            roadDistanceKm = road.distanceKm,
-                            roadDurationMinutes = road.durationMinutes,
-                        )
-                    },
+                    ),
                 )
             }
         }
@@ -144,11 +100,6 @@ private sealed interface StoreCandidatesResult {
     data class Success(val candidates: List<StoreDiscoveryCandidate>) : StoreCandidatesResult
     data class Error(val message: String) : StoreCandidatesResult
 }
-
-private data class CandidatesWithRoutes(
-    val candidates: StoreCandidatesResult,
-    val estimates: Map<String, RoadEstimate>,
-)
 
 /** Reevalúa el horario al cambiar de minuto, aunque Firestore no haya cambiado. */
 private fun minuteTicker(): Flow<Unit> = flow {

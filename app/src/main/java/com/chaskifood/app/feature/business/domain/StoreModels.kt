@@ -64,8 +64,6 @@ data class BusinessStore(
     val operatingHours: List<DayOperatingHours> = defaultWeeklyOperatingHours(),
     val createdAt: Long = System.currentTimeMillis(),
     val suspensionReason: String? = null,
-    val suspendedAt: Long? = null,
-    val suspensionId: String? = null,
 ) {
     fun isAvailableForOrders(
         currentTime: String = getCurrentFormattedTime(),

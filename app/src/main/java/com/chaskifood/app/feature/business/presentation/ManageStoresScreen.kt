@@ -57,8 +57,6 @@ import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Switch
 import androidx.compose.material3.LinearProgressIndicator
 import java.util.UUID
-import java.text.DateFormat
-import java.util.Date
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -79,7 +77,6 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -90,7 +87,6 @@ import com.chaskifood.app.feature.auth.presentation.AuthSubmitButton
 import com.chaskifood.app.feature.business.domain.BusinessStore
 import com.chaskifood.app.feature.business.domain.StoreManager
 import com.chaskifood.app.feature.business.domain.StoreStatus
-import com.chaskifood.app.ui.components.ChaskiStatusPill
 import com.chaskifood.app.ui.theme.ChaskiBackground
 import com.chaskifood.app.ui.theme.ChaskiDimens
 import com.chaskifood.app.ui.theme.ChaskiPrimary
@@ -121,20 +117,6 @@ fun ManageStoresScreen(
     var showManagerDialog by rememberSaveable { mutableStateOf(false) }
     var editingManagerId by rememberSaveable { mutableStateOf<String?>(null) }
     val loaded = uiState as? ManageStoresUiState.Success
-    var showAppeals by rememberSaveable { mutableStateOf(false) }
-    var appealStoreId by rememberSaveable { mutableStateOf<String?>(null) }
-    var ordersStoreId by rememberSaveable { mutableStateOf<String?>(null) }
-    if (showAppeals) StoreAppealsPanel(
-        admin = false,
-        stores = loaded?.stores.orEmpty(),
-        initialStoreId = appealStoreId,
-        onDismiss = { showAppeals = false; appealStoreId = null },
-    )
-    ordersStoreId?.let { id ->
-        loaded?.stores?.firstOrNull { it.id == id }?.let { store ->
-            StoreOrdersPanel(storeId = id, storeName = store.name, onDismiss = { ordersStoreId = null })
-        }
-    }
     val editingStore = loaded?.stores?.find { it.id == editingStoreId }
     val editingManager = loaded?.managers?.find { it.id == editingManagerId }
     val draftStates = rememberSaveableStateHolder()
@@ -147,7 +129,6 @@ fun ManageStoresScreen(
             .navigationBarsPadding(),
     ) {
         AuthAppBar(onBackClick = onBack)
-        TextButton(onClick = { appealStoreId = null; showAppeals = true }) { Text("SUSPENSIONES Y APELACIONES") }
 
         when (val state = uiState) {
             is ManageStoresUiState.Loading -> {
@@ -261,11 +242,6 @@ fun ManageStoresScreen(
                                     draftStates.removeState("store")
                                     showStoreDialog = true
                                 },
-                                onAppealStore = { store ->
-                                    appealStoreId = store.id
-                                    showAppeals = true
-                                },
-                                onOrdersStore = { store -> ordersStoreId = store.id },
                             )
                         } else {
                             ManagersTabContent(
@@ -365,8 +341,6 @@ fun ManageStoresScreen(
 private fun StoresTabContent(
     stores: List<BusinessStore>,
     onEditStore: (BusinessStore) -> Unit,
-    onAppealStore: (BusinessStore) -> Unit,
-    onOrdersStore: (BusinessStore) -> Unit,
 ) {
     if (stores.isEmpty()) {
         Box(
@@ -397,11 +371,12 @@ private fun StoresTabContent(
                     modifier = Modifier.fillMaxWidth(),
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
-                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.Top,
-                            ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
                                 Icon(
                                     imageVector = Icons.Filled.Store,
                                     contentDescription = null,
@@ -410,21 +385,31 @@ private fun StoresTabContent(
                                 )
                                 Text(
                                     text = store.name,
-                                    modifier = Modifier.weight(1f),
                                     fontSize = 18.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = ChaskiTextPrimary,
                                 )
                             }
-                            ChaskiStatusPill(
-                                text = when (store.status) {
-                                    StoreStatus.ACTIVE -> "ACTIVO"
-                                    StoreStatus.INACTIVE -> "INACTIVO"
-                                    StoreStatus.SUSPENDED -> "SUSPENDIDO"
-                                },
-                                backgroundColor = if (store.status == StoreStatus.ACTIVE) ChaskiStatusApprovedBg else ChaskiStatusRejectedBg,
-                                contentColor = if (store.status == StoreStatus.ACTIVE) ChaskiStatusApprovedFg else ChaskiStatusRejectedFg,
-                            )
+
+                            Box(
+                                modifier = Modifier
+                                    .background(
+                                        color = if (store.status == StoreStatus.ACTIVE) ChaskiStatusApprovedBg else ChaskiStatusRejectedBg,
+                                        shape = RoundedCornerShape(16.dp),
+                                    )
+                                    .padding(horizontal = 10.dp, vertical = 4.dp),
+                            ) {
+                                Text(
+                                    text = when (store.status) {
+                                        StoreStatus.ACTIVE -> "ACTIVO"
+                                        StoreStatus.INACTIVE -> "INACTIVO"
+                                        StoreStatus.SUSPENDED -> "SUSPENDIDO"
+                                    },
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (store.status == StoreStatus.ACTIVE) ChaskiStatusApprovedFg else ChaskiStatusRejectedFg,
+                                )
+                            }
                         }
 
                         Spacer(Modifier.height(8.dp))
@@ -469,37 +454,6 @@ private fun StoresTabContent(
                         }
 
                         Spacer(Modifier.height(8.dp))
-
-                        OutlinedButton(onClick = { onOrdersStore(store) }, modifier = Modifier.fillMaxWidth()) {
-                            Text("VER PEDIDOS DEL LOCAL", textAlign = TextAlign.Center)
-                        }
-
-                        if (store.status == StoreStatus.SUSPENDED) {
-                            Text(
-                                text = "Motivo: " + (store.suspensionReason?.takeIf { it.isNotBlank() }
-                                    ?: "Consulta el motivo con administración."),
-                                color = MaterialTheme.colorScheme.error,
-                                style = MaterialTheme.typography.bodyMedium,
-                                modifier = Modifier.fillMaxWidth(),
-                            )
-                            store.suspendedAt?.let { suspendedAt ->
-                                Text(
-                                    text = "Suspendido el " + DateFormat.getDateTimeInstance(
-                                        DateFormat.MEDIUM, DateFormat.SHORT,
-                                    ).format(Date(suspendedAt)),
-                                    color = ChaskiTextMuted,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    modifier = Modifier.padding(top = 4.dp),
-                                )
-                            }
-                            OutlinedButton(
-                                onClick = { onAppealStore(store) },
-                                modifier = Modifier.fillMaxWidth(),
-                            ) {
-                                Text("APELAR SUSPENSIÓN", textAlign = TextAlign.Center)
-                            }
-                            Spacer(Modifier.height(8.dp))
-                        }
 
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -767,23 +721,22 @@ internal fun StoreDialog(
                         border = BorderStroke(1.dp, ChaskiPrimary),
                         colors = ButtonDefaults.outlinedButtonColors(contentColor = ChaskiPrimary),
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.LocationOn,
-                            contentDescription = null,
-                            modifier = Modifier.size(20.dp),
-                            tint = ChaskiPrimary,
-                        )
-                        Spacer(Modifier.width(8.dp))
-                        Text(
-                            text = if (latitude.isNotBlank() && longitude.isNotBlank())
-                                "Cambiar ubicación en el mapa"
-                            else
-                                "Seleccionar ubicación en el mapa",
-                            modifier = Modifier.weight(1f),
-                            fontWeight = FontWeight.Bold,
-                            textAlign = TextAlign.Center,
-                            softWrap = true,
-                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.LocationOn,
+                                contentDescription = null,
+                                modifier = Modifier.size(20.dp),
+                                tint = ChaskiPrimary,
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                text = if (latitude.isNotBlank() && longitude.isNotBlank())
+                                    "📍 Cambiar ubicación en el mapa"
+                                else
+                                    "📍 Seleccionar ubicación en el mapa",
+                                fontWeight = FontWeight.Bold,
+                            )
+                        }
                     }
 
                     if (latitude.isNotBlank() && longitude.isNotBlank()) {

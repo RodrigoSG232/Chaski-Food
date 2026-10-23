@@ -6,14 +6,11 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -47,7 +44,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -58,7 +54,6 @@ import com.chaskifood.app.feature.auth.presentation.AuthAppBar
 import com.chaskifood.app.feature.business.domain.BusinessRequest
 import com.chaskifood.app.feature.business.domain.BusinessStatus
 import com.chaskifood.app.feature.business.domain.canBeEvaluated
-import com.chaskifood.app.ui.components.ChaskiStatusPill
 import com.chaskifood.app.ui.theme.ChaskiBackground
 import com.chaskifood.app.ui.theme.ChaskiDimens
 import com.chaskifood.app.ui.theme.ChaskiStatusApprovedBg
@@ -307,14 +302,20 @@ private fun AdminBusinessCard(
         modifier = Modifier.fillMaxWidth(),
     ) {
         Column(modifier = Modifier.padding(ChaskiDimens.SpacingLg)) {
-            Text(
-                text = request.businessName,
-                fontWeight = FontWeight.Bold,
-                fontSize = 18.sp,
-                color = Color(0xFF212121),
-            )
-            Spacer(Modifier.height(8.dp))
-            StatusBadge(status = request.status)
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(
+                    text = request.businessName,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp,
+                    color = Color(0xFF212121),
+                    modifier = Modifier.weight(1f),
+                )
+                StatusBadge(status = request.status)
+            }
 
             Spacer(Modifier.height(ChaskiDimens.SpacingSm))
 
@@ -360,57 +361,63 @@ private fun AdminBusinessCard(
                     color = Color(0xFFEEEEEE),
                 )
 
-                val actions = listOf(
-                    Triple("APROBAR", Color(0xFF2E7D32), onApprove),
-                    Triple("OBSERVAR", Color(0xFFE65100), onObserve),
-                    Triple("RECHAZAR", Color(0xFFC62828), onReject),
-                )
-                BoxWithConstraints(Modifier.fillMaxWidth()) {
-                    if (maxWidth < 400.dp) {
-                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            actions.forEach { (label, color, action) ->
-                                ReviewActionButton(label, color, actionsEnabled, action, Modifier.fillMaxWidth())
-                            }
-                        }
-                    } else {
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            actions.forEach { (label, color, action) ->
-                                ReviewActionButton(label, color, actionsEnabled, action, Modifier.weight(1f))
-                            }
-                        }
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(Color(0xFF2E7D32))
+                            .clickable(enabled = actionsEnabled, onClick = onApprove)
+                            .padding(vertical = 10.dp),
+                        horizontalArrangement = Arrangement.Center,
+                    ) {
+                        Text(
+                            text = "APROBAR",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White,
+                        )
+                    }
+
+                    Row(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(Color(0xFFE65100))
+                            .clickable(enabled = actionsEnabled, onClick = onObserve)
+                            .padding(vertical = 10.dp),
+                        horizontalArrangement = Arrangement.Center,
+                    ) {
+                        Text(
+                            text = "OBSERVAR",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White,
+                        )
+                    }
+
+                    Row(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(Color(0xFFC62828))
+                            .clickable(enabled = actionsEnabled, onClick = onReject)
+                            .padding(vertical = 10.dp),
+                        horizontalArrangement = Arrangement.Center,
+                    ) {
+                        Text(
+                            text = "RECHAZAR",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White,
+                        )
                     }
                 }
             }
         }
-    }
-}
-
-@Composable
-private fun ReviewActionButton(
-    label: String,
-    color: Color,
-    enabled: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Box(
-        modifier = modifier
-            .heightIn(min = 44.dp)
-            .clip(RoundedCornerShape(6.dp))
-            .background(color)
-            .clickable(enabled = enabled, onClick = onClick)
-            .padding(horizontal = 8.dp, vertical = 10.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            text = label,
-            modifier = Modifier.fillMaxWidth(),
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Bold,
-            color = Color.White,
-            textAlign = TextAlign.Center,
-            softWrap = true,
-        )
     }
 }
 
@@ -424,5 +431,16 @@ private fun StatusBadge(status: BusinessStatus) {
         BusinessStatus.SUSPENDED -> Triple(ChaskiStatusSuspendedBg, ChaskiStatusSuspendedFg, "SUSPENDIDO")
     }
 
-    ChaskiStatusPill(text = label, backgroundColor = bg, contentColor = fg)
+    Surface(
+        color = bg,
+        shape = RoundedCornerShape(12.dp),
+    ) {
+        Text(
+            text = label,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Bold,
+            color = fg,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+        )
+    }
 }

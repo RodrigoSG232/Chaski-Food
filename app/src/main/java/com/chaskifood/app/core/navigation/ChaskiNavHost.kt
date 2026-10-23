@@ -52,8 +52,6 @@ import com.chaskifood.app.feature.catalog.presentation.ManageCatalogScreen
 import com.chaskifood.app.feature.catalog.presentation.StoreProductConfigurationScreen
 import com.chaskifood.app.feature.checkout.presentation.AddCardScreen
 import com.chaskifood.app.feature.checkout.presentation.CheckoutScreen
-import com.chaskifood.app.feature.checkout.presentation.RealCheckoutScreen
-import com.chaskifood.app.feature.checkout.presentation.RealOrderConfirmedScreen
 import com.chaskifood.app.feature.checkout.presentation.PaymentScreen
 import com.chaskifood.app.feature.main.presentation.MainScreen
 import com.chaskifood.app.feature.profile.presentation.ProfileSettingsScreen
@@ -528,7 +526,6 @@ fun ChaskiNavHost() {
                     onSelectAddress = {
                         navController.navigate(ChaskiDestinations.ADDRESS_BOOK) { launchSingleTop = true }
                     },
-                    onCheckout = { navController.navigate(ChaskiDestinations.CHECKOUT) },
                 )
             }
             composable(
@@ -576,21 +573,12 @@ fun ChaskiNavHost() {
                 )
             }
             composable(ChaskiDestinations.CHECKOUT) {
-                RealCheckoutScreen(
+                CheckoutScreen(
                     onBack = { navController.popBackStack() },
-                    onSelectAddress = { navController.navigate(ChaskiDestinations.ADDRESS_BOOK) },
-                    onCreated = { orderId ->
-                        navController.navigate("order_confirmed/$orderId") {
-                            popUpTo(ChaskiDestinations.CART) { inclusive = true }
-                        }
+                    onTabSelected = onTabSelected,
+                    onContinueToPayment = {
+                        navController.navigate(ChaskiDestinations.PAYMENT)
                     },
-                )
-            }
-            composable(ChaskiDestinations.ORDER_CONFIRMED,
-                arguments = listOf(navArgument("orderId") { type = NavType.StringType })) { entry ->
-                RealOrderConfirmedScreen(
-                    orderId = entry.arguments?.getString("orderId").orEmpty(),
-                    onDone = { navController.openMainTab(FlowTab.Home) },
                 )
             }
             composable(ChaskiDestinations.PAYMENT) {

@@ -1,7 +1,6 @@
 package com.chaskifood.app.core.network
 
 import com.chaskifood.app.BuildConfig
-import com.chaskifood.app.feature.discover.data.OsrmRouteApi
 import retrofit2.converter.kotlinx.serialization.asConverterFactory
 import dagger.Module
 import dagger.Provides
@@ -51,25 +50,4 @@ object NetworkModule {
     @Provides
     @Singleton
     fun provideChaskiApi(retrofit: Retrofit): ChaskiApi = retrofit.create(ChaskiApi::class.java)
-
-    @Provides
-    @Singleton
-    fun provideOsrmRouteApi(json: Json): OsrmRouteApi {
-        val client = OkHttpClient.Builder()
-            .connectTimeout(5, TimeUnit.SECONDS)
-            .readTimeout(5, TimeUnit.SECONDS)
-            .callTimeout(6, TimeUnit.SECONDS)
-            .addInterceptor { chain ->
-                chain.proceed(chain.request().newBuilder()
-                    .header("User-Agent", "ChaskiFood/1.0 (Android university project; com.chaskifood.app)")
-                    .build())
-            }
-            .build()
-        return Retrofit.Builder()
-            .baseUrl("https://router.project-osrm.org/")
-            .client(client)
-            .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
-            .build()
-            .create(OsrmRouteApi::class.java)
-    }
 }

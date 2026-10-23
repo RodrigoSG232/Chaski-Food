@@ -1,0 +1,728 @@
+
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isOwner(uid) {
+      return request.auth != null && request.auth.uid == uid;
+    }
+
+    function addressPath(uid, id) {
+      return /databases/$(database)/documents/users/$(uid)/addresses/$(id);
+    }
+
+    function preferencePath(uid) {
+      return /databases/$(database)/documents/users/$(uid)/preferences/delivery;
+    }
+
+    function operationPath(uid, id) {
+      return /databases/$(database)/documents/users/$(uid)/address_operations/$(id);
+    }
+
+    function validId(id) {
+      return id is string
+        && id.trim().size() > 0
+        && id.toUtf8().size() <= 1500
+        && id != '.'
+        && id != '..'
+        && id.matches('[^/]+')
+        && !id.matches('(?s)__.*__');
+    }
+
+    function validAddress(data) {
+      let fields = [
+        'label',
+        'addressText',
+        'location',
+        'reference',
+        'instructions',
+        'createdAt',
+        'updatedAt'
+      ];
+
+      return data.keys().hasAll(fields)
+        && data.keys().hasOnly(fields)
+        && data.label is string
+        && data.label.size() <= 40
+        && data.addressText is string
+        && data.addressText.trim().size() > 0
+        && data.addressText == data.addressText.trim()
+        && data.addressText.size() <= 250
+        && data.location is map
+        && data.location.keys().hasAll(['lat', 'lng'])
+        && data.location.keys().hasOnly(['lat', 'lng'])
+        && data.location.lat is number
+        && data.location.lng is number
+        && data.location.lat >= -90
+        && data.location.lat <= 90
+        && data.location.lng >= -180
+        && data.location.lng <= 180
+        && data.reference is string
+        && data.reference.size() <= 250
+        && data.instructions is string
+        && data.instructions.size() <= 500
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp
+        && data.updatedAt >= data.createdAt;
+    }
+
+    function oldCount(uid) {
+      return exists(preferencePath(uid))
+        ? get(preferencePath(uid)).data.addressCount
+        : 0;
+    }
+
+    function oldDefault(uid) {
+      return exists(preferencePath(uid))
+        ? get(preferencePath(uid)).data.defaultAddressId
+        : null;
+    }
+
+    function validPreference(uid, data) {
+      let fields = [
+        'addressCount',
+        'defaultAddressId',
+        'lastOperationId',
+        'updatedAt'
+      ];
+
+      return data.keys().hasAll(fields)
+        && data.keys().hasOnly(fields)
+        && data.addressCount is int
+        && data.addressCount >= 0
+        && data.updatedAt == request.time
+        && validId(data.lastOperationId)
+        && (
+          (
+            data.addressCount == 0
+            && data.defaultAddressId == null
+          )
+          || (
+            data.addressCount > 0
+            && validId(data.defaultAddressId)
+            && existsAfter(addressPath(uid, data.defaultAddressId))
+          )
+        );
+    }
+
+    function validOperation(data) {
+      let fields = [
+        'kind',
+        'addressId',
+        'payloadHash',
+        'createdAt'
+      ];
+
+      return data.keys().hasAll(fields)
+        && data.keys().hasOnly(fields)
+        && data.kind in ['create', 'update', 'delete', 'default']
+        && validId(data.addressId)
+        && data.createdAt == request.time
+        && data.payloadHash is string
+        && (
+          (
+            data.kind == 'create'
+            && data.payloadHash.matches('[0-9a-f]{64}')
+          )
+          || (
+            data.kind != 'create'
+            && data.payloadHash == ''
+          )
+        );
+    }
+
+    function newOperationFor(uid, addressId, kind) {
+      let next = getAfter(preferencePath(uid)).data;
+      let operation = getAfter(
+        operationPath(uid, next.lastOperationId)
+      ).data;
+
+      return next.updatedAt == request.time
+        && !exists(operationPath(uid, next.lastOperationId))
+        && operation.createdAt == request.time
+        && operation.addressId == addressId
+        && operation.kind == kind;
+    }
+
+    function validTransition(uid, next, operation) {
+      let count = oldCount(uid);
+      let preferred = oldDefault(uid);
+      let target = addressPath(uid, operation.addressId);
+
+      return (
+        operation.kind == 'create'
+        && !exists(target)
+        && existsAfter(target)
+        && operation.addressId == next.lastOperationId
+        && next.addressCount == count + 1
+        && next.defaultAddressId == (
+          count == 0 ? operation.addressId : preferred
+        )
+      ) || (
+        operation.kind == 'update'
+        && count > 0
+        && exists(target)
+        && existsAfter(target)
+        && getAfter(target).data.updatedAt == request.time
+        && next.addressCount == count
+        && next.defaultAddressId == preferred
+      ) || (
+        operation.kind == 'delete'
+        && count > 0
+        && exists(target)
+        && !existsAfter(target)
+        && next.addressCount == count - 1
+        && (
+          preferred == operation.addressId
+            ? (
+              next.addressCount == 0
+                ? next.defaultAddressId == null
+                : next.defaultAddressId != operation.addressId
+            )
+            : next.defaultAddressId == preferred
+        )
+      ) || (
+        operation.kind == 'default'
+        && count > 0
+        && exists(target)
+        && existsAfter(target)
+        && getAfter(target).data == get(target).data
+        && next.addressCount == count
+        && next.defaultAddressId == operation.addressId
+      );
+    }
+
+    match /users/{uid}/addresses/{addressId} {
+      allow read: if isOwner(uid);
+
+      allow create: if isOwner(uid)
+        && validId(addressId)
+        && validAddress(request.resource.data)
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time
+        && newOperationFor(uid, addressId, 'create');
+
+      allow update: if isOwner(uid)
+        && validAddress(request.resource.data)
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.updatedAt == request.time
+        && newOperationFor(uid, addressId, 'update');
+
+      allow delete: if isOwner(uid)
+        && newOperationFor(uid, addressId, 'delete');
+    }
+
+    match /users/{uid}/preferences/delivery {
+      allow read: if isOwner(uid);
+
+      allow create, update: if isOwner(uid)
+        && validPreference(uid, request.resource.data)
+        && !exists(
+          operationPath(
+            uid,
+            request.resource.data.lastOperationId
+          )
+        )
+        && validOperation(
+          getAfter(
+            operationPath(
+              uid,
+              request.resource.data.lastOperationId
+            )
+          ).data
+        )
+        && validTransition(
+          uid,
+          request.resource.data,
+          getAfter(
+            operationPath(
+              uid,
+              request.resource.data.lastOperationId
+            )
+          ).data
+        );
+
+      allow delete: if false;
+    }
+
+    match /users/{uid}/address_operations/{operationId} {
+      allow read: if isOwner(uid);
+
+      allow create: if isOwner(uid)
+        && validId(operationId)
+        && validOperation(request.resource.data)
+        && getAfter(preferencePath(uid)).data.lastOperationId
+          == operationId
+        && getAfter(preferencePath(uid)).data.updatedAt
+          == request.time;
+
+      allow update, delete: if false;
+    }
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function admin() {
+      return signedIn()
+        && request.auth.token.get('admin', false) == true;
+    }
+
+    function ownsBusiness(id) {
+      return signedIn()
+        && get(
+          /databases/$(database)/documents/business_requests/$(id)
+        ).data.ownerUid == request.auth.uid;
+    }
+
+    function approvedOwner(id) {
+      return ownsBusiness(id)
+        && get(
+          /databases/$(database)/documents/business_requests/$(id)
+        ).data.status == 'APPROVED';
+    }
+
+    function managerOf(id, businessId) {
+      let email = request.auth.token.get('email', '').lower();
+      let assignmentId = businessId + '_' + email;
+
+      return signedIn()
+        && exists(
+          /databases/$(database)/documents/store_managers/$(assignmentId)
+        )
+        && id in get(
+          /databases/$(database)/documents/store_managers/$(assignmentId)
+        ).data.assignedStoreIds;
+    }
+
+    function operational(id, businessId) {
+      return (
+        ownsBusiness(businessId)
+        || managerOf(id, businessId)
+      )
+        && get(
+          /databases/$(database)/documents/business_requests/$(businessId)
+        ).data.status == 'APPROVED'
+        && resource.data.status == 'ACTIVE';
+    }
+
+    function managesBusiness(businessId) {
+      let assignmentId = businessId
+        + '_'
+        + request.auth.token.get('email', '').lower();
+
+      return signedIn()
+        && exists(
+          /databases/$(database)/documents/store_managers/$(assignmentId)
+        );
+    }
+
+    function configuresStore(storeId, businessId) {
+      let storePath =
+        /databases/$(database)/documents/stores/$(storeId);
+      let businessPath =
+        /databases/$(database)/documents/business_requests/$(businessId);
+
+      return signedIn()
+        && exists(storePath)
+        && exists(businessPath)
+        && get(storePath).data.businessId == businessId
+        && get(storePath).data.status == 'ACTIVE'
+        && get(businessPath).data.status == 'APPROVED'
+        && (
+          ownsBusiness(businessId)
+          || managerOf(storeId, businessId)
+        );
+    }
+
+    function validStoreProductConfig(id, data) {
+      let fields = [
+        'businessId',
+        'storeId',
+        'productId',
+        'price',
+        'availability',
+        'updatedAt',
+        'updatedBy'
+      ];
+      let productPath =
+        /databases/$(database)/documents/products/$(data.productId);
+
+      return data.keys().hasAll(fields)
+        && data.keys().hasOnly(fields)
+        && data.businessId is string
+        && validId(data.businessId)
+        && data.storeId is string
+        && validId(data.storeId)
+        && data.productId is string
+        && validId(data.productId)
+        && id == data.storeId + '_' + data.productId
+        && data.price is number
+        && data.price > 0
+        && data.availability in ['AVAILABLE', 'OUT_OF_STOCK']
+        && data.updatedAt == request.time
+        && data.updatedBy == request.auth.uid
+        && configuresStore(data.storeId, data.businessId)
+        && exists(productPath)
+        && get(productPath).data.businessId == data.businessId;
+    }
+
+    function auditedBusiness(id) {
+      let audit = getAfter(
+        /databases/$(database)/documents/audit_logs/$(request.resource.data.lastAuditId)
+      ).data;
+
+      return audit.adminUid == request.auth.uid
+        && audit.targetBusinessId == id
+        && audit.previousStatus == resource.data.status
+        && audit.newStatus == request.resource.data.status
+        && audit.timestamp == request.time;
+    }
+
+    function auditedStore(id) {
+      let audit = getAfter(
+        /databases/$(database)/documents/audit_logs/$(request.resource.data.lastAuditId)
+      ).data;
+
+      return audit.adminUid == request.auth.uid
+        && audit.targetStoreId == id
+        && audit.previousStatus == resource.data.status
+        && audit.newStatus == request.resource.data.status
+        && audit.timestamp == request.time;
+    }
+
+    function businessDecision() {
+      let oldStatus = resource.data.status;
+      let nextStatus = request.resource.data.status;
+
+      return (
+        oldStatus == 'PENDING_REVIEW'
+        && nextStatus in ['APPROVED', 'OBSERVED', 'REJECTED']
+      )
+        || (
+          oldStatus == 'APPROVED'
+          && nextStatus == 'SUSPENDED'
+        )
+        || (
+          oldStatus == 'SUSPENDED'
+          && nextStatus == 'APPROVED'
+        );
+    }
+
+    function businessData(data) {
+      return data.businessName is string
+        && data.businessName.size() > 0
+        && data.ruc is string
+        && data.ruc.matches('[0-9]{11}')
+        && data.legalAddress is string
+        && data.legalAddress.size() > 0
+        && data.phone is string
+        && data.phone.size() > 0
+        && data.email is string
+        && data.email.size() > 0;
+    }
+
+    function validStoredImageUrl(value) {
+      return value is string
+        && (
+          value == ''
+          || value.matches('https://.*')
+        );
+    }
+
+    match /business_requests/{id} {
+      allow get: if signedIn()
+        && (
+          id == request.auth.uid
+          || admin()
+          || managesBusiness(id)
+        );
+
+      allow list: if admin();
+
+      allow create: if signedIn()
+        && id == request.auth.uid
+        && request.resource.data.ownerUid == request.auth.uid
+        && request.resource.data.status == 'PENDING_REVIEW'
+        && businessData(request.resource.data)
+        && request.resource.data.keys().hasOnly([
+          'ownerUid',
+          'businessName',
+          'ruc',
+          'legalAddress',
+          'phone',
+          'email',
+          'category',
+          'status',
+          'observations',
+          'suspensionReason',
+          'reviewedBy',
+          'reviewedAt',
+          'updatedAt',
+          'createdAt'
+        ])
+        && request.resource.data.observations == null
+        && request.resource.data.suspensionReason == null
+        && request.resource.data.reviewedBy == null
+        && request.resource.data.reviewedAt == null
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time;
+
+      allow update: if (
+        signedIn()
+        && id == request.auth.uid
+        && resource.data.ownerUid == request.auth.uid
+        && resource.data.status == 'OBSERVED'
+        && request.resource.data.status == 'PENDING_REVIEW'
+        && businessData(request.resource.data)
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.observations == null
+        && request.resource.data.suspensionReason == null
+        && request.resource.data.reviewedBy == null
+        && request.resource.data.reviewedAt == null
+        && request.resource.data.diff(resource.data)
+          .affectedKeys()
+          .hasOnly([
+            'businessName',
+            'ruc',
+            'legalAddress',
+            'phone',
+            'email',
+            'category',
+            'status',
+            'observations',
+            'suspensionReason',
+            'reviewedBy',
+            'reviewedAt',
+            'updatedAt'
+          ])
+      ) || (
+        admin()
+        && businessDecision()
+        && auditedBusiness(id)
+        && request.resource.data.reviewedBy
+          == request.auth.token.get('email', request.auth.uid)
+        && request.resource.data.reviewedAt == request.time
+        && request.resource.data.updatedAt == request.time
+        && (
+          request.resource.data.status != 'SUSPENDED'
+          || request.resource.data.suspensionReason.size() > 0
+        )
+        && (
+          !(
+            request.resource.data.status
+            in ['OBSERVED', 'REJECTED']
+          )
+          || request.resource.data.observations.size() > 0
+        )
+        && request.resource.data.diff(resource.data)
+          .affectedKeys()
+          .hasOnly([
+            'status',
+            'observations',
+            'suspensionReason',
+            'reviewedBy',
+            'reviewedAt',
+            'updatedAt',
+            'lastAuditId'
+          ])
+      );
+    }
+
+    match /stores/{id} {
+      allow read: if signedIn();
+
+      allow create: if approvedOwner(
+        request.resource.data.businessId
+      )
+        && request.resource.data.status in ['ACTIVE', 'INACTIVE']
+        && request.resource.data.operationalStatus == 'OPEN'
+        && validStoredImageUrl(request.resource.data.imageUrl);
+
+      allow update: if (
+        approvedOwner(resource.data.businessId)
+        && request.resource.data.businessId
+          == resource.data.businessId
+        && validStoredImageUrl(request.resource.data.imageUrl)
+        && request.resource.data.diff(resource.data)
+          .affectedKeys()
+          .hasOnly([
+            'name',
+            'imageUrl',
+            'address',
+            'latitude',
+            'longitude',
+            'phone',
+            'status'
+          ])
+        && (
+          request.resource.data.status == resource.data.status
+          || (
+            resource.data.status != 'SUSPENDED'
+            && request.resource.data.status
+              in ['ACTIVE', 'INACTIVE']
+          )
+        )
+      ) || (
+        operational(id, resource.data.businessId)
+        && request.resource.data.operationalStatus
+          in ['OPEN', 'PAUSED', 'CLOSED']
+        && request.resource.data.diff(resource.data)
+          .affectedKeys()
+          .hasOnly([
+            'operationalStatus',
+            'pauseReason',
+            'operatingHours'
+          ])
+      ) || (
+        admin()
+        && auditedStore(id)
+        && request.resource.data.updatedAt == request.time
+        && (
+          (
+            resource.data.status in ['ACTIVE', 'INACTIVE']
+            && request.resource.data.status == 'SUSPENDED'
+            && request.resource.data.suspensionReason.size() > 0
+          )
+          || (
+            resource.data.status == 'ACTIVE'
+            && request.resource.data.status == 'INACTIVE'
+            && get(
+              /databases/$(database)/documents/business_requests/$(resource.data.businessId)
+            ).data.status == 'APPROVED'
+            && getAfter(
+              /databases/$(database)/documents/business_requests/$(resource.data.businessId)
+            ).data.status == 'SUSPENDED'
+          )
+          || (
+            resource.data.status == 'SUSPENDED'
+            && request.resource.data.status == 'ACTIVE'
+            && getAfter(
+              /databases/$(database)/documents/business_requests/$(resource.data.businessId)
+            ).data.status == 'APPROVED'
+          )
+        )
+        && request.resource.data.diff(resource.data)
+          .affectedKeys()
+          .hasOnly([
+            'status',
+            'suspensionReason',
+            'lastAuditId',
+            'updatedAt'
+          ])
+      );
+    }
+
+    match /store_managers/{id} {
+      allow read: if signedIn();
+
+      allow create: if approvedOwner(
+        request.resource.data.businessId
+      )
+        && id
+          == request.resource.data.businessId
+          + '_'
+          + request.resource.data.email
+        && request.resource.data.email
+          == request.resource.data.email.lower();
+
+      allow update: if approvedOwner(resource.data.businessId)
+        && request.resource.data.businessId
+          == resource.data.businessId
+        && id
+          == request.resource.data.businessId
+          + '_'
+          + request.resource.data.email;
+
+      allow delete: if approvedOwner(resource.data.businessId);
+    }
+
+    match /categories/{id} {
+      allow read: if signedIn();
+
+      allow create: if approvedOwner(
+        request.resource.data.businessId
+      );
+
+      allow update: if approvedOwner(resource.data.businessId)
+        && request.resource.data.businessId
+          == resource.data.businessId;
+    }
+
+    match /products/{id} {
+      allow read: if signedIn();
+
+      allow create: if approvedOwner(
+        request.resource.data.businessId
+      )
+        && request.resource.data.price > 0
+        && request.resource.data.prepTimeMinutes >= 1
+        && request.resource.data.prepTimeMinutes <= 1440
+        && validStoredImageUrl(request.resource.data.imageUrl);
+
+      allow update: if approvedOwner(resource.data.businessId)
+        && request.resource.data.businessId
+          == resource.data.businessId
+        && request.resource.data.price > 0
+        && request.resource.data.prepTimeMinutes >= 1
+        && request.resource.data.prepTimeMinutes <= 1440
+        && validStoredImageUrl(request.resource.data.imageUrl);
+    }
+
+    match /store_product_configs/{id} {
+      allow read: if signedIn();
+
+      allow create: if validStoreProductConfig(
+        id,
+        request.resource.data
+      );
+
+      allow update: if request.resource.data.businessId
+          == resource.data.businessId
+        && request.resource.data.storeId == resource.data.storeId
+        && request.resource.data.productId
+          == resource.data.productId
+        && request.resource.data.diff(resource.data)
+          .affectedKeys()
+          .hasOnly([
+            'price',
+            'availability',
+            'updatedAt',
+            'updatedBy'
+          ])
+        && validStoreProductConfig(id, request.resource.data);
+
+      allow delete: if false;
+    }
+
+    match /audit_logs/{id} {
+      allow read: if admin();
+
+      allow create: if admin()
+        && request.resource.data.adminUid == request.auth.uid
+        && request.resource.data.timestamp == request.time
+        && (
+          (
+            request.resource.data.keys().hasAny([
+              'targetStoreId'
+            ])
+            && getAfter(
+              /databases/$(database)/documents/stores/$(request.resource.data.targetStoreId)
+            ).data.lastAuditId == id
+          )
+          || (
+            !request.resource.data.keys().hasAny([
+              'targetStoreId'
+            ])
+            && getAfter(
+              /databases/$(database)/documents/business_requests/$(request.resource.data.targetBusinessId)
+            ).data.lastAuditId == id
+          )
+        );
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
