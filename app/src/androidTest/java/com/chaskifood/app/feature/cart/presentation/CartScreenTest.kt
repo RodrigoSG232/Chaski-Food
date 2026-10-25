@@ -51,6 +51,13 @@ class CartScreenTest {
         compose.runOnIdle { assertEquals(1, explored) }
     }
 
+    @Test fun carritoConProductosPermiteAbrirRevisionDeCompra() {
+        var reviews = 0
+        show(CartUiState(source = CartState.Ready(cart)), onCheckout = { reviews++ })
+        compose.onNodeWithText("Revisar compra").performClick()
+        compose.runOnIdle { assertEquals(1, reviews) }
+    }
+
     @Test fun carritoVacioMuestraAvisoYProgresoSinPermitirNavegarDuranteOperacion() {
         val empty = Cart("uid")
         val state = mutableStateOf(CartUiState(source = CartState.Ready(empty),
@@ -177,6 +184,7 @@ class CartScreenTest {
         stateOverride: androidx.compose.runtime.State<CartUiState>? = null,
         onBack: () -> Unit = {},
         onExplore: () -> Unit = {},
+        onCheckout: () -> Unit = {},
         onRetry: () -> Unit = {},
         onChange: (String, Int) -> Unit = { _, _ -> },
         onRemove: (String) -> Unit = {},
@@ -191,6 +199,7 @@ class CartScreenTest {
                     state = current,
                     onBack = onBack,
                     onExploreProducts = onExplore,
+                    onCheckout = onCheckout,
                     onRetry = onRetry,
                     onChangeQuantity = onChange,
                     onRemoveProduct = onRemove,

@@ -381,6 +381,7 @@ private fun FilterChipsRow(
             ) {
                 Text(
                     text = chip,
+                    modifier = Modifier.weight(1f, fill = false),
                     fontSize = 14.sp,
                     fontWeight = FontWeight.SemiBold,
                     letterSpacing = 0.5.sp,

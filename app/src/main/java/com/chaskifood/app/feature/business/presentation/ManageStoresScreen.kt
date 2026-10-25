@@ -77,6 +77,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -87,6 +88,7 @@ import com.chaskifood.app.feature.auth.presentation.AuthSubmitButton
 import com.chaskifood.app.feature.business.domain.BusinessStore
 import com.chaskifood.app.feature.business.domain.StoreManager
 import com.chaskifood.app.feature.business.domain.StoreStatus
+import com.chaskifood.app.ui.components.ChaskiStatusPill
 import com.chaskifood.app.ui.theme.ChaskiBackground
 import com.chaskifood.app.ui.theme.ChaskiDimens
 import com.chaskifood.app.ui.theme.ChaskiPrimary
@@ -371,12 +373,11 @@ private fun StoresTabContent(
                     modifier = Modifier.fillMaxWidth(),
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.Top,
+                            ) {
                                 Icon(
                                     imageVector = Icons.Filled.Store,
                                     contentDescription = null,
@@ -385,31 +386,21 @@ private fun StoresTabContent(
                                 )
                                 Text(
                                     text = store.name,
+                                    modifier = Modifier.weight(1f),
                                     fontSize = 18.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = ChaskiTextPrimary,
                                 )
                             }
-
-                            Box(
-                                modifier = Modifier
-                                    .background(
-                                        color = if (store.status == StoreStatus.ACTIVE) ChaskiStatusApprovedBg else ChaskiStatusRejectedBg,
-                                        shape = RoundedCornerShape(16.dp),
-                                    )
-                                    .padding(horizontal = 10.dp, vertical = 4.dp),
-                            ) {
-                                Text(
-                                    text = when (store.status) {
-                                        StoreStatus.ACTIVE -> "ACTIVO"
-                                        StoreStatus.INACTIVE -> "INACTIVO"
-                                        StoreStatus.SUSPENDED -> "SUSPENDIDO"
-                                    },
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = if (store.status == StoreStatus.ACTIVE) ChaskiStatusApprovedFg else ChaskiStatusRejectedFg,
-                                )
-                            }
+                            ChaskiStatusPill(
+                                text = when (store.status) {
+                                    StoreStatus.ACTIVE -> "ACTIVO"
+                                    StoreStatus.INACTIVE -> "INACTIVO"
+                                    StoreStatus.SUSPENDED -> "SUSPENDIDO"
+                                },
+                                backgroundColor = if (store.status == StoreStatus.ACTIVE) ChaskiStatusApprovedBg else ChaskiStatusRejectedBg,
+                                contentColor = if (store.status == StoreStatus.ACTIVE) ChaskiStatusApprovedFg else ChaskiStatusRejectedFg,
+                            )
                         }
 
                         Spacer(Modifier.height(8.dp))
@@ -721,22 +712,23 @@ internal fun StoreDialog(
                         border = BorderStroke(1.dp, ChaskiPrimary),
                         colors = ButtonDefaults.outlinedButtonColors(contentColor = ChaskiPrimary),
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Default.LocationOn,
-                                contentDescription = null,
-                                modifier = Modifier.size(20.dp),
-                                tint = ChaskiPrimary,
-                            )
-                            Spacer(Modifier.width(8.dp))
-                            Text(
-                                text = if (latitude.isNotBlank() && longitude.isNotBlank())
-                                    "📍 Cambiar ubicación en el mapa"
-                                else
-                                    "📍 Seleccionar ubicación en el mapa",
-                                fontWeight = FontWeight.Bold,
-                            )
-                        }
+                        Icon(
+                            imageVector = Icons.Default.LocationOn,
+                            contentDescription = null,
+                            modifier = Modifier.size(20.dp),
+                            tint = ChaskiPrimary,
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            text = if (latitude.isNotBlank() && longitude.isNotBlank())
+                                "Cambiar ubicación en el mapa"
+                            else
+                                "Seleccionar ubicación en el mapa",
+                            modifier = Modifier.weight(1f),
+                            fontWeight = FontWeight.Bold,
+                            textAlign = TextAlign.Center,
+                            softWrap = true,
+                        )
                     }
 
                     if (latitude.isNotBlank() && longitude.isNotBlank()) {

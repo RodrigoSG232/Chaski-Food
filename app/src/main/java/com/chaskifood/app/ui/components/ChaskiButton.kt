@@ -2,6 +2,7 @@ package com.chaskifood.app.ui.components
 
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
@@ -10,7 +11,9 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.chaskifood.app.ui.theme.ChaskiAction
 import com.chaskifood.app.ui.theme.ChaskiOnPrimary
@@ -33,6 +36,7 @@ fun ChaskiButton(
     variant: ChaskiButtonVariant = ChaskiButtonVariant.Primary,
 ) {
     val shape = MaterialTheme.shapes.large
+    val contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp)
     when (variant) {
         ChaskiButtonVariant.Primary -> Button(
             onClick = onClick,
@@ -41,12 +45,13 @@ fun ChaskiButton(
                 .heightIn(min = ChaskiDimens.BottomNavHeight - 12.dp),
             enabled = enabled,
             shape = shape,
+            contentPadding = contentPadding,
             colors = ButtonDefaults.buttonColors(
                 containerColor = ChaskiAction,
                 contentColor = ChaskiOnPrimary,
             ),
         ) {
-            Text(text = text, fontWeight = FontWeight.SemiBold)
+            ButtonLabel(text)
         }
 
         ChaskiButtonVariant.Accent -> Button(
@@ -56,12 +61,13 @@ fun ChaskiButton(
                 .heightIn(min = ChaskiDimens.BottomNavHeight - 12.dp),
             enabled = enabled,
             shape = shape,
+            contentPadding = contentPadding,
             colors = ButtonDefaults.buttonColors(
                 containerColor = ChaskiPrimary,
                 contentColor = ChaskiOnPrimary,
             ),
         ) {
-            Text(text = text, fontWeight = FontWeight.SemiBold)
+            ButtonLabel(text)
         }
 
         ChaskiButtonVariant.Outlined -> OutlinedButton(
@@ -71,18 +77,32 @@ fun ChaskiButton(
                 .heightIn(min = ChaskiDimens.BottomNavHeight - 12.dp),
             enabled = enabled,
             shape = shape,
+            contentPadding = contentPadding,
             border = androidx.compose.foundation.BorderStroke(1.dp, ChaskiPrimary),
             colors = ButtonDefaults.outlinedButtonColors(contentColor = ChaskiPrimary),
         ) {
-            Text(text = text, fontWeight = FontWeight.SemiBold)
+            ButtonLabel(text)
         }
 
         ChaskiButtonVariant.Text -> TextButton(
             onClick = onClick,
             modifier = modifier.fillMaxWidth(),
             enabled = enabled,
+            contentPadding = contentPadding,
         ) {
-            Text(text = text, color = ChaskiPrimary, fontWeight = FontWeight.SemiBold)
+            ButtonLabel(text, color = ChaskiPrimary)
         }
     }
+}
+
+@Composable
+private fun ButtonLabel(text: String, color: Color = Color.Unspecified) {
+    Text(
+        text = text,
+        modifier = Modifier.fillMaxWidth(),
+        color = color,
+        fontWeight = FontWeight.SemiBold,
+        textAlign = TextAlign.Center,
+        softWrap = true,
+    )
 }
