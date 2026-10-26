@@ -1,18 +1,13 @@
 package com.chaskifood.app.feature.checkout.data
 
-import com.chaskifood.app.feature.address.domain.model.Address
-import com.chaskifood.app.feature.address.domain.model.AddressBookState
-import com.chaskifood.app.feature.address.domain.repository.AddressRepository
-import com.chaskifood.app.feature.auth.domain.AuthRepository
 import com.chaskifood.app.feature.business.domain.getCurrentDayOfWeek
 import com.chaskifood.app.feature.business.domain.getCurrentFormattedTime
 import com.chaskifood.app.feature.cart.domain.AddToCartRejectionReason
 import com.chaskifood.app.feature.cart.domain.AddToCartValidationResult
-import com.chaskifood.app.feature.cart.domain.Cart
-import com.chaskifood.app.feature.cart.domain.CartState
-import com.chaskifood.app.feature.cart.domain.CartRepository
 import com.chaskifood.app.feature.cart.domain.ValidateProductForCart
 import com.chaskifood.app.feature.checkout.domain.CheckoutPricedItem
+import com.chaskifood.app.feature.checkout.domain.CheckoutContext
+import com.chaskifood.app.feature.checkout.domain.CheckoutContextState
 import com.chaskifood.app.feature.checkout.domain.CheckoutRepository
 import com.chaskifood.app.feature.checkout.domain.CheckoutReviewResult
 import com.chaskifood.app.feature.checkout.domain.DELIVERY_FEE_MINOR
@@ -28,21 +23,32 @@ import com.google.firebase.firestore.FirebaseFirestoreException
 import com.google.firebase.firestore.Source
 import javax.inject.Inject
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.tasks.await
 
 /** Vuelve a leer Firestore desde el servidor; nunca interpreta un fallo como compra válida. */
 internal class FirebaseCheckoutRepository @Inject constructor(
-    private val auth: AuthRepository,
-    private val carts: CartRepository,
-    private val addresses: AddressRepository,
+    private val contexts: CheckoutContextSource,
     private val offers: ProductOfferReader,
     private val firestore: FirebaseFirestore,
 ) : CheckoutRepository {
     private val validateProduct = ValidateProductForCart()
 
-    override suspend fun review(): CheckoutReviewResult = try {
-        reviewVerified()
+    override fun observeContext(): Flow<CheckoutContextState> = contexts.observe()
+
+    override suspend fun isContextCurrent(context: CheckoutContext): Boolean = contexts.isCurrent(context)
+
+    override suspend fun review(context: CheckoutContext): CheckoutReviewResult = try {
+        if (!contexts.isCurrentSession(context)) CheckoutReviewResult.SignedOut
+        else if (!contexts.isCurrent(context)) CheckoutReviewResult.Error(
+            "La compra cambió mientras la revisábamos. Vuelve a comprobarla.")
+        else {
+            val result = reviewVerified(context)
+            if (result is CheckoutReviewResult.Ready && !contexts.isCurrent(context)) {
+                CheckoutReviewResult.Error("La compra cambió mientras la revisábamos. Vuelve a comprobarla.")
+            } else if (!contexts.isCurrentSession(context)) CheckoutReviewResult.SignedOut
+            else result
+        }
     } catch (cancelled: CancellationException) {
         throw cancelled
     } catch (error: FirebaseFirestoreException) {
@@ -57,21 +63,14 @@ internal class FirebaseCheckoutRepository @Inject constructor(
         CheckoutReviewResult.Error("No pudimos comprobar la compra. Reintenta antes de continuar.")
     }
 
-    private suspend fun reviewVerified(): CheckoutReviewResult {
-        val uid = auth.currentUserFlow.first()?.uid ?: return CheckoutReviewResult.SignedOut
-        val cart = when (val state = carts.observeCart().first { it !is CartState.Loading }) {
-            is CartState.Ready -> state.cart
-            CartState.SignedOut -> return CheckoutReviewResult.SignedOut
-            CartState.ReadError -> return CheckoutReviewResult.Error("No pudimos leer tu carrito.")
-            CartState.Loading -> error("Loading ya fue filtrado")
-        }
+    private suspend fun reviewVerified(context: CheckoutContext): CheckoutReviewResult {
+        val uid = context.ownerUid
+        val cart = context.cart
         if (cart.ownerUid != uid) return CheckoutReviewResult.SignedOut
         if (cart.items.isEmpty()) return CheckoutReviewResult.Blocked(listOf("Tu carrito está vacío."))
         val storeId = cart.storeId ?: return CheckoutReviewResult.Error("El carrito no tiene un local válido.")
-        val address = when (val result = selectedAddress(uid)) {
-            is AddressResult.Ready -> result.address
-            is AddressResult.Failed -> return result.result
-        }
+        val address = context.selectedAddress ?: return CheckoutReviewResult.Blocked(
+            listOf("Selecciona una dirección de entrega válida."), canChangeAddress = true)
         val document = firestore.collection("stores").document(storeId).get(Source.SERVER).await()
         if (document.metadata.isFromCache || document.metadata.hasPendingWrites()) {
             return CheckoutReviewResult.Error("No pudimos verificar el local en el servidor.")
@@ -122,12 +121,6 @@ internal class FirebaseCheckoutRepository @Inject constructor(
             }
         }
         if (reasons.isNotEmpty()) return CheckoutReviewResult.Blocked(reasons)
-        // Una edición del carrito, dirección o sesión durante las lecturas invalida la revisión.
-        if (auth.currentUserFlow.first()?.uid != uid ||
-            (carts.observeCart().first { it !is CartState.Loading } as? CartState.Ready)?.cart != cart ||
-            (selectedAddress(uid) as? AddressResult.Ready)?.address != address) {
-            return CheckoutReviewResult.Error("La compra cambió mientras la revisábamos. Vuelve a comprobarla.")
-        }
         val latestDocument = firestore.collection("stores").document(storeId).get(Source.SERVER).await()
         if (latestDocument.metadata.isFromCache || latestDocument.metadata.hasPendingWrites()) {
             return CheckoutReviewResult.Error("No pudimos volver a verificar el local en el servidor.")
@@ -157,26 +150,6 @@ internal class FirebaseCheckoutRepository @Inject constructor(
         ))
     }
 
-    private suspend fun selectedAddress(uid: String): AddressResult = when (
-        val state = addresses.observeAddressBook().first { it !is AddressBookState.Loading }
-    ) {
-        AddressBookState.SignedOut -> AddressResult.Failed(CheckoutReviewResult.SignedOut)
-        is AddressBookState.Error -> AddressResult.Failed(CheckoutReviewResult.Error(
-            "No pudimos comprobar tu dirección de entrega."))
-        is AddressBookState.Ready -> {
-            if (state.book.ownerUid != uid) AddressResult.Failed(CheckoutReviewResult.SignedOut)
-            else state.book.addresses.singleOrNull { it.id == state.book.selectedAddressId }
-                ?.let(AddressResult::Ready)
-                ?: AddressResult.Failed(CheckoutReviewResult.Blocked(
-                    listOf("Selecciona una dirección de entrega válida."), canChangeAddress = true))
-        }
-        is AddressBookState.Loading -> error("Loading ya fue filtrado")
-    }
-
-    private sealed interface AddressResult {
-        data class Ready(val address: Address) : AddressResult
-        data class Failed(val result: CheckoutReviewResult) : AddressResult
-    }
 }
 
 private fun StoreExclusionReason.message(): String = when (this) {

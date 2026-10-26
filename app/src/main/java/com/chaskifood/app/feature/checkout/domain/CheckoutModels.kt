@@ -1,6 +1,9 @@
 package com.chaskifood.app.feature.checkout.domain
 
 import com.chaskifood.app.feature.cart.domain.CartCurrency
+import com.chaskifood.app.feature.cart.domain.Cart
+import com.chaskifood.app.feature.address.domain.model.Address
+import kotlinx.coroutines.flow.Flow
 
 /** Una revisión temporal de la compra; HU16 deberá calcularla otra vez en el servidor. */
 data class CheckoutQuote(
@@ -67,8 +70,27 @@ sealed interface CheckoutReviewResult {
     data object SignedOut : CheckoutReviewResult
 }
 
+/** Datos que pueden cambiar mientras se consulta la oferta; la generación distingue A → logout → A. */
+data class CheckoutContext(
+    val ownerUid: String,
+    val sessionGeneration: Long,
+    val cart: Cart,
+    val selectedAddress: Address?,
+)
+
+sealed interface CheckoutContextState {
+    data object Loading : CheckoutContextState
+    data object SignedOut : CheckoutContextState
+    data object ReadError : CheckoutContextState
+    data class Ready(val context: CheckoutContext) : CheckoutContextState
+}
+
 interface CheckoutRepository {
-    suspend fun review(): CheckoutReviewResult
+    /** Una sola suscripción por pantalla; ignora cambios de direcciones no seleccionadas. */
+    fun observeContext(): Flow<CheckoutContextState>
+    /** Comprueba sesión, contexto observado y fuentes locales actuales; no consulta Firestore. */
+    suspend fun isContextCurrent(context: CheckoutContext): Boolean
+    suspend fun review(context: CheckoutContext): CheckoutReviewResult
 }
 
 /** Política inicial explícita, compartible con la futura confirmación del pedido. */

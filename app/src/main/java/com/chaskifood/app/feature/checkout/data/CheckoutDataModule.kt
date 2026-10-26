@@ -11,4 +11,7 @@ import dagger.hilt.components.SingletonComponent
 internal abstract class CheckoutDataModule {
     @Binds
     abstract fun bindCheckoutRepository(impl: FirebaseCheckoutRepository): CheckoutRepository
+
+    @Binds
+    abstract fun bindCheckoutLocalSnapshotReader(impl: StoredCheckoutLocalSnapshotReader): CheckoutLocalSnapshotReader
 }

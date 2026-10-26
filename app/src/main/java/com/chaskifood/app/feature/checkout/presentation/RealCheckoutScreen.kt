@@ -70,12 +70,16 @@ fun RealCheckoutScreen(
             verticalArrangement = Arrangement.spacedBy(ChaskiDimens.SpacingMd),
         ) {
             when {
-                state.loading || state.result == null -> item("loading") {
+                state.loading -> item("loading") {
                     Row(verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(ChaskiDimens.SpacingMd)) {
                         CircularProgressIndicator()
                         Text("Comprobando carrito, dirección y oferta actual…")
                     }
+                }
+                state.result == null -> {
+                    item("changed") { CheckoutMessage("La compra cambió. Vuelve a comprobarla antes de continuar.") }
+                    item("review-again") { ChaskiButton("Volver a comprobar", onClick = viewModel::review) }
                 }
                 state.result is CheckoutReviewResult.SignedOut -> item("signed-out") {
                     CheckoutMessage("Inicia sesión para revisar tu compra.")
