@@ -26,10 +26,17 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
-        buildConfigField("String", "API_BASE_URL", "\"http://10.0.2.2:3000/api/v1/\"")
+        // Configurar una URL HTTPS real antes de distribuir Release.
+        buildConfigField("String", "API_BASE_URL", "\"https://unconfigured.invalid/\"")
+        buildConfigField("String", "ELIGIBILITY_API_BASE_URL", "\"https://unconfigured.invalid/\"")
     }
 
     buildTypes {
+        debug {
+            buildConfigField("String", "API_BASE_URL", "\"http://10.0.2.2:3000/api/v1/\"")
+            buildConfigField("String", "ELIGIBILITY_API_BASE_URL",
+                "\"http://10.0.2.2:5001/demo-chaski-hu15/us-central1/foodApi/api/v1/\"")
+        }
         release {
             optimization {
                 enable = false

@@ -60,11 +60,11 @@ class CheckoutViewModel @Inject constructor(
                     (previous != null && current is CheckoutContextState.Ready &&
                         (previous.context.ownerUid != current.context.ownerUid ||
                             previous.context.sessionGeneration != current.context.sessionGeneration))
+                val requested = pendingReview
                 context = current
                 reviewJob?.cancel()
                 attempt++
-                val requested = pendingReview && current is CheckoutContextState.Ready
-                pendingReview = false
+                pendingReview = requested && current == CheckoutContextState.Loading
                 _uiState.value = _uiState.value.copy(
                     loading = current == CheckoutContextState.Loading,
                     result = when (current) {
@@ -75,12 +75,19 @@ class CheckoutViewModel @Inject constructor(
                     paymentMethod = if (newSession) null else _uiState.value.paymentMethod,
                     acceptedPriceChanges = false,
                 )
-                if (requested) startReview(current.context)
+                if (requested && current is CheckoutContextState.Ready) startReview(current.context)
             }
         }
     }
 
     fun review() {
+        // ON_RESUME puede repetirse mientras el mismo intento está en curso. Una vez terminado,
+        // el siguiente regreso sí consulta otra vez precios, horarios y disponibilidad remotos.
+        if (context == CheckoutContextState.Loading && pendingReview) return
+        if (context is CheckoutContextState.Ready && reviewJob?.isActive == true) {
+            pendingReview = true // Si el contexto cambia antes de terminar, revisa el nuevo.
+            return
+        }
         reviewJob?.cancel()
         attempt++
         if (context == CheckoutContextState.ReadError) {
@@ -119,6 +126,8 @@ class CheckoutViewModel @Inject constructor(
                 currentCoroutineContext().ensureActive()
                 publish(request, expected,
                     CheckoutReviewResult.Error("No pudimos comprobar la compra. Reintenta."))
+            } finally {
+                if (request == attempt) pendingReview = false
             }
         }
     }

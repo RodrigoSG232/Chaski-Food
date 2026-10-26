@@ -9,6 +9,9 @@ import com.chaskifood.app.feature.checkout.domain.CheckoutPricedItem
 import com.chaskifood.app.feature.checkout.domain.CheckoutContext
 import com.chaskifood.app.feature.checkout.domain.CheckoutContextState
 import com.chaskifood.app.feature.checkout.domain.CheckoutRepository
+import com.chaskifood.app.feature.checkout.domain.StorePurchaseEligibilityReader
+import com.chaskifood.app.feature.checkout.domain.PurchaseEligibility
+import com.chaskifood.app.feature.checkout.domain.PurchaseBlockReason
 import com.chaskifood.app.feature.checkout.domain.CheckoutReviewResult
 import com.chaskifood.app.feature.checkout.domain.DELIVERY_FEE_MINOR
 import com.chaskifood.app.feature.checkout.domain.buildCheckoutQuote
@@ -20,6 +23,7 @@ import com.chaskifood.app.feature.search.domain.ProductOfferReadResult
 import com.chaskifood.app.feature.search.domain.ProductOfferReader
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.FirebaseFirestoreException
+import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.Source
 import javax.inject.Inject
 import kotlinx.coroutines.CancellationException
@@ -31,8 +35,11 @@ internal class FirebaseCheckoutRepository @Inject constructor(
     private val contexts: CheckoutContextSource,
     private val offers: ProductOfferReader,
     private val firestore: FirebaseFirestore,
+    private val administrativeEligibility: StorePurchaseEligibilityReader,
 ) : CheckoutRepository {
     private val validateProduct = ValidateProductForCart()
+    /** Cuenta las lecturas directas del local en las pruebas con Emulator. */
+    internal var onStoreGet: (() -> Unit)? = null
 
     override fun observeContext(): Flow<CheckoutContextState> = contexts.observe()
 
@@ -71,7 +78,7 @@ internal class FirebaseCheckoutRepository @Inject constructor(
         val storeId = cart.storeId ?: return CheckoutReviewResult.Error("El carrito no tiene un local válido.")
         val address = context.selectedAddress ?: return CheckoutReviewResult.Blocked(
             listOf("Selecciona una dirección de entrega válida."), canChangeAddress = true)
-        val document = firestore.collection("stores").document(storeId).get(Source.SERVER).await()
+        val document = serverStore(storeId)
         if (document.metadata.isFromCache || document.metadata.hasPendingWrites()) {
             return CheckoutReviewResult.Error("No pudimos verificar el local en el servidor.")
         }
@@ -89,10 +96,16 @@ internal class FirebaseCheckoutRepository @Inject constructor(
                     eligibility.reason == StoreExclusionReason.INVALID_ADDRESS)
         }
 
+        // El lector normal conserva sus validaciones para Cart y ProductDetail. Checkout comparte
+        // únicamente este local confirmado y las categorías de esta revisión.
+        val reviewOffers = if (document.data?.get("deliveryRadiusKm") is Number) {
+            offers.openCheckoutReview(candidate, address.location)
+        } else null
         val pricedItems = mutableListOf<CheckoutPricedItem>()
         val reasons = mutableListOf<String>()
         for (item in cart.items) {
-            when (val offer = offers.read(storeId, item.productId, address.location)) {
+            when (val offer = reviewOffers?.read(item.productId)
+                ?: offers.read(storeId, item.productId, address.location)) {
                 is ProductOfferReadResult.Found -> {
                     when (val validated = validateProduct(storeId, offer.product,
                         offer.configuration, item.quantity)) {
@@ -121,7 +134,7 @@ internal class FirebaseCheckoutRepository @Inject constructor(
             }
         }
         if (reasons.isNotEmpty()) return CheckoutReviewResult.Blocked(reasons)
-        val latestDocument = firestore.collection("stores").document(storeId).get(Source.SERVER).await()
+        val latestDocument = serverStore(storeId)
         if (latestDocument.metadata.isFromCache || latestDocument.metadata.hasPendingWrites()) {
             return CheckoutReviewResult.Error("No pudimos volver a verificar el local en el servidor.")
         }
@@ -136,7 +149,26 @@ internal class FirebaseCheckoutRepository @Inject constructor(
         val lastEligibility = evaluateStoreEligibility(latestCandidate, address.location,
             getCurrentDayOfWeek(), getCurrentFormattedTime())
         if (lastEligibility is StoreEligibilityResult.Excluded) {
-            return CheckoutReviewResult.Blocked(listOf(lastEligibility.reason.message()))
+            return CheckoutReviewResult.Blocked(listOf(lastEligibility.reason.message()),
+                canChangeAddress = lastEligibility.reason == StoreExclusionReason.OUTSIDE_COVERAGE ||
+                    lastEligibility.reason == StoreExclusionReason.INVALID_ADDRESS)
+        }
+        if (!contexts.isCurrent(context)) return CheckoutReviewResult.Error("La compra cambió. Vuelve a comprobarla.")
+        val administrative = administrativeEligibility.check(storeId, context.ownerUid, context.sessionGeneration)
+        if (!contexts.isCurrentSession(context)) return CheckoutReviewResult.SignedOut
+        if (!contexts.isCurrent(context)) return CheckoutReviewResult.Error("La compra cambió. Vuelve a comprobarla.")
+        when (administrative) {
+            is PurchaseEligibility.Eligible -> if (administrative.businessId != cart.businessId) {
+                return CheckoutReviewResult.Error("El local cambió de negocio. Vuelve a comprobar la compra.")
+            }
+            is PurchaseEligibility.Blocked -> return CheckoutReviewResult.Blocked(listOf(when (administrative.reason) {
+                PurchaseBlockReason.BUSINESS_SUSPENDED -> "El negocio está suspendido y no puede recibir compras."
+                PurchaseBlockReason.BUSINESS_NOT_APPROVED -> "El negocio todavía no está habilitado para recibir compras."
+                PurchaseBlockReason.STORE_UNAVAILABLE -> "El local no está disponible para recibir compras."
+            }))
+            PurchaseEligibility.SessionChanged -> return CheckoutReviewResult.SignedOut
+            PurchaseEligibility.AuthenticationRequired -> return CheckoutReviewResult.Error("Vuelve a iniciar sesión para comprobar la compra.")
+            PurchaseEligibility.Unavailable -> return CheckoutReviewResult.Error("No pudimos comprobar la habilitación del negocio. Vuelve a comprobar la compra.")
         }
         return CheckoutReviewResult.Ready(buildCheckoutQuote(
             ownerUid = uid,
@@ -148,6 +180,11 @@ internal class FirebaseCheckoutRepository @Inject constructor(
             pricedItems = pricedItems,
             deliveryFeeMinor = DELIVERY_FEE_MINOR,
         ))
+    }
+
+    private suspend fun serverStore(storeId: String): DocumentSnapshot {
+        onStoreGet?.invoke()
+        return firestore.collection("stores").document(storeId).get(Source.SERVER).await()
     }
 
 }

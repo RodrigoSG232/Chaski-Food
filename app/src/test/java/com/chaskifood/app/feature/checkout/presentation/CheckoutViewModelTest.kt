@@ -136,12 +136,64 @@ class CheckoutViewModelTest {
         val model = CheckoutViewModel(repository)
         model.review()
         runCurrent()
+        repository.context.value = CheckoutContextState.Ready(context(quantity = 2))
+        runCurrent()
         model.review()
         runCurrent()
         assertEquals(newer, model.uiState.value.result)
         gate.complete(Unit)
         runCurrent()
         assertEquals(newer, model.uiState.value.result)
+    }
+
+    @Test fun `dos ON_RESUME equivalentes comparten la revision en curso`() = runTest {
+        val gate = CompletableDeferred<Unit>()
+        val repository = FakeCheckoutRepository(CheckoutReviewResult.Ready(quote(oldPrice = 1000)))
+        repository.reviewBlock = { gate.await(); repository.next }
+        val model = CheckoutViewModel(repository)
+        model.review()
+        runCurrent()
+        model.review()
+        runCurrent()
+        assertEquals(1, repository.reviews)
+        gate.complete(Unit)
+        runCurrent()
+        assertTrue(model.uiState.value.result is CheckoutReviewResult.Ready)
+    }
+
+    @Test fun `regreso despues de Ready vuelve a consultar la oferta`() = runTest {
+        val repository = FakeCheckoutRepository(CheckoutReviewResult.Ready(quote(oldPrice = 1000)))
+        val model = CheckoutViewModel(repository)
+        model.review()
+        runCurrent()
+        repository.next = CheckoutReviewResult.Blocked(listOf("Oferta agotada"))
+        model.review()
+        runCurrent()
+        assertEquals(2, repository.reviews)
+        assertEquals(repository.next, model.uiState.value.result)
+    }
+
+    @Test fun `ON_RESUME durante consulta revisa el contexto nuevo si cambia antes de terminar`() = runTest {
+        val gate = CompletableDeferred<Unit>()
+        val repository = FakeCheckoutRepository(CheckoutReviewResult.Ready(quote(oldPrice = 1000)))
+        repository.reviewBlock = { number ->
+            if (number == 1) withContext(NonCancellable) { gate.await() }
+            if (number == 1) CheckoutReviewResult.Ready(quote(oldPrice = 1000))
+            else CheckoutReviewResult.Blocked(listOf("Cambio de carrito"))
+        }
+        val model = CheckoutViewModel(repository)
+        model.review()
+        runCurrent()
+        model.review() // Equivalente mientras la primera lectura está pendiente.
+        runCurrent()
+        assertEquals(1, repository.reviews)
+        repository.context.value = CheckoutContextState.Ready(context(quantity = 2))
+        runCurrent()
+        assertEquals(2, repository.reviews)
+        assertTrue(model.uiState.value.result is CheckoutReviewResult.Blocked)
+        gate.complete(Unit)
+        runCurrent()
+        assertTrue(model.uiState.value.result is CheckoutReviewResult.Blocked)
     }
 
     @Test fun `cambio de carrito durante consulta descarta respuesta tardia`() = runTest {
