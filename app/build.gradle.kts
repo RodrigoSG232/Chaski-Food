@@ -1,3 +1,5 @@
+import java.net.URI
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
@@ -5,6 +7,27 @@ plugins {
     alias(libs.plugins.ksp)
     alias(libs.plugins.hilt)
     alias(libs.plugins.google.services)
+}
+
+// LOCAL es el laboratorio ficticio; CONECTADO requiere elegirlo expresamente al compilar Debug.
+val chaskiFirebaseMode = providers.gradleProperty("chaskiFirebaseMode").orNull?.uppercase() ?: "LOCAL"
+require(chaskiFirebaseMode in setOf("LOCAL", "CONECTADO")) { "chaskiFirebaseMode debe ser LOCAL o CONECTADO" }
+val chaskiEmulatorHost = providers.gradleProperty("chaskiEmulatorHost").orNull ?: "10.0.2.2"
+require(chaskiEmulatorHost in setOf("10.0.2.2", "127.0.0.1")) { "Host de Emulator no permitido" }
+val chaskiConnectedProjectId = providers.gradleProperty("chaskiConnectedProjectId").orNull.orEmpty()
+require(chaskiConnectedProjectId.isEmpty() || chaskiConnectedProjectId.matches(Regex("[a-z0-9-]{6,30}"))) {
+    "Identificador de proyecto Firebase inválido"
+}
+val chaskiCheckoutApiBaseUrl = providers.gradleProperty("chaskiCheckoutApiBaseUrl").orNull
+if (chaskiCheckoutApiBaseUrl != null) {
+    val uri = URI(chaskiCheckoutApiBaseUrl)
+    require(chaskiFirebaseMode == "CONECTADO" && chaskiConnectedProjectId.isNotBlank() &&
+        uri.scheme == "https" && uri.host == "us-central1-$chaskiConnectedProjectId.cloudfunctions.net" &&
+        uri.port == -1 && uri.rawQuery == null && uri.rawFragment == null &&
+        uri.path == "/foodApi/api/v1/" &&
+        chaskiCheckoutApiBaseUrl.matches(Regex("[A-Za-z0-9./:_-]+"))) {
+        "Checkout CONECTADO requiere URL HTTPS pública y chaskiConnectedProjectId"
+    }
 }
 
 ksp {
@@ -33,11 +56,23 @@ android {
 
     buildTypes {
         debug {
-            buildConfigField("String", "API_BASE_URL", "\"http://10.0.2.2:3000/api/v1/\"")
-            buildConfigField("String", "ELIGIBILITY_API_BASE_URL",
-                "\"http://10.0.2.2:5001/demo-chaski-hu15/us-central1/foodApi/api/v1/\"")
+            buildConfigField("String", "FIREBASE_MODE", "\"$chaskiFirebaseMode\"")
+            buildConfigField("String", "EMULATOR_HOST",
+                "\"${if (chaskiFirebaseMode == "LOCAL") chaskiEmulatorHost else ""}\"")
+            buildConfigField("String", "CONNECTED_FIREBASE_PROJECT_ID", "\"$chaskiConnectedProjectId\"")
+            if (chaskiFirebaseMode == "LOCAL") {
+                buildConfigField("String", "API_BASE_URL", "\"http://$chaskiEmulatorHost:3000/api/v1/\"")
+                buildConfigField("String", "ELIGIBILITY_API_BASE_URL",
+                    "\"http://$chaskiEmulatorHost:5001/demo-chaski-hu15/us-central1/foodApi/api/v1/\"")
+            } else {
+                buildConfigField("String", "ELIGIBILITY_API_BASE_URL",
+                    "\"${chaskiCheckoutApiBaseUrl ?: "https://unconfigured.invalid/"}\"")
+            }
         }
         release {
+            buildConfigField("String", "FIREBASE_MODE", "\"CONECTADO\"")
+            buildConfigField("String", "EMULATOR_HOST", "\"\"")
+            buildConfigField("String", "CONNECTED_FIREBASE_PROJECT_ID", "\"\"")
             optimization {
                 enable = false
             }

@@ -3,6 +3,7 @@ package com.chaskifood.app.feature.checkout.data
 import android.content.Context
 import android.os.SystemClock
 import com.chaskifood.app.feature.checkout.data.remote.StoreEligibilityApi
+import com.chaskifood.app.feature.checkout.data.remote.DeliveryQuoteApi
 import kotlinx.serialization.json.Json
 import okhttp3.OkHttpClient
 import okhttp3.MediaType.Companion.toMediaType
@@ -28,6 +29,10 @@ import com.chaskifood.app.feature.cart.domain.Cart
 import com.chaskifood.app.feature.cart.domain.CartProductSnapshot
 import com.chaskifood.app.feature.checkout.domain.CheckoutContext
 import com.chaskifood.app.feature.checkout.domain.CheckoutContextState
+import com.chaskifood.app.feature.checkout.domain.DeliveryQuote
+import com.chaskifood.app.feature.checkout.domain.DeliveryQuoteReader
+import com.chaskifood.app.feature.checkout.domain.DeliveryQuoteResult
+import com.chaskifood.app.feature.cart.domain.CartCurrency
 import com.chaskifood.app.feature.search.data.FirebaseProductOfferReader
 import com.chaskifood.app.feature.search.domain.ProductOfferReader
 import com.google.firebase.FirebaseApp
@@ -81,6 +86,17 @@ internal class CheckoutEmulatorFixture {
         private set
     var lastBackendReads = 0
         private set
+    var deliveryResult: DeliveryQuoteResult? = null
+    var beforeDeliveryReturn: (suspend () -> Unit)? = null
+    @Volatile var afterQuoteHttpResponse: (() -> Unit)? = null
+    @Volatile var quoteHttpCalls = 0
+        private set
+    @Volatile var quoteHttpStatus = 0
+        private set
+    @Volatile var quoteRouteSource: String? = null
+        private set
+    @Volatile var quoteBackendReads = 0
+        private set
 
     init {
         check(FirebaseApp.getApps(androidContext).all { it.options.projectId == PROJECT_ID }) {
@@ -90,6 +106,13 @@ internal class CheckoutEmulatorFixture {
 
     suspend fun beginTest() {
         afterHttpResponse = null
+        deliveryResult = null
+        beforeDeliveryReturn = null
+        afterQuoteHttpResponse = null
+        quoteHttpCalls = 0
+        quoteHttpStatus = 0
+        quoteRouteSource = null
+        quoteBackendReads = 0
         auth.signOut()
         clearAccounts()
         clearDocuments()
@@ -111,7 +134,7 @@ internal class CheckoutEmulatorFixture {
         auth.signInWithEmailAndPassword(email, password).await()
     }
 
-    fun createLocalCheckout(offers: ProductOfferReader) {
+    fun createLocalCheckout(offers: ProductOfferReader, useRealDeliveryQuotes: Boolean = false) {
         if (::database.isInitialized) database.close()
         database = Room.inMemoryDatabaseBuilder(androidContext, ChaskiDatabase::class.java).build()
         local = CartLocalCoordinator(database, database.cartDao(), sessions)
@@ -121,18 +144,51 @@ internal class CheckoutEmulatorFixture {
         val client = OkHttpClient.Builder().addInterceptor { chain ->
             val start = SystemClock.elapsedRealtimeNanos()
             val response = chain.proceed(chain.request())
-            lastHttpMs = (SystemClock.elapsedRealtimeNanos() - start) / 1_000_000
-            lastBackendMs = response.header("Server-Timing")?.substringAfter("dur=")?.toDoubleOrNull() ?: 0.0
-            lastBackendReads = response.header("X-Eligibility-Reads")?.toIntOrNull() ?: 0
-            afterHttpResponse?.invoke()
+            if (chain.request().url.encodedPath.endsWith("/delivery-quotes")) {
+                quoteHttpCalls++
+                quoteHttpStatus = response.code
+                quoteRouteSource = response.header("X-Route-Source")
+                quoteBackendReads = response.header("X-Quote-Firestore-Reads")?.toIntOrNull() ?: 0
+                afterQuoteHttpResponse?.invoke()
+            } else {
+                lastHttpMs = (SystemClock.elapsedRealtimeNanos() - start) / 1_000_000
+                lastBackendMs = response.header("Server-Timing")?.substringAfter("dur=")?.toDoubleOrNull() ?: 0.0
+                lastBackendReads = response.header("X-Eligibility-Reads")?.toIntOrNull() ?: 0
+                afterHttpResponse?.invoke()
+            }
             response
         }.build()
-        val api = Retrofit.Builder().client(client)
+        val json = Json { ignoreUnknownKeys = true; coerceInputValues = true }
+        val retrofit = Retrofit.Builder().client(client)
             .baseUrl("http://$HOST:5001/$PROJECT_ID/us-central1/foodApi/api/v1/")
-            .addConverterFactory(Json.asConverterFactory("application/json".toMediaType()))
-            .build().create(StoreEligibilityApi::class.java)
-        val eligibility = HttpStorePurchaseEligibilityReader(api, FirebaseBuyerTokenSource(auth, sessions))
-        repository = FirebaseCheckoutRepository(contexts, offers, firestore, eligibility)
+            .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
+            .build()
+        val tokens = FirebaseBuyerTokenSource(auth, sessions)
+        val eligibility = HttpStorePurchaseEligibilityReader(retrofit.create(StoreEligibilityApi::class.java), tokens)
+        val simulatedQuotes = object : DeliveryQuoteReader {
+            override suspend fun quote(storeId: String, addressId: String, ownerUid: String,
+                                       sessionGeneration: Long): DeliveryQuoteResult {
+                beforeDeliveryReturn?.invoke()
+                deliveryResult?.let { return it }
+                val issued = System.currentTimeMillis()
+                val selected = (addresses.observeAddressBook().first() as AddressBookState.Ready)
+                    .book.addresses.single { it.id == addressId }
+                return DeliveryQuoteResult.Quoted(DeliveryQuote(1_918.8, 380, CartCurrency.PEN,
+                    "fixture-tariff", issued, issued + 300_000L,
+                    AddressCoordinates((storeFields.getValue("latitude") as Number).toDouble(),
+                        (storeFields.getValue("longitude") as Number).toDouble()), selected.location))
+            }
+        }
+        val quotes = if (useRealDeliveryQuotes) HttpDeliveryQuoteReader(
+            retrofit.create(DeliveryQuoteApi::class.java), tokens, json) else simulatedQuotes
+        repository = FirebaseCheckoutRepository(contexts, offers, firestore, eligibility,
+            quotes, SystemCheckoutClock())
+    }
+
+    /** Solo el caso E2E necesita la copia Firestore que el backend lee bajo el UID del comprador. */
+    fun seedRemoteAddress(address: Address, ownerUid: String = uid) {
+        put("users/$ownerUid/addresses/${address.id}", mapOf("location" to mapOf(
+            "lat" to address.location.latitude, "lng" to address.location.longitude)))
     }
 
     suspend fun seed(products: Int = 1, categories: Int = 1,
@@ -185,6 +241,11 @@ internal class CheckoutEmulatorFixture {
         storeFields = storeFields + listOfNotNull(
             status?.let { "status" to it }, operationalStatus?.let { "operationalStatus" to it },
             radiusKm?.let { "deliveryRadiusKm" to it }).toMap()
+        put("stores/$STORE_ID", storeFields)
+    }
+
+    fun updateStoreLocation(latitude: Double, longitude: Double) {
+        storeFields = storeFields + mapOf("latitude" to latitude, "longitude" to longitude)
         put("stores/$STORE_ID", storeFields)
     }
 

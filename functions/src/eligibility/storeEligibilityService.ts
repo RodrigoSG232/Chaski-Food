@@ -7,12 +7,13 @@ export async function checkStoreEligibility(db: Firestore, storeId: string) {
   const result = await db.runTransaction(async transaction => {
     reads++;
     const store = await transaction.get(db.doc(`stores/${storeId}`));
-    if (!store.exists) return { storeId, businessId: null, decision: evaluateEligibility(undefined, undefined) };
+    if (!store.exists) return { storeId, businessId: null, decision: evaluateEligibility(undefined, undefined), storeData: undefined };
     const data = store.data()!;
     const businessId = businessIdOf(data);
     reads++;
     const business = await transaction.get(db.doc(`business_requests/${businessId}`));
-    return { storeId, businessId, decision: evaluateEligibility(data, business.data()) };
+    return { storeId, businessId, decision: evaluateEligibility(data, business.data()), storeData: data };
   }, { readOnly: true });
-  return { result, reads };
+  const { storeData, ...publicResult } = result;
+  return { result: publicResult, storeData, reads };
 }

@@ -18,7 +18,14 @@ data class CheckoutQuote(
     val deliveryFeeMinor: Long,
     val totalMinor: Long,
     val currency: CartCurrency = CartCurrency.PEN,
+    val deliveryQuote: DeliveryQuote,
+    val deliveryQuoteDeadlineMillis: Long,
 ) {
+    init {
+        require(deliveryFeeMinor == deliveryQuote.deliveryFeeMinor && currency == deliveryQuote.currency)
+        require(subtotalMinor >= 0 && totalMinor == Math.addExact(subtotalMinor, deliveryFeeMinor))
+        require(deliveryQuoteDeadlineMillis > 0)
+    }
     val hasPriceChanges: Boolean get() = lines.any { it.previousUnitPriceMinor != it.unitPriceMinor }
 }
 
@@ -48,10 +55,11 @@ fun buildCheckoutQuote(
     addressLabel: String,
     addressText: String,
     pricedItems: List<CheckoutPricedItem>,
-    deliveryFeeMinor: Long,
+    deliveryQuote: DeliveryQuote,
+    deliveryQuoteDeadlineMillis: Long,
 ): CheckoutQuote {
     require(ownerUid.isNotBlank() && storeId.isNotBlank() && addressId.isNotBlank())
-    require(pricedItems.isNotEmpty() && deliveryFeeMinor >= 0)
+    require(pricedItems.isNotEmpty() && deliveryQuoteDeadlineMillis > 0)
     require(pricedItems.map { it.productId }.distinct().size == pricedItems.size)
     val lines = pricedItems.map { item ->
         require(item.productId.isNotBlank() && item.quantity > 0 && item.unitPriceMinor > 0)
@@ -60,7 +68,9 @@ fun buildCheckoutQuote(
     }
     val subtotal = lines.fold(0L) { amount, line -> Math.addExact(amount, line.lineTotalMinor) }
     return CheckoutQuote(ownerUid, storeId, storeName, addressId, addressLabel, addressText,
-        lines, subtotal, deliveryFeeMinor, Math.addExact(subtotal, deliveryFeeMinor))
+        lines, subtotal, deliveryQuote.deliveryFeeMinor,
+        Math.addExact(subtotal, deliveryQuote.deliveryFeeMinor),
+        deliveryQuote.currency, deliveryQuote, deliveryQuoteDeadlineMillis)
 }
 
 sealed interface CheckoutReviewResult {
@@ -92,6 +102,3 @@ interface CheckoutRepository {
     suspend fun isContextCurrent(context: CheckoutContext): Boolean
     suspend fun review(context: CheckoutContext): CheckoutReviewResult
 }
-
-/** Política inicial explícita, compartible con la futura confirmación del pedido. */
-const val DELIVERY_FEE_MINOR = 500L

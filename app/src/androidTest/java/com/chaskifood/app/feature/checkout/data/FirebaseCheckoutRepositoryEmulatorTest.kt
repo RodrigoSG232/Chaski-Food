@@ -4,18 +4,26 @@ import android.os.SystemClock
 import androidx.lifecycle.ViewModelStore
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import com.chaskifood.app.BuildConfig
 import com.chaskifood.app.feature.address.domain.model.AddressCoordinates
 import com.chaskifood.app.feature.cart.data.mapper.toDomain
 import com.chaskifood.app.feature.cart.data.mapper.toEntity
 import com.chaskifood.app.feature.cart.data.mapper.toItemEntities
+import com.chaskifood.app.feature.cart.domain.CartCurrency
 import com.chaskifood.app.feature.checkout.domain.CheckoutReviewResult
+import com.chaskifood.app.feature.checkout.domain.DeliveryQuoteFailure
+import com.chaskifood.app.feature.checkout.domain.DeliveryQuoteResult
 import com.chaskifood.app.feature.checkout.presentation.CheckoutViewModel
 import com.chaskifood.app.feature.discover.domain.StoreDiscoveryCandidate
 import com.chaskifood.app.feature.search.domain.ProductOfferReadResult
 import com.chaskifood.app.feature.search.domain.ProductOfferReader
 import com.chaskifood.app.feature.search.domain.ProductOfferReviewSession
 import com.google.firebase.firestore.FirebaseFirestoreException
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Source
+import java.net.HttpURLConnection
+import java.net.URL
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.CountDownLatch
@@ -48,16 +56,199 @@ class FirebaseCheckoutRepositoryEmulatorTest {
 
     @Before fun reset() = runBlocking { fixture.beginTest() }
 
+    @Test fun appDebugLocalDirigeAuthYFirestoreAlEmulator() = runBlocking {
+        assertEquals("LOCAL", BuildConfig.FIREBASE_MODE)
+        assertEquals("demo-chaski-hu15", FirebaseAuth.getInstance().app.options.projectId)
+        assertEquals("http://${BuildConfig.EMULATOR_HOST}:5001/demo-chaski-hu15/us-central1/foodApi/api/v1/",
+            BuildConfig.ELIGIBILITY_API_BASE_URL)
+        fixture.seed()
+        val auth = FirebaseAuth.getInstance()
+        val user = requireNotNull(auth.signInAnonymously().await().user)
+        try {
+            val store = FirebaseFirestore.getInstance().collection("stores")
+                .document(CheckoutEmulatorFixture.STORE_ID).get(Source.SERVER).await()
+            assertTrue(store.exists())
+            val token = requireNotNull(user.getIdToken(false).await().token)
+            val connection = URL(BuildConfig.ELIGIBILITY_API_BASE_URL +
+                "stores/${CheckoutEmulatorFixture.STORE_ID}/purchase-eligibility")
+                .openConnection() as HttpURLConnection
+            try {
+                connection.connectTimeout = 5_000
+                connection.readTimeout = 10_000
+                connection.setRequestProperty("Authorization", "Bearer $token")
+                assertEquals(200, connection.responseCode)
+                assertTrue(connection.inputStream.bufferedReader().use { it.readText() }.contains("ELIGIBLE"))
+            } finally {
+                connection.disconnect()
+            }
+        } finally {
+            user.delete().await()
+            auth.signOut()
+        }
+    }
+
     @Test fun compraValidaUsaPrecioVigenteYNoEscribePedidosNiCarrito() = runBlocking {
         val context = fixture.seed()
         val before = fixture.database.cartDao().getCart(fixture.uid)?.toDomain()
         val result = fixture.repository.review(context) as CheckoutReviewResult.Ready
         assertEquals(1_050L, result.quote.lines.single().unitPriceMinor)
         assertEquals(1_050L, result.quote.subtotalMinor)
-        assertEquals(1_550L, result.quote.totalMinor)
+        assertEquals(1_430L, result.quote.totalMinor)
         assertTrue(result.quote.hasPriceChanges)
         assertEquals(before, fixture.database.cartDao().getCart(fixture.uid)?.toDomain())
         assertEquals(0, fixture.collection("orders").optJSONArray("documents")?.length() ?: 0)
+    }
+
+    @Test fun cotizacionRealAndroidFunctionsLlegaACheckoutReady() = runBlocking {
+        fixture.createLocalCheckout(fixture.realOffers, useRealDeliveryQuotes = true)
+        val context = fixture.seed()
+        fixture.seedRemoteAddress(requireNotNull(context.selectedAddress))
+        val before = fixture.database.cartDao().getCart(fixture.uid)?.toDomain()
+
+        val result = fixture.repository.review(context) as CheckoutReviewResult.Ready
+        assertEquals(1, fixture.quoteHttpCalls)
+        assertEquals(200, fixture.quoteHttpStatus)
+        assertEquals("SIMULATED", fixture.quoteRouteSource)
+        assertEquals(3, fixture.quoteBackendReads)
+        assertEquals(1_250.5, result.quote.deliveryQuote.distanceMeters, 0.0)
+        assertEquals(300L, result.quote.deliveryFeeMinor)
+        assertEquals(CartCurrency.PEN, result.quote.currency)
+        assertEquals("lima-driving-car-v1", result.quote.deliveryQuote.tariffVersion)
+        assertEquals(300_000L, result.quote.deliveryQuote.expiresAtEpochMillis -
+            result.quote.deliveryQuote.quotedAtEpochMillis)
+        assertEquals(1_050L, result.quote.subtotalMinor)
+        assertEquals(1_350L, result.quote.totalMinor)
+        assertTrue(result.quote.deliveryQuoteDeadlineMillis > SystemClock.elapsedRealtime())
+        assertEquals(before, fixture.database.cartDao().getCart(fixture.uid)?.toDomain())
+        assertEquals(0, fixture.collection("orders").optJSONArray("documents")?.length() ?: 0)
+
+        val model = CheckoutViewModel(fixture.repository, SystemCheckoutClock())
+        val store = ViewModelStore().apply { put("checkout-e2e", model) }
+        try {
+            InstrumentationRegistry.getInstrumentation().runOnMainSync { model.review() }
+            val ready = withTimeout(20_000) { model.uiState.first { it.result is CheckoutReviewResult.Ready } }
+            assertEquals(1_350L, (ready.result as CheckoutReviewResult.Ready).quote.totalMinor)
+            assertEquals(2, fixture.quoteHttpCalls) // Revisión explícita del ViewModel, no recomposición.
+        } finally {
+            InstrumentationRegistry.getInstrumentation().runOnMainSync { store.clear() }
+        }
+    }
+
+    @Test fun cotizacionHttpNoAceptaDireccionAjena() = runBlocking {
+        fixture.createLocalCheckout(fixture.realOffers, useRealDeliveryQuotes = true)
+        val context = fixture.seed()
+        fixture.seedRemoteAddress(requireNotNull(context.selectedAddress), ownerUid = "another-buyer")
+        val result = fixture.repository.review(context)
+        assertTrue(result is CheckoutReviewResult.Blocked)
+        assertTrue((result as CheckoutReviewResult.Blocked).canChangeAddress)
+        assertEquals(1, fixture.quoteHttpCalls)
+        assertEquals(404, fixture.quoteHttpStatus)
+        assertEquals(0, fixture.collection("orders").optJSONArray("documents")?.length() ?: 0)
+    }
+
+    @Test fun mismaDireccionEditadaRemotamenteNoMezclaUbicacionYTarifa() = runBlocking {
+        fixture.createLocalCheckout(fixture.realOffers, useRealDeliveryQuotes = true)
+        val context = fixture.seed()
+        val original = requireNotNull(context.selectedAddress)
+        fixture.seedRemoteAddress(original.copy(location = AddressCoordinates(-12.001, -77.001)))
+
+        val result = fixture.repository.review(context)
+        assertTrue(result is CheckoutReviewResult.Error)
+        assertTrue((result as CheckoutReviewResult.Error).message.contains("ubicación"))
+        assertEquals(200, fixture.quoteHttpStatus)
+        assertEquals("SIMULATED", fixture.quoteRouteSource)
+        assertEquals(0, fixture.collection("orders").optJSONArray("documents")?.length() ?: 0)
+    }
+
+    @Test fun mismoLocalMovidoDuranteRevisionNoMezclaUbicacionYTarifa() = runBlocking {
+        fixture.createLocalCheckout(fixture.realOffers, useRealDeliveryQuotes = true)
+        val context = fixture.seed()
+        fixture.seedRemoteAddress(requireNotNull(context.selectedAddress))
+        fixture.afterHttpResponse = { fixture.updateStoreLocation(-12.001, -77.001) }
+        try {
+            val result = fixture.repository.review(context)
+            assertTrue(result is CheckoutReviewResult.Error)
+            assertTrue((result as CheckoutReviewResult.Error).message.contains("ubicación"))
+            assertEquals(200, fixture.quoteHttpStatus)
+            assertEquals("SIMULATED", fixture.quoteRouteSource)
+        } finally {
+            fixture.afterHttpResponse = null
+        }
+    }
+
+    @Test fun direccionCambiadaDuranteRespuestaHttpRealNoPublicaReady() = runBlocking {
+        fixture.createLocalCheckout(fixture.realOffers, useRealDeliveryQuotes = true)
+        val context = fixture.seed()
+        fixture.seedRemoteAddress(requireNotNull(context.selectedAddress))
+        val entered = CompletableDeferred<Unit>()
+        val release = CountDownLatch(1)
+        fixture.afterQuoteHttpResponse = {
+            entered.complete(Unit)
+            check(release.await(8, TimeUnit.SECONDS)) { "La prueba no liberó la respuesta HTTP" }
+        }
+        try {
+            val review = async { fixture.repository.review(context) }
+            withTimeout(20_000) { entered.await() }
+            fixture.selection.select(fixture.uid, "another-address")
+            release.countDown()
+            assertFalse(review.await() is CheckoutReviewResult.Ready)
+            assertEquals("SIMULATED", fixture.quoteRouteSource)
+        } finally {
+            release.countDown()
+            fixture.afterQuoteHttpResponse = null
+        }
+    }
+
+    @Test fun logoutDuranteRespuestaHttpRealNoPublicaReady() = runBlocking {
+        fixture.createLocalCheckout(fixture.realOffers, useRealDeliveryQuotes = true)
+        val context = fixture.seed()
+        fixture.seedRemoteAddress(requireNotNull(context.selectedAddress))
+        val entered = CompletableDeferred<Unit>()
+        val release = CountDownLatch(1)
+        fixture.afterQuoteHttpResponse = {
+            entered.complete(Unit)
+            check(release.await(8, TimeUnit.SECONDS)) { "La prueba no liberó la respuesta HTTP" }
+        }
+        try {
+            val review = async { fixture.repository.review(context) }
+            withTimeout(20_000) { entered.await() }
+            fixture.auth.signOut()
+            release.countDown()
+            assertFalse(review.await() is CheckoutReviewResult.Ready)
+            assertEquals("SIMULATED", fixture.quoteRouteSource)
+        } finally {
+            release.countDown()
+            fixture.afterQuoteHttpResponse = null
+        }
+    }
+
+    @Test fun falloDeCotizacionNoConservaTotalNiCreaPedidos() = runBlocking {
+        val context = fixture.seed()
+        val before = fixture.database.cartDao().getCart(fixture.uid)?.toDomain()
+        fixture.deliveryResult = DeliveryQuoteResult.Failed(DeliveryQuoteFailure.OUTSIDE_COVERAGE)
+        val blocked = fixture.repository.review(context) as CheckoutReviewResult.Blocked
+        assertTrue(blocked.canChangeAddress)
+        fixture.deliveryResult = DeliveryQuoteResult.Failed(DeliveryQuoteFailure.ROUTING_QUOTA_EXCEEDED)
+        assertTrue(fixture.repository.review(context) is CheckoutReviewResult.Error)
+        assertEquals(before, fixture.database.cartDao().getCart(fixture.uid)?.toDomain())
+        assertEquals(0, fixture.collection("orders").optJSONArray("documents")?.length() ?: 0)
+    }
+
+    @Test fun cambioDeDireccionDuranteCotizacionDescartaLaRespuesta() = runBlocking {
+        val context = fixture.seed()
+        val entered = CompletableDeferred<Unit>()
+        val release = CompletableDeferred<Unit>()
+        fixture.beforeDeliveryReturn = { entered.complete(Unit); release.await() }
+        try {
+            val review = async { fixture.repository.review(context) }
+            withTimeout(20_000) { entered.await() }
+            fixture.selection.select(fixture.uid, "another-address")
+            release.complete(Unit)
+            assertFalse(review.await() is CheckoutReviewResult.Ready)
+        } finally {
+            release.complete(Unit)
+            fixture.beforeDeliveryReturn = null
+        }
     }
 
     @Test fun productoAgotadoBloqueaCheckout() = runBlocking {
@@ -77,12 +268,12 @@ class FirebaseCheckoutRepositoryEmulatorTest {
         fixture.updateConfiguration(price = 12.25)
         val increased = fixture.repository.review(context) as CheckoutReviewResult.Ready
         assertEquals(1_225L, increased.quote.subtotalMinor)
-        assertEquals(1_725L, increased.quote.totalMinor)
+        assertEquals(1_605L, increased.quote.totalMinor)
         assertTrue(increased.quote.hasPriceChanges)
         fixture.updateConfiguration(price = 9.75)
         val decreased = fixture.repository.review(context) as CheckoutReviewResult.Ready
         assertEquals(975L, decreased.quote.subtotalMinor)
-        assertEquals(1_475L, decreased.quote.totalMinor)
+        assertEquals(1_355L, decreased.quote.totalMinor)
         assertTrue(decreased.quote.hasPriceChanges)
     }
 
@@ -252,7 +443,7 @@ class FirebaseCheckoutRepositoryEmulatorTest {
         }
         fixture.createLocalCheckout(reader)
         fixture.seed()
-        val model = CheckoutViewModel(fixture.repository)
+        val model = CheckoutViewModel(fixture.repository, SystemCheckoutClock())
         val store = ViewModelStore().apply { put("checkout", model) }
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         try {

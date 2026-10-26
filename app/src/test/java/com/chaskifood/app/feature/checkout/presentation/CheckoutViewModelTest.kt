@@ -6,10 +6,13 @@ import com.chaskifood.app.feature.checkout.domain.CheckoutContextState
 import com.chaskifood.app.feature.checkout.domain.CheckoutQuote
 import com.chaskifood.app.feature.checkout.domain.CheckoutRepository
 import com.chaskifood.app.feature.checkout.domain.CheckoutReviewResult
+import com.chaskifood.app.feature.checkout.domain.CheckoutClock
+import com.chaskifood.app.feature.checkout.domain.DeliveryQuote
+import com.chaskifood.app.feature.cart.domain.CartCurrency
+import com.chaskifood.app.feature.address.domain.model.AddressCoordinates
 import com.chaskifood.app.feature.cart.domain.Cart
 import com.chaskifood.app.feature.cart.domain.CartProductSnapshot
 import com.chaskifood.app.feature.address.domain.model.Address
-import com.chaskifood.app.feature.address.domain.model.AddressCoordinates
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -21,6 +24,7 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
@@ -36,13 +40,17 @@ import org.junit.Test
 @OptIn(ExperimentalCoroutinesApi::class)
 class CheckoutViewModelTest {
     private val dispatcher = StandardTestDispatcher()
+    private val clock = object : CheckoutClock {
+        override fun wallTimeMillis(): Long = 1_000_000L + dispatcher.scheduler.currentTime
+        override fun monotonicTimeMillis(): Long = 1_000L + dispatcher.scheduler.currentTime
+    }
 
     @Before fun setUp() = Dispatchers.setMain(dispatcher)
     @After fun tearDown() = Dispatchers.resetMain()
 
     @Test fun `un precio cambiado exige revision expresa y modalidad de pago`() = runTest {
         val repository = FakeCheckoutRepository(CheckoutReviewResult.Ready(quote(oldPrice = 1000)))
-        val model = CheckoutViewModel(repository)
+        val model = CheckoutViewModel(repository, clock)
         model.review()
         runCurrent()
         assertFalse(model.uiState.value.reviewComplete)
@@ -60,7 +68,7 @@ class CheckoutViewModelTest {
 
     @Test fun `revalidar invalida la aceptacion anterior de precios`() = runTest {
         val repository = FakeCheckoutRepository(CheckoutReviewResult.Ready(quote(oldPrice = 1000)))
-        val model = CheckoutViewModel(repository)
+        val model = CheckoutViewModel(repository, clock)
         model.review()
         runCurrent()
         model.selectPaymentMethod(CheckoutPaymentMethod.CASH_ON_DELIVERY)
@@ -79,7 +87,7 @@ class CheckoutViewModelTest {
 
     @Test fun `editar el carrito despues de Ready descarta cotizacion y aceptacion`() = runTest {
         val repository = FakeCheckoutRepository(CheckoutReviewResult.Ready(quote(oldPrice = 1000)))
-        val model = CheckoutViewModel(repository)
+        val model = CheckoutViewModel(repository, clock)
         model.review()
         runCurrent()
         model.selectPaymentMethod(CheckoutPaymentMethod.CASH_ON_DELIVERY)
@@ -97,7 +105,7 @@ class CheckoutViewModelTest {
 
     @Test fun `editar direccion seleccionada invalida Ready sin consultar otra vez`() = runTest {
         val repository = FakeCheckoutRepository(CheckoutReviewResult.Ready(quote(oldPrice = 1000)))
-        val model = CheckoutViewModel(repository)
+        val model = CheckoutViewModel(repository, clock)
         model.review()
         runCurrent()
         repository.context.value = CheckoutContextState.Ready(context(addressText = "Otra calle"))
@@ -108,7 +116,7 @@ class CheckoutViewModelTest {
 
     @Test fun `logout y nuevo login con mismo UID no conserva revision ni pago`() = runTest {
         val repository = FakeCheckoutRepository(CheckoutReviewResult.Ready(quote(oldPrice = 1000)))
-        val model = CheckoutViewModel(repository)
+        val model = CheckoutViewModel(repository, clock)
         model.review()
         runCurrent()
         model.selectPaymentMethod(CheckoutPaymentMethod.CASH_ON_DELIVERY)
@@ -133,7 +141,7 @@ class CheckoutViewModelTest {
         repository.reviewBlock = { number ->
             if (number == 1) withContext(NonCancellable) { gate.await() }.let { old } else newer
         }
-        val model = CheckoutViewModel(repository)
+        val model = CheckoutViewModel(repository, clock)
         model.review()
         runCurrent()
         repository.context.value = CheckoutContextState.Ready(context(quantity = 2))
@@ -150,7 +158,7 @@ class CheckoutViewModelTest {
         val gate = CompletableDeferred<Unit>()
         val repository = FakeCheckoutRepository(CheckoutReviewResult.Ready(quote(oldPrice = 1000)))
         repository.reviewBlock = { gate.await(); repository.next }
-        val model = CheckoutViewModel(repository)
+        val model = CheckoutViewModel(repository, clock)
         model.review()
         runCurrent()
         model.review()
@@ -163,7 +171,7 @@ class CheckoutViewModelTest {
 
     @Test fun `regreso despues de Ready vuelve a consultar la oferta`() = runTest {
         val repository = FakeCheckoutRepository(CheckoutReviewResult.Ready(quote(oldPrice = 1000)))
-        val model = CheckoutViewModel(repository)
+        val model = CheckoutViewModel(repository, clock)
         model.review()
         runCurrent()
         repository.next = CheckoutReviewResult.Blocked(listOf("Oferta agotada"))
@@ -181,7 +189,7 @@ class CheckoutViewModelTest {
             if (number == 1) CheckoutReviewResult.Ready(quote(oldPrice = 1000))
             else CheckoutReviewResult.Blocked(listOf("Cambio de carrito"))
         }
-        val model = CheckoutViewModel(repository)
+        val model = CheckoutViewModel(repository, clock)
         model.review()
         runCurrent()
         model.review() // Equivalente mientras la primera lectura está pendiente.
@@ -200,7 +208,7 @@ class CheckoutViewModelTest {
         val gate = CompletableDeferred<Unit>()
         val repository = FakeCheckoutRepository(CheckoutReviewResult.Ready(quote(oldPrice = 1000)))
         repository.reviewBlock = { withContext(NonCancellable) { gate.await() }; repository.next }
-        val model = CheckoutViewModel(repository)
+        val model = CheckoutViewModel(repository, clock)
         model.review()
         runCurrent()
         repository.context.value = CheckoutContextState.Ready(context(quantity = 3))
@@ -215,7 +223,7 @@ class CheckoutViewModelTest {
         val gate = CompletableDeferred<Unit>()
         val repository = FakeCheckoutRepository(CheckoutReviewResult.Ready(quote(oldPrice = 1000)))
         repository.reviewBlock = { withContext(NonCancellable) { gate.await() }; repository.next }
-        val model = CheckoutViewModel(repository)
+        val model = CheckoutViewModel(repository, clock)
         model.review()
         runCurrent()
         repository.context.value = CheckoutContextState.Ready(context(addressText = "Otra calle"))
@@ -229,7 +237,7 @@ class CheckoutViewModelTest {
         val gate = CompletableDeferred<Unit>()
         val repository = FakeCheckoutRepository(CheckoutReviewResult.Ready(quote(oldPrice = 1000)))
         repository.reviewBlock = { withContext(NonCancellable) { gate.await() }; repository.next }
-        val model = CheckoutViewModel(repository)
+        val model = CheckoutViewModel(repository, clock)
         model.review()
         runCurrent()
         repository.context.value = CheckoutContextState.SignedOut
@@ -244,7 +252,7 @@ class CheckoutViewModelTest {
 
     @Test fun `error y cancelacion de repositorio no dejan revision anterior`() = runTest {
         val repository = FakeCheckoutRepository(CheckoutReviewResult.Ready(quote(oldPrice = 1000)))
-        val model = CheckoutViewModel(repository)
+        val model = CheckoutViewModel(repository, clock)
         model.review()
         runCurrent()
         repository.reviewBlock = { throw IllegalStateException("error de prueba") }
@@ -258,7 +266,7 @@ class CheckoutViewModelTest {
         val gate = CompletableDeferred<Unit>()
         val repository = FakeCheckoutRepository(CheckoutReviewResult.Ready(quote(oldPrice = 1000)))
         repository.reviewBlock = { gate.await(); repository.next }
-        val model = CheckoutViewModel(repository)
+        val model = CheckoutViewModel(repository, clock)
         model.review()
         runCurrent()
 
@@ -274,7 +282,7 @@ class CheckoutViewModelTest {
 
     @Test fun `aceptacion se invalida si el carrito cambio antes del Flow`() = runTest {
         val repository = FakeCheckoutRepository(CheckoutReviewResult.Ready(quote(oldPrice = 1000)))
-        val model = CheckoutViewModel(repository)
+        val model = CheckoutViewModel(repository, clock)
         model.review()
         runCurrent()
         model.selectPaymentMethod(CheckoutPaymentMethod.CASH_ON_DELIVERY)
@@ -293,7 +301,7 @@ class CheckoutViewModelTest {
             if (repository.subscriptions == 1) flowOf(CheckoutContextState.ReadError)
             else flowOf(CheckoutContextState.Ready(context()))
         }
-        val model = CheckoutViewModel(repository)
+        val model = CheckoutViewModel(repository, clock)
         runCurrent()
         assertTrue(model.uiState.value.result is CheckoutReviewResult.Error)
 
@@ -308,7 +316,7 @@ class CheckoutViewModelTest {
     @Test fun `ReadError persistente no provoca bucle ni observadores duplicados`() = runTest {
         val repository = FakeCheckoutRepository(CheckoutReviewResult.Ready(quote(oldPrice = 1000)))
         repository.contextFlow = { flowOf(CheckoutContextState.ReadError) }
-        val model = CheckoutViewModel(repository)
+        val model = CheckoutViewModel(repository, clock)
         runCurrent()
         assertEquals(1, repository.subscriptions)
         assertTrue(model.uiState.value.result is CheckoutReviewResult.Error)
@@ -322,11 +330,65 @@ class CheckoutViewModelTest {
         assertTrue(model.uiState.value.result is CheckoutReviewResult.Error)
     }
 
+    @Test fun `cotizacion vence con la pantalla abierta y se puede revisar otra vez`() = runTest {
+        val repository = FakeCheckoutRepository(CheckoutReviewResult.Ready(quote(oldPrice = 1200)))
+        val model = CheckoutViewModel(repository, clock)
+        model.review()
+        runCurrent()
+        model.selectPaymentMethod(CheckoutPaymentMethod.CASH_ON_DELIVERY)
+        assertTrue(model.uiState.value.reviewComplete)
+
+        advanceTimeBy(265_000L)
+        runCurrent()
+        assertTrue(model.uiState.value.result is CheckoutReviewResult.Error)
+        assertFalse(model.uiState.value.reviewComplete)
+        assertEquals(1, repository.reviews)
+
+        repository.next = CheckoutReviewResult.Ready(quote(oldPrice = 1200))
+        model.review()
+        runCurrent()
+        assertTrue(model.uiState.value.result is CheckoutReviewResult.Ready)
+        assertEquals(2, repository.reviews)
+    }
+
+    @Test fun `respuesta ya vencida nunca publica Ready`() = runTest {
+        val old = quote(oldPrice = 1200).copy(deliveryQuoteDeadlineMillis = clock.monotonicTimeMillis() - 1)
+        val model = CheckoutViewModel(FakeCheckoutRepository(CheckoutReviewResult.Ready(old)), clock)
+        model.review()
+        runCurrent()
+        assertTrue(model.uiState.value.result is CheckoutReviewResult.Error)
+        assertFalse(model.uiState.value.reviewComplete)
+    }
+
+    @Test fun `regreso durante llamada cancela intento previo y revisa otra vez`() = runTest {
+        val gate = CompletableDeferred<Unit>()
+        val repository = FakeCheckoutRepository(CheckoutReviewResult.Ready(quote(oldPrice = 1200)))
+        repository.reviewBlock = { number ->
+            if (number == 1) withContext(NonCancellable) { gate.await() }
+            if (number == 1) CheckoutReviewResult.Error("Respuesta antigua") else repository.next
+        }
+        val model = CheckoutViewModel(repository, clock)
+        model.review()
+        runCurrent()
+        model.onScreenPaused()
+        model.review()
+        runCurrent()
+        assertEquals(2, repository.reviews)
+        assertTrue(model.uiState.value.result is CheckoutReviewResult.Ready)
+        gate.complete(Unit)
+        runCurrent()
+        assertTrue(model.uiState.value.result is CheckoutReviewResult.Ready)
+    }
+
     private fun quote(oldPrice: Long) = CheckoutQuote(
         ownerUid = "customer", storeId = "store", storeName = "Local",
         addressId = "address", addressLabel = "Casa", addressText = "Lima",
         lines = listOf(CheckoutLine("product", "Plato", 2, oldPrice, 1200, 2400)),
-        subtotalMinor = 2400, deliveryFeeMinor = 500, totalMinor = 2900,
+        subtotalMinor = 2400, deliveryFeeMinor = 380, totalMinor = 2780,
+        deliveryQuote = DeliveryQuote(1_918.8, 380, CartCurrency.PEN, "v1",
+            clock.wallTimeMillis(), clock.wallTimeMillis() + 300_000L,
+            AddressCoordinates(-12.0, -77.0), AddressCoordinates(-12.0, -77.0)),
+        deliveryQuoteDeadlineMillis = clock.monotonicTimeMillis() + 265_000L,
     )
 }
 

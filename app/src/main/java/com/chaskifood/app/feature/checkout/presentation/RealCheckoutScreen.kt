@@ -54,6 +54,7 @@ fun RealCheckoutScreen(
     DisposableEffect(lifecycleOwner, viewModel) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) viewModel.review()
+            if (event == Lifecycle.Event.ON_PAUSE) viewModel.onScreenPaused()
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
@@ -74,7 +75,7 @@ fun RealCheckoutScreen(
                     Row(verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(ChaskiDimens.SpacingMd)) {
                         CircularProgressIndicator()
-                        Text("Comprobando carrito, dirección y oferta actual…")
+                        Text("Comprobando carrito, dirección, oferta y reparto…")
                     }
                 }
                 state.result == null -> {
@@ -211,7 +212,7 @@ private fun CheckoutAmountSummary(quote: CheckoutQuote) {
             CheckoutAmountRow("Costo de reparto", quote.deliveryFeeMinor)
             HorizontalDivider()
             CheckoutAmountRow("Total", quote.totalMinor, bold = true)
-            Text("Importes revisados con la oferta actual. Se volverán a validar al confirmar el pedido.",
+            Text("La cotización de reparto es temporal. Los importes se volverán a validar al confirmar el pedido.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
