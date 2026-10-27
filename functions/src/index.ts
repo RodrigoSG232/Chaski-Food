@@ -13,7 +13,7 @@ import { initializeRuntimeApp, resolveRuntimeEnvironment, routeSourceForRuntime 
 
 const heigitKey = defineSecret("HEIGIT_API_KEY");
 
-export const foodApi = onRequest({ region: "us-central1", timeoutSeconds: 15, minInstances: 0, maxInstances: 1,
+export const foodApi = onRequest({ region: "southamerica-west1", timeoutSeconds: 15, minInstances: 0, maxInstances: 1,
   concurrency: 10, invoker: "public", secrets: [heigitKey] },
   async (request, response) => {
     const started = performance.now();

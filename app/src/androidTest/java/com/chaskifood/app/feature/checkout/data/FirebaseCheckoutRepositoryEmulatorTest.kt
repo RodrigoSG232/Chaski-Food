@@ -59,7 +59,7 @@ class FirebaseCheckoutRepositoryEmulatorTest {
     @Test fun appDebugLocalDirigeAuthYFirestoreAlEmulator() = runBlocking {
         assertEquals("LOCAL", BuildConfig.FIREBASE_MODE)
         assertEquals("demo-chaski-hu15", FirebaseAuth.getInstance().app.options.projectId)
-        assertEquals("http://${BuildConfig.EMULATOR_HOST}:5001/demo-chaski-hu15/us-central1/foodApi/api/v1/",
+        assertEquals("http://${BuildConfig.EMULATOR_HOST}:5001/demo-chaski-hu15/southamerica-west1/foodApi/api/v1/",
             BuildConfig.ELIGIBILITY_API_BASE_URL)
         fixture.seed()
         val auth = FirebaseAuth.getInstance()

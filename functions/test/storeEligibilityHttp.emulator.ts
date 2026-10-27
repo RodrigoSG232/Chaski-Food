@@ -10,7 +10,7 @@ const projectId = "demo-chaski-hu15";
 const app = initializeApp({ projectId }, "eligibility-tests");
 const db = getFirestore(app);
 const auth = getAuth(app);
-const base = `http://127.0.0.1:5001/${projectId}/us-central1/foodApi/api/v1/stores/`;
+const base = `http://127.0.0.1:5001/${projectId}/southamerica-west1/foodApi/api/v1/stores/`;
 let buyer: string;
 let owner: string;
 let admin: string;

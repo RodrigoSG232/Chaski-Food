@@ -160,7 +160,7 @@ internal class CheckoutEmulatorFixture {
         }.build()
         val json = Json { ignoreUnknownKeys = true; coerceInputValues = true }
         val retrofit = Retrofit.Builder().client(client)
-            .baseUrl("http://$HOST:5001/$PROJECT_ID/us-central1/foodApi/api/v1/")
+            .baseUrl("http://$HOST:5001/$PROJECT_ID/southamerica-west1/foodApi/api/v1/")
             .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
             .build()
         val tokens = FirebaseBuyerTokenSource(auth, sessions)

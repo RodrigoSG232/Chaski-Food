@@ -22,7 +22,7 @@ val chaskiCheckoutApiBaseUrl = providers.gradleProperty("chaskiCheckoutApiBaseUr
 if (chaskiCheckoutApiBaseUrl != null) {
     val uri = URI(chaskiCheckoutApiBaseUrl)
     require(chaskiFirebaseMode == "CONECTADO" && chaskiConnectedProjectId.isNotBlank() &&
-        uri.scheme == "https" && uri.host == "us-central1-$chaskiConnectedProjectId.cloudfunctions.net" &&
+        uri.scheme == "https" && uri.host == "southamerica-west1-$chaskiConnectedProjectId.cloudfunctions.net" &&
         uri.port == -1 && uri.rawQuery == null && uri.rawFragment == null &&
         uri.path == "/foodApi/api/v1/" &&
         chaskiCheckoutApiBaseUrl.matches(Regex("[A-Za-z0-9./:_-]+"))) {
@@ -63,7 +63,7 @@ android {
             if (chaskiFirebaseMode == "LOCAL") {
                 buildConfigField("String", "API_BASE_URL", "\"http://$chaskiEmulatorHost:3000/api/v1/\"")
                 buildConfigField("String", "ELIGIBILITY_API_BASE_URL",
-                    "\"http://$chaskiEmulatorHost:5001/demo-chaski-hu15/us-central1/foodApi/api/v1/\"")
+                    "\"http://$chaskiEmulatorHost:5001/demo-chaski-hu15/southamerica-west1/foodApi/api/v1/\"")
             } else {
                 buildConfigField("String", "ELIGIBILITY_API_BASE_URL",
                     "\"${chaskiCheckoutApiBaseUrl ?: "https://unconfigured.invalid/"}\"")

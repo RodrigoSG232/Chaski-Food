@@ -12,7 +12,7 @@ const projectId = "demo-chaski-hu15";
 const app = initializeApp({ projectId }, "delivery-quote-tests");
 const db = getFirestore(app);
 const auth = getAuth(app);
-const endpoint = `http://127.0.0.1:5001/${projectId}/us-central1/foodApi/api/v1/delivery-quotes`;
+const endpoint = `http://127.0.0.1:5001/${projectId}/southamerica-west1/foodApi/api/v1/delivery-quotes`;
 const uid = "quote-buyer";
 let token: string;
 
