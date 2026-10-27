@@ -1,0 +1,8 @@
+packages:
+  - .
+
+strictDepBuilds: true
+allowBuilds:
+  '@firebase/util@1.15.3': true
+  'protobufjs@7.6.6': false
+  're2@1.27.0': false
