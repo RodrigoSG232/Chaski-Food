@@ -1,6 +1,7 @@
 {
   "name": "chaski-food-local-api",
   "private": true,
+  "packageManager": "pnpm@11.25.0",
   "main": "lib/src/index.js",
   "engines": {
     "node": "22"

@@ -154,6 +154,31 @@ class CheckoutViewModelTest {
         assertEquals(newer, model.uiState.value.result)
     }
 
+    @Test fun `cambiar de tienda durante cotizacion no publica la respuesta anterior`() = runTest {
+        val gate = CompletableDeferred<Unit>()
+        val old = CheckoutReviewResult.Ready(quote(oldPrice = 1000))
+        val newer = CheckoutReviewResult.Blocked(listOf("Nueva tienda pendiente de revisión"))
+        val repository = FakeCheckoutRepository(old)
+        repository.reviewBlock = { number ->
+            if (number == 1) withContext(NonCancellable) { gate.await() }.let { old } else newer
+        }
+        val model = CheckoutViewModel(repository, clock)
+        model.review()
+        runCurrent()
+
+        repository.context.value = CheckoutContextState.Ready(context(storeId = "other-store"))
+        runCurrent()
+        assertNull(model.uiState.value.result)
+        model.review()
+        runCurrent()
+        assertEquals(newer, model.uiState.value.result)
+        gate.complete(Unit)
+        runCurrent()
+        assertEquals(newer, model.uiState.value.result)
+        assertFalse(model.uiState.value.reviewComplete)
+        assertEquals(2, repository.reviews)
+    }
+
     @Test fun `dos ON_RESUME equivalentes comparten la revision en curso`() = runTest {
         val gate = CompletableDeferred<Unit>()
         val repository = FakeCheckoutRepository(CheckoutReviewResult.Ready(quote(oldPrice = 1000)))
@@ -417,8 +442,9 @@ private class FakeCheckoutRepository(var next: CheckoutReviewResult) : CheckoutR
     override suspend fun review(context: CheckoutContext): CheckoutReviewResult = reviewBlock(++reviews)
 }
 
-private fun context(quantity: Int = 1, addressText: String = "Lima", generation: Long = 0): CheckoutContext =
+private fun context(quantity: Int = 1, addressText: String = "Lima", generation: Long = 0,
+                    storeId: String = "store"): CheckoutContext =
     CheckoutContext("customer", generation, Cart("customer", listOf(
-        CartProductSnapshot("business", "store", "product", "Plato", 1000, quantity),
+        CartProductSnapshot("business", storeId, "product", "Plato", 1000, quantity),
     )), Address("address", "Casa", addressText, AddressCoordinates(-12.0, -77.0),
         "", "", 1L, 1L))

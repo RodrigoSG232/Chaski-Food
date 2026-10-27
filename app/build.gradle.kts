@@ -1,3 +1,10 @@
+import groovy.json.JsonSlurper
+import org.gradle.api.DefaultTask
+import org.gradle.api.GradleException
+import org.gradle.api.provider.Property
+import org.gradle.api.tasks.Input
+import org.gradle.api.tasks.TaskAction
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
@@ -23,6 +30,55 @@ if (chaskiCheckoutApiBaseUrl != null) {
         "Checkout CONECTADO requiere foodApi HTTPS y el proyecto Firebase autorizado"
     }
 }
+
+// Google Services prioriza src/debug/google-services.json sobre google-services.json.
+// Validar el mismo archivo antes de generar recursos evita instalar LOCAL con Firebase real.
+abstract class ValidateDebugFirebaseConfiguration : DefaultTask() {
+    @get:Input abstract val mode: Property<String>
+    @get:Input abstract val debugJsonPath: Property<String>
+    @get:Input abstract val rootJsonPath: Property<String>
+
+    @TaskAction
+    fun validate() {
+        val debugJson = File(debugJsonPath.get())
+        val rootJson = File(rootJsonPath.get())
+        val selected = listOf(debugJson, rootJson).firstOrNull { it.isFile }
+            ?: throw GradleException(
+                "Falta google-services.json para Debug. LOCAL: copia " +
+                    "app/src/debug/google-services.demo.json a app/src/debug/google-services.json. " +
+                    "CONECTADO: coloca allí el JSON legítimo de chaski-food-9adba. " +
+                    "No se modifican archivos personales."
+            )
+        val parsed = try {
+            JsonSlurper().parse(selected) as? Map<*, *>
+        } catch (_: Exception) {
+            null
+        }
+        val projectId = (parsed?.get("project_info") as? Map<*, *>)?.get("project_id") as? String
+        val packages = (parsed?.get("client") as? List<*>)?.mapNotNull { client ->
+            ((client as? Map<*, *>)?.get("client_info") as? Map<*, *>)
+                ?.get("android_client_info")?.let { it as? Map<*, *> }
+                ?.get("package_name") as? String
+        }.orEmpty()
+        val expectedProject = if (mode.get() == "LOCAL") "demo-chaski-hu15" else "chaski-food-9adba"
+        if (projectId != expectedProject || "com.chaskifood.app" !in packages) {
+            throw GradleException(
+                "Configuración Firebase Debug incompatible en " +
+                    "${if (selected == debugJson) "app/src/debug/google-services.json" else "app/google-services.json"}: " +
+                    "${mode.get()} requiere el proyecto $expectedProject y el paquete com.chaskifood.app. " +
+                    "LOCAL: usa la plantilla google-services.demo.json; CONECTADO: usa el JSON legítimo. " +
+                    "Conserva una copia de tu archivo personal antes de alternar."
+            )
+        }
+    }
+}
+val validateDebugFirebaseConfiguration = tasks.register<ValidateDebugFirebaseConfiguration>("validateDebugFirebaseConfiguration") {
+    mode.set(chaskiFirebaseMode)
+    debugJsonPath.set(layout.projectDirectory.file("src/debug/google-services.json").asFile.absolutePath)
+    rootJsonPath.set(layout.projectDirectory.file("google-services.json").asFile.absolutePath)
+}
+tasks.matching { it.name == "preDebugBuild" || it.name == "processDebugGoogleServices" }
+    .configureEach { dependsOn(validateDebugFirebaseConfiguration) }
 
 ksp {
     arg("room.schemaLocation", "$projectDir/schemas")
