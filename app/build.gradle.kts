@@ -1,5 +1,3 @@
-import java.net.URI
-
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
@@ -20,13 +18,9 @@ require(chaskiConnectedProjectId.isEmpty() || chaskiConnectedProjectId.matches(R
 }
 val chaskiCheckoutApiBaseUrl = providers.gradleProperty("chaskiCheckoutApiBaseUrl").orNull
 if (chaskiCheckoutApiBaseUrl != null) {
-    val uri = URI(chaskiCheckoutApiBaseUrl)
-    require(chaskiFirebaseMode == "CONECTADO" && chaskiConnectedProjectId.isNotBlank() &&
-        uri.scheme == "https" && uri.host == "southamerica-west1-$chaskiConnectedProjectId.cloudfunctions.net" &&
-        uri.port == -1 && uri.rawQuery == null && uri.rawFragment == null &&
-        uri.path == "/foodApi/api/v1/" &&
-        chaskiCheckoutApiBaseUrl.matches(Regex("[A-Za-z0-9./:_-]+"))) {
-        "Checkout CONECTADO requiere URL HTTPS pública y chaskiConnectedProjectId"
+    require(chaskiFirebaseMode == "CONECTADO" && chaskiConnectedProjectId == "chaski-food-9adba" &&
+        chaskiCheckoutApiBaseUrl == "https://foodapi-u65lcqarqa-tl.a.run.app/api/v1/") {
+        "Checkout CONECTADO requiere foodApi HTTPS y el proyecto Firebase autorizado"
     }
 }
 
