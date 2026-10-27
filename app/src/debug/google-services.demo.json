@@ -1,0 +1,23 @@
+{
+  "project_info": {
+    "project_number": "123456789",
+    "project_id": "demo-chaski-hu15",
+    "storage_bucket": "demo-chaski-hu15.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:123456789:android:hu15checkout",
+        "android_client_info": {
+          "package_name": "com.chaskifood.app"
+        }
+      },
+      "api_key": [
+        {
+          "current_key": "demo-api-key"
+        }
+      ]
+    }
+  ],
+  "configuration_version": "1"
+}

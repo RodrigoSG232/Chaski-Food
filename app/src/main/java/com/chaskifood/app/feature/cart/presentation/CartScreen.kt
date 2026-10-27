@@ -62,6 +62,7 @@ import androidx.compose.ui.tooling.preview.Preview
 fun CartScreen(
     onBack: () -> Unit,
     onExploreProducts: () -> Unit,
+    onCheckout: () -> Unit = {},
     onSignIn: () -> Unit = onBack,
     onSelectAddress: () -> Unit = {},
     modifier: Modifier = Modifier,
@@ -77,6 +78,7 @@ fun CartScreen(
             state = state,
             onBack = onBack,
             onExploreProducts = onExploreProducts,
+            onCheckout = onCheckout,
             onSignIn = onSignIn,
             onSelectAddress = onSelectAddress,
             onRetry = viewModel::retryLoading,
@@ -94,6 +96,7 @@ internal fun CartContent(
     state: CartUiState,
     onBack: () -> Unit,
     onExploreProducts: () -> Unit,
+    onCheckout: () -> Unit = {},
     onSignIn: () -> Unit = onBack,
     onSelectAddress: () -> Unit = {},
     onRetry: () -> Unit,
@@ -138,6 +141,7 @@ internal fun CartContent(
                     cart = source.cart,
                     state = state,
                     onExploreProducts = onExploreProducts,
+                    onCheckout = onCheckout,
                     onChangeQuantity = onChangeQuantity,
                     onRemoveProduct = onRemoveProduct,
                     onDismissMessage = onDismissMessage,
@@ -198,6 +202,7 @@ private fun CartReadyContent(
     cart: Cart,
     state: CartUiState,
     onExploreProducts: () -> Unit,
+    onCheckout: () -> Unit,
     onChangeQuantity: (String, Int) -> Unit,
     onRemoveProduct: (String) -> Unit,
     onDismissMessage: (Long) -> Unit,
@@ -245,7 +250,8 @@ private fun CartReadyContent(
                 )
             }
         }
-        CartSummary(cart.subtotalMinor, enabled = !state.isBusy, onExploreProducts = onExploreProducts)
+        CartSummary(cart.subtotalMinor, enabled = !state.isBusy && state.confirmation == null,
+            onExploreProducts = onExploreProducts, onCheckout = onCheckout)
     }
 }
 
@@ -327,7 +333,8 @@ private fun CartLine(
 }
 
 @Composable
-private fun CartSummary(subtotalMinor: Long, enabled: Boolean, onExploreProducts: () -> Unit) {
+private fun CartSummary(subtotalMinor: Long, enabled: Boolean,
+    onExploreProducts: () -> Unit, onCheckout: () -> Unit) {
     Surface(color = MaterialTheme.colorScheme.surface, shadowElevation = 4.dp) {
         Column(
             modifier = Modifier.fillMaxWidth().padding(ChaskiDimens.ScreenPadding),
@@ -344,6 +351,7 @@ private fun CartSummary(subtotalMinor: Long, enabled: Boolean, onExploreProducts
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            ChaskiButton(text = "Revisar compra", onClick = onCheckout, enabled = enabled)
             ChaskiButton(text = "Seguir explorando", onClick = onExploreProducts,
                 enabled = enabled, variant = ChaskiButtonVariant.Outlined)
         }
@@ -358,7 +366,7 @@ private fun CartFilledPreview() {
             state = CartUiState(source = CartState.Ready(Cart("preview", listOf(
                 CartProductSnapshot("business", "store", "product", "Producto de ejemplo", 1050, 2),
             )))),
-            onBack = {}, onExploreProducts = {}, onRetry = {}, onChangeQuantity = { _, _ -> },
+            onBack = {}, onExploreProducts = {}, onCheckout = {}, onRetry = {}, onChangeQuantity = { _, _ -> },
             onRemoveProduct = {}, onDismissMessage = {},
         )
     }
@@ -370,7 +378,7 @@ private fun CartEmptyPreview() {
     ChaskiTheme {
         CartContent(
             state = CartUiState(source = CartState.Ready(Cart("preview"))),
-            onBack = {}, onExploreProducts = {}, onRetry = {}, onChangeQuantity = { _, _ -> },
+            onBack = {}, onExploreProducts = {}, onCheckout = {}, onRetry = {}, onChangeQuantity = { _, _ -> },
             onRemoveProduct = {}, onDismissMessage = {},
         )
     }

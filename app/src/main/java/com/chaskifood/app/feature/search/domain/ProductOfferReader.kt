@@ -3,6 +3,7 @@ package com.chaskifood.app.feature.search.domain
 import com.chaskifood.app.feature.address.domain.model.AddressCoordinates
 import com.chaskifood.app.feature.catalog.domain.Product
 import com.chaskifood.app.feature.catalog.domain.StoreProductConfiguration
+import com.chaskifood.app.feature.discover.domain.StoreDiscoveryCandidate
 
 /** Lectura puntual confirmada por el servidor para una incorporación al carrito. */
 interface ProductOfferReader {
@@ -11,6 +12,18 @@ interface ProductOfferReader {
         productId: String,
         deliveryLocation: AddressCoordinates,
     ): ProductOfferReadResult
+
+    /** Solo Checkout entrega un local previamente verificado; la implementación puntual sigue intacta. */
+    fun openCheckoutReview(
+        verifiedStore: StoreDiscoveryCandidate,
+        deliveryLocation: AddressCoordinates,
+    ): ProductOfferReviewSession = ProductOfferReviewSession { productId ->
+        read(verifiedStore.store.id, productId, deliveryLocation)
+    }
+}
+
+fun interface ProductOfferReviewSession {
+    suspend fun read(productId: String): ProductOfferReadResult
 }
 
 sealed interface ProductOfferReadResult {

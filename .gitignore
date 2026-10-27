@@ -16,6 +16,7 @@ app/build
 */build
 .gradle/
 .kotlin/
+node_modules/
 .externalNativeBuild/
 .cxx/
 /captures

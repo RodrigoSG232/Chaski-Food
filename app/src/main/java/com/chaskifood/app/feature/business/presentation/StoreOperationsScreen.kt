@@ -5,7 +5,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -75,6 +77,7 @@ import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -93,6 +96,7 @@ import com.chaskifood.app.ui.theme.ChaskiStatusRejectedBg
 import com.chaskifood.app.ui.theme.ChaskiStatusRejectedFg
 import com.chaskifood.app.ui.theme.ChaskiTextMuted
 import com.chaskifood.app.ui.theme.ChaskiTextPrimary
+import com.chaskifood.app.ui.components.ChaskiStatusPill
 
 @Composable
 fun StoreOperationsScreen(
@@ -249,12 +253,26 @@ private fun StoreOperationCard(
         modifier = Modifier.fillMaxWidth(),
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Row(
+            Column(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
+                verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                val (badgeBg, badgeFg, badgeText) = when {
+                    isAvailable -> Triple(ChaskiStatusApprovedBg, ChaskiStatusApprovedFg, "RECIBIENDO PEDIDOS")
+                    store.operationalStatus == OperationalStatus.PAUSED -> Triple(ChaskiStatusObservedBg, ChaskiStatusObservedFg, "PAUSADO")
+                    else -> Triple(ChaskiStatusRejectedBg, ChaskiStatusRejectedFg, "NO DISPONIBLE")
+                }
+
+                ChaskiStatusPill(
+                    text = badgeText,
+                    backgroundColor = badgeBg,
+                    contentColor = badgeFg,
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.Top,
+                ) {
                     Icon(
                         imageVector = Icons.Filled.Store,
                         contentDescription = null,
@@ -263,35 +281,20 @@ private fun StoreOperationCard(
                     )
                     Text(
                         text = store.name,
+                        modifier = Modifier.weight(1f),
                         fontSize = 18.sp,
                         fontWeight = FontWeight.Bold,
                         color = ChaskiTextPrimary,
-                    )
-                }
-
-                val (badgeBg, badgeFg, badgeText) = when {
-                    isAvailable -> Triple(ChaskiStatusApprovedBg, ChaskiStatusApprovedFg, "RECIBIENDO PEDIDOS")
-                    store.operationalStatus == OperationalStatus.PAUSED -> Triple(ChaskiStatusObservedBg, ChaskiStatusObservedFg, "PAUSADO")
-                    else -> Triple(ChaskiStatusRejectedBg, ChaskiStatusRejectedFg, "NO DISPONIBLE")
-                }
-
-                Box(
-                    modifier = Modifier
-                        .background(color = badgeBg, shape = RoundedCornerShape(16.dp))
-                        .padding(horizontal = 10.dp, vertical = 4.dp),
-                ) {
-                    Text(
-                        text = badgeText,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = badgeFg,
                     )
                 }
             }
 
             Spacer(Modifier.height(6.dp))
 
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
                 Icon(
                     imageVector = Icons.Filled.LocationOn,
                     contentDescription = null,
@@ -301,6 +304,7 @@ private fun StoreOperationCard(
                 Spacer(Modifier.width(4.dp))
                 Text(
                     text = store.address,
+                    modifier = Modifier.weight(1f),
                     fontSize = 13.sp,
                     color = Color.DarkGray,
                 )
@@ -324,6 +328,7 @@ private fun StoreOperationCard(
                     Spacer(Modifier.width(6.dp))
                     Text(
                         text = "Motivo de pausa: ${store.pauseReason}",
+                        modifier = Modifier.weight(1f),
                         fontSize = 12.sp,
                         color = Color(0xFFE65100),
                     )
@@ -341,34 +346,41 @@ private fun StoreOperationCard(
 
             Spacer(Modifier.height(6.dp))
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                StatusButton(
-                    text = "ABIERTO",
-                    enabled = !operationState.saving && store.operationalStatus != OperationalStatus.OPEN,
-                    isSelected = store.operationalStatus == OperationalStatus.OPEN,
-                    activeColor = Color(0xFF2E7D32),
-                    onClick = { onStatusChange(OperationalStatus.OPEN) },
-                    modifier = Modifier.weight(1f),
-                )
-                StatusButton(
-                    text = "PAUSAR",
-                    enabled = !operationState.saving,
-                    isSelected = store.operationalStatus == OperationalStatus.PAUSED,
-                    activeColor = Color(0xFFEF6C00),
-                    onClick = { onStatusChange(OperationalStatus.PAUSED) },
-                    modifier = Modifier.weight(1f),
-                )
-                StatusButton(
-                    text = "CERRADO",
-                    enabled = !operationState.saving && store.operationalStatus != OperationalStatus.CLOSED,
-                    isSelected = store.operationalStatus == OperationalStatus.CLOSED,
-                    activeColor = Color(0xFFC62828),
-                    onClick = { onStatusChange(OperationalStatus.CLOSED) },
-                    modifier = Modifier.weight(1f),
-                )
+            val statusActions = listOf(
+                Triple("ABIERTO", OperationalStatus.OPEN, Color(0xFF2E7D32)),
+                Triple("PAUSAR", OperationalStatus.PAUSED, Color(0xFFEF6C00)),
+                Triple("CERRADO", OperationalStatus.CLOSED, Color(0xFFC62828)),
+            )
+            BoxWithConstraints(Modifier.fillMaxWidth()) {
+                if (maxWidth < 400.dp) {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        statusActions.forEach { (label, status, color) ->
+                            StatusButton(
+                                text = label,
+                                enabled = !operationState.saving &&
+                                    (status == OperationalStatus.PAUSED || store.operationalStatus != status),
+                                isSelected = store.operationalStatus == status,
+                                activeColor = color,
+                                onClick = { onStatusChange(status) },
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                        }
+                    }
+                } else {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        statusActions.forEach { (label, status, color) ->
+                            StatusButton(
+                                text = label,
+                                enabled = !operationState.saving &&
+                                    (status == OperationalStatus.PAUSED || store.operationalStatus != status),
+                                isSelected = store.operationalStatus == status,
+                                activeColor = color,
+                                onClick = { onStatusChange(status) },
+                                modifier = Modifier.weight(1f),
+                            )
+                        }
+                    }
+                }
             }
 
             if (operationState.operation == StoreOperation.STATUS || !expandedHours) {
@@ -385,7 +397,10 @@ private fun StoreOperationCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    modifier = Modifier.weight(1f),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
                     Icon(
                         imageVector = Icons.Filled.Schedule,
                         contentDescription = null,
@@ -395,6 +410,7 @@ private fun StoreOperationCard(
                     Spacer(Modifier.width(6.dp))
                     Text(
                         text = "Configurar Horario Semanal",
+                        modifier = Modifier.weight(1f),
                         fontSize = 14.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = ChaskiPrimary,
@@ -429,20 +445,28 @@ private fun StatusButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val backgroundColor = if (isSelected) activeColor else Color(0xFFEEEEEE)
+    val foregroundColor = if (isSelected) Color.White else Color.DarkGray
     Button(
         onClick = onClick,
         enabled = enabled,
         colors = ButtonDefaults.buttonColors(
-            containerColor = if (isSelected) activeColor else Color(0xFFEEEEEE),
-            contentColor = if (isSelected) Color.White else Color.DarkGray,
+            containerColor = backgroundColor,
+            contentColor = foregroundColor,
+            disabledContainerColor = backgroundColor,
+            disabledContentColor = foregroundColor,
         ),
         shape = RoundedCornerShape(8.dp),
         modifier = modifier.heightIn(min = 48.dp),
+        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
     ) {
         Text(
-            text = text,
+            text = if (isSelected) "✓ $text" else text,
+            modifier = Modifier.fillMaxWidth(),
             fontSize = 11.sp,
             fontWeight = FontWeight.Bold,
+            textAlign = TextAlign.Center,
+            softWrap = true,
         )
     }
 }

@@ -51,6 +51,7 @@ import com.chaskifood.app.core.common.UiState
 import com.chaskifood.app.feature.auth.presentation.AuthAppBar
 import com.chaskifood.app.feature.business.domain.BusinessRequest
 import com.chaskifood.app.feature.business.domain.BusinessStatus
+import com.chaskifood.app.ui.components.ChaskiStatusPill
 import com.chaskifood.app.ui.theme.ChaskiBackground
 import com.chaskifood.app.ui.theme.ChaskiDimens
 
@@ -268,20 +269,14 @@ private fun SupervisionBusinessCard(
         modifier = Modifier.fillMaxWidth(),
     ) {
         Column(modifier = Modifier.padding(ChaskiDimens.SpacingLg)) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text(
-                    text = request.businessName,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 18.sp,
-                    color = Color(0xFF212121),
-                    modifier = Modifier.weight(1f),
-                )
-                SupervisionStatusBadge(status = request.status)
-            }
+            Text(
+                text = request.businessName,
+                fontWeight = FontWeight.Bold,
+                fontSize = 18.sp,
+                color = Color(0xFF212121),
+            )
+            Spacer(Modifier.height(8.dp))
+            SupervisionStatusBadge(status = request.status)
 
             Spacer(Modifier.height(ChaskiDimens.SpacingSm))
 
@@ -365,16 +360,5 @@ private fun SupervisionStatusBadge(status: BusinessStatus) {
         else -> Triple(Color(0xFFEEEEEE), Color(0xFF616161), status.name)
     }
 
-    Surface(
-        color = bg,
-        shape = RoundedCornerShape(12.dp),
-    ) {
-        Text(
-            text = label,
-            fontSize = 11.sp,
-            fontWeight = FontWeight.Bold,
-            color = fg,
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-        )
-    }
+    ChaskiStatusPill(text = label, backgroundColor = bg, contentColor = fg)
 }

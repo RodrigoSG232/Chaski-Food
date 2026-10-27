@@ -38,6 +38,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.chaskifood.app.core.common.ApiResult
 import com.chaskifood.app.feature.auth.presentation.AuthAppBar
 import com.chaskifood.app.feature.business.domain.AuditLog
+import com.chaskifood.app.ui.components.ChaskiStatusPill
 import com.chaskifood.app.ui.theme.ChaskiBackground
 import com.chaskifood.app.ui.theme.ChaskiDimens
 import java.text.SimpleDateFormat
@@ -140,9 +141,8 @@ private fun AuditLogCard(log: AuditLog) {
         modifier = Modifier.fillMaxWidth(),
     ) {
         Column(modifier = Modifier.padding(ChaskiDimens.SpacingLg)) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
+            Column(
+                verticalArrangement = Arrangement.spacedBy(4.dp),
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 ActionBadge(action = log.action)
@@ -197,18 +197,7 @@ private fun ActionBadge(action: String) {
         else -> Triple(Color(0xFFEEEEEE), Color(0xFF616161), action)
     }
 
-    Surface(
-        color = bg,
-        shape = RoundedCornerShape(12.dp),
-    ) {
-        Text(
-            text = label,
-            fontSize = 11.sp,
-            fontWeight = FontWeight.Bold,
-            color = fg,
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-        )
-    }
+    ChaskiStatusPill(text = label, backgroundColor = bg, contentColor = fg)
 }
 
 private fun rememberDateFormat(): SimpleDateFormat {

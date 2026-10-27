@@ -51,7 +51,7 @@ import com.chaskifood.app.feature.cart.presentation.CartConfirmationHost
 import com.chaskifood.app.feature.catalog.presentation.ManageCatalogScreen
 import com.chaskifood.app.feature.catalog.presentation.StoreProductConfigurationScreen
 import com.chaskifood.app.feature.checkout.presentation.AddCardScreen
-import com.chaskifood.app.feature.checkout.presentation.CheckoutScreen
+import com.chaskifood.app.feature.checkout.presentation.RealCheckoutScreen
 import com.chaskifood.app.feature.checkout.presentation.PaymentScreen
 import com.chaskifood.app.feature.main.presentation.MainScreen
 import com.chaskifood.app.feature.profile.presentation.ProfileSettingsScreen
@@ -518,6 +518,7 @@ fun ChaskiNavHost() {
                     viewModel = cartViewModel,
                     onBack = { navController.popBackStack() },
                     onExploreProducts = { navController.openMainTab(FlowTab.Search) },
+                    onCheckout = { navController.navigate(ChaskiDestinations.CHECKOUT) { launchSingleTop = true } },
                     onSignIn = {
                         navController.navigate(ChaskiDestinations.SIGN_IN) {
                             popUpTo(0) { inclusive = true }
@@ -573,12 +574,14 @@ fun ChaskiNavHost() {
                 )
             }
             composable(ChaskiDestinations.CHECKOUT) {
-                CheckoutScreen(
+                RealCheckoutScreen(
                     onBack = { navController.popBackStack() },
-                    onTabSelected = onTabSelected,
-                    onContinueToPayment = {
-                        navController.navigate(ChaskiDestinations.PAYMENT)
+                    onOpenCart = {
+                        if (!navController.popBackStack(ChaskiDestinations.CART, inclusive = false)) {
+                            navController.navigate(ChaskiDestinations.CART)
+                        }
                     },
+                    onSelectAddress = { navController.navigate(ChaskiDestinations.ADDRESS_BOOK) },
                 )
             }
             composable(ChaskiDestinations.PAYMENT) {
@@ -744,7 +747,7 @@ private val demoDestinations = setOf(
     ChaskiDestinations.SEARCH_CATEGORIES,
     ChaskiDestinations.FOODS_PER_CATEGORY,
     ChaskiDestinations.FILTER, ChaskiDestinations.MENU_TOPPING,
-    ChaskiDestinations.YOUR_ORDER, ChaskiDestinations.CHECKOUT, ChaskiDestinations.PAYMENT,
+    ChaskiDestinations.YOUR_ORDER, ChaskiDestinations.PAYMENT,
     ChaskiDestinations.ORDER_PLACED, ChaskiDestinations.ORDER_TRACKING, ChaskiDestinations.ORDER_PROGRESS,
     ChaskiDestinations.ORDER_DELIVERED, ChaskiDestinations.ORDER_RATING,
 )
