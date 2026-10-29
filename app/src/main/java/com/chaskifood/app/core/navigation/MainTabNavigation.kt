@@ -15,7 +15,11 @@ fun FlowTab.mainTab(): ChaskiTab = when (this) {
 
 /** Return to the existing Main entry; keep its tab histories and ViewModels. */
 fun NavHostController.openMainTab(tab: FlowTab) {
-    getBackStackEntry(ChaskiDestinations.MAIN).savedStateHandle[MAIN_TAB_REQUEST] = tab.mainTab().route
+    val main = runCatching { getBackStackEntry(ChaskiDestinations.MAIN) }.getOrElse {
+        navigate(ChaskiDestinations.MAIN) { launchSingleTop = true }
+        getBackStackEntry(ChaskiDestinations.MAIN)
+    }
+    main.savedStateHandle[MAIN_TAB_REQUEST] = tab.mainTab().route
     popBackStack(ChaskiDestinations.MAIN, inclusive = false)
 }
 

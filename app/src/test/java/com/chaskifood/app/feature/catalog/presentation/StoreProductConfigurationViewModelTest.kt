@@ -24,6 +24,7 @@ import com.chaskifood.app.feature.catalog.domain.StoreProductConfigurationReposi
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
@@ -230,12 +231,34 @@ class StoreProductConfigurationViewModelTest {
         assertTrue(model.operations.value.getValue("store-1_product-1").error!!.contains("precio", ignoreCase = true))
     }
 
-    private fun model() = StoreProductConfigurationViewModel(
+    @Test fun `HU34 selector no revela local ajeno ni mantiene seleccion revocada`() = runTest {
+        val changes = MutableStateFlow(0)
+        var permitted = setOf("store-2")
+        val permissions = object : com.chaskifood.app.core.access.domain.StoreAuthorization {
+            override val enforced = true
+            override val changes = changes.map { Unit }
+            override fun hasAuthorizedStores() = permitted.isNotEmpty()
+            override fun allows(businessId: String, storeId: String) = businessId == "business-1" && storeId in permitted
+        }
+        stores.owned.value = ApiResult.Success(listOf("store-1", "store-2").map { BusinessStore(id = it, businessId = "business-1") })
+        val vm = model(permissions); runCurrent()
+        val success = vm.uiState.value as StoreProductConfigurationUiState.Success
+        assertEquals(listOf("store-2"), success.stores.map { it.id })
+        assertEquals("store-2", success.selectedStoreId)
+        vm.selectStore("store-1"); runCurrent()
+        assertEquals("store-2", (vm.uiState.value as StoreProductConfigurationUiState.Success).selectedStoreId)
+        permitted = emptySet(); changes.value++; runCurrent()
+        assertFalse(vm.uiState.value is StoreProductConfigurationUiState.Success)
+        vm.saveConfiguration("product-1", 10.0, StoreProductAvailability.AVAILABLE); runCurrent()
+        assertTrue(vm.operations.value.isEmpty())
+    }
+    private fun model(permissions: com.chaskifood.app.core.access.domain.StoreAuthorization = com.chaskifood.app.core.access.domain.OperationTestAuthorization) = StoreProductConfigurationViewModel(
         auth,
         businesses,
         stores,
         catalog,
         configurations,
+        permissions,
     ).also { viewModels.put("store-products", it) }
 
     private fun prepareSuccessfulContent(productCount: Int = 1) {

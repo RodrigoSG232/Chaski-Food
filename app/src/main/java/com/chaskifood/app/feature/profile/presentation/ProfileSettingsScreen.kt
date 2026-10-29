@@ -1,5 +1,7 @@
 package com.chaskifood.app.feature.profile.presentation
 
+import com.chaskifood.app.core.navigation.LocalProtectedAction
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -55,6 +57,7 @@ fun ProfileSettingsScreen(
     onSignOut: () -> Unit = {},
     viewModel: ProfileViewModel = hiltViewModel(),
 ) {
+    val authorize = LocalProtectedAction.current
     val currentUser by viewModel.currentUser.collectAsState()
     val uiState by viewModel.uiState.collectAsState()
 
@@ -142,7 +145,7 @@ fun ProfileSettingsScreen(
                         .clip(RoundedCornerShape(8.dp))
                         .background(ChaskiPrimary)
                         .clickable {
-                            viewModel.updateProfile(name, onSuccess = onSave)
+                            authorize { viewModel.updateProfile(name, onSuccess = onSave) }
                         }
                         .padding(vertical = ChaskiDimens.SpacingLg, horizontal = 48.dp),
                     horizontalArrangement = Arrangement.Center,

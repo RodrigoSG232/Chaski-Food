@@ -1,5 +1,7 @@
 package com.chaskifood.app.feature.business.presentation
 
+import com.chaskifood.app.core.navigation.LocalProtectedAction
+
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -109,6 +111,7 @@ fun ManageStoresScreen(
     modifier: Modifier = Modifier,
     viewModel: ManageStoresViewModel = hiltViewModel(),
 ) {
+    val authorize = LocalProtectedAction.current
     val uiState by viewModel.uiState.collectAsState()
     val actionMessage by viewModel.actionMessage.collectAsState()
     val saving by viewModel.saving.collectAsState()
@@ -294,7 +297,7 @@ fun ManageStoresScreen(
                             message = actionMessage,
                             onDismiss = { if (!saving) { showStoreDialog = false; draftStates.removeState("store") } },
                             onSave = { id, busId, name, imageUrl, address, lat, lng, phone, status ->
-                                viewModel.saveStore(
+                                authorize { viewModel.saveStore(
                                     id = id,
                                     businessId = busId,
                                     name = name,
@@ -305,7 +308,7 @@ fun ManageStoresScreen(
                                     phone = phone,
                                     status = status,
                                     onComplete = { showStoreDialog = false; draftStates.removeState("store") },
-                                )
+                                ) }
                             },
                         )
                     }
@@ -321,7 +324,7 @@ fun ManageStoresScreen(
                             message = actionMessage,
                             onDismiss = { if (!saving) { showManagerDialog = false; draftStates.removeState("manager") } },
                             onSave = { managerId, busId, email, name, phone, assignedIds ->
-                                viewModel.assignManager(
+                                authorize { viewModel.assignManager(
                                     managerId = managerId,
                                     businessId = busId,
                                     email = email,
@@ -329,7 +332,7 @@ fun ManageStoresScreen(
                                     phone = phone,
                                     assignedStoreIds = assignedIds,
                                     onComplete = { showManagerDialog = false; draftStates.removeState("manager") },
-                                )
+                                ) }
                             },
                         )
                     }

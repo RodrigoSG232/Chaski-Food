@@ -190,4 +190,14 @@ class ResolveAccessTest {
         assertTrue(resolve(identity, invalid) is AccessResolution.Error)
         assertTrue(resolve(identity, valid) is AccessResolution.Resolved)
     }
-}
+    @Test fun `solicitud existente conserva estado y solo observada o rechazada permite reenvio`() {
+        for (status in AccessBusinessStatus.entries) {
+            val access = result(facts(owner(status)))
+            val scope = AccessScope.Business("business")
+            assertTrue(access.capabilities.allows(AccessCapability.READ_OWN_BUSINESS_STATUS, scope))
+            assertEquals(status in setOf(AccessBusinessStatus.OBSERVED, AccessBusinessStatus.REJECTED),
+                access.capabilities.allows(AccessCapability.RESUBMIT_BUSINESS, scope))
+            assertFalse(allows(access, AccessCapability.REQUEST_BUSINESS))
+        }
+        assertFalse(result().capabilities.grants.any { it.capability == AccessCapability.RESUBMIT_BUSINESS })
+    }}

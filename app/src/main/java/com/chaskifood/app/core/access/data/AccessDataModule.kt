@@ -24,5 +24,8 @@ object AccessDataModule {
         RemoteAccessFacts(retrofit.newBuilder().baseUrl(BuildConfig.ELIGIBILITY_API_BASE_URL).build().create(AccessFactsApi::class.java),
             driver, json, BuildConfig.FIREBASE_MODE == "LOCAL" && auth.app.options.projectId == "demo-chaski-hu15")
     @Provides @Singleton fun context(identity: SharedAccessIdentitySource, facts: AccessFactsReader,
-        @AccessCoroutineScope scope: CoroutineScope): SharedAccessContext = SharedAccessContext(identity, facts, scope, BuildConfig.FIREBASE_MODE == "LOCAL")
+        @AccessCoroutineScope scope: CoroutineScope): SharedAccessContext = SharedAccessContext(identity, facts, scope, BuildConfig.FIREBASE_MODE == "LOCAL",
+            monotonicMillis = { android.os.SystemClock.elapsedRealtime() })
+    @Provides @Singleton fun storeAuthorization(context: SharedAccessContext): com.chaskifood.app.core.access.domain.StoreAuthorization =
+        CurrentStoreAuthorization(context)
 }

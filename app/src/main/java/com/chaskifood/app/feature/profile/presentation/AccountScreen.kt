@@ -1,5 +1,7 @@
 package com.chaskifood.app.feature.profile.presentation
 
+import com.chaskifood.app.core.navigation.LocalProtectedAction
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
@@ -81,6 +83,7 @@ fun AccountScreen(
     modifier: Modifier = Modifier,
     viewModel: ProfileViewModel = hiltViewModel(),
 ) {
+    val authorize = LocalProtectedAction.current
     val currentUser by viewModel.currentUser.collectAsState()
 
     Column(
@@ -271,7 +274,7 @@ fun AccountScreen(
             subtitle = stringResource(R.string.sign_out_subtitle),
             titleColor = ChaskiError,
             onClick = {
-                viewModel.signOut(onSignedOut = onSignOut)
+                authorize { viewModel.signOut(onSignedOut = onSignOut) }
             },
         )
 

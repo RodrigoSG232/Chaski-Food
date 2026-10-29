@@ -88,10 +88,13 @@ class AccessContextEmulatorTest {
             f.auth.signInWithEmailAndPassword(email, password).await()
             val again = f.resolved(CommercialExperience.CLIENT); assertTrue(again.identity.session.generation > initial.identity.session.generation)
             update(uid, JSONObject().put("emailVerified", true)); f.context.refresh()
-            withTimeout(25_000) { f.context.states.first { (it.resolution as? AccessResolution.Resolved)?.identity?.verification == EmailVerification.VERIFIED } }
+            try { withTimeout(25_000) { f.context.states.first { (it.resolution as? AccessResolution.Resolved)?.identity?.verification == EmailVerification.VERIFIED } } }
+            catch (timeout: TimeoutCancellationException) { throw AssertionError("Verificación: ${f.context.currentState().phase}/${f.context.currentState().problem}", timeout) }
             val newEmail = "$prefix-new@example.test"; update(uid, JSONObject().put("email", newEmail)); f.context.refresh()
-            withTimeout(25_000) { f.source.states.first { (it.identity as? AccessIdentity.Authenticated)?.email == newEmail } }
-            val blocked = withTimeout(25_000) { f.context.states.first { it.resolution is AccessResolution.Error && it.problem == AccessCheckProblem.RECONCILIATION_REQUIRED } }
+            try { withTimeout(25_000) { f.source.states.first { (it.identity as? AccessIdentity.Authenticated)?.email == newEmail } } }
+            catch (timeout: TimeoutCancellationException) { throw AssertionError("Correo: ${f.context.currentState().phase}/${f.context.currentState().problem}", timeout) }
+            val blocked = try { withTimeout(25_000) { f.context.states.first { it.resolution is AccessResolution.Error && it.problem == AccessCheckProblem.RECONCILIATION_REQUIRED } } }
+            catch (timeout: TimeoutCancellationException) { throw AssertionError("Reconciliación: ${f.context.currentState().phase}/${f.context.currentState().problem}", timeout) }
             assertNull(blocked.serverRevision)
         } finally { f.close() }
     }

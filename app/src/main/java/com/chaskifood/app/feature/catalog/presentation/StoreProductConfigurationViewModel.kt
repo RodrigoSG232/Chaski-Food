@@ -2,6 +2,8 @@
 
 package com.chaskifood.app.feature.catalog.presentation
 
+import com.chaskifood.app.core.access.domain.StoreAuthorization
+
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.chaskifood.app.core.common.ApiResult
@@ -79,6 +81,7 @@ class StoreProductConfigurationViewModel @Inject constructor(
     private val storeRepository: StoreRepository,
     private val catalogRepository: CatalogRepository,
     private val configurationRepository: StoreProductConfigurationRepository,
+    private val authorization: StoreAuthorization,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<StoreProductConfigurationUiState>(StoreProductConfigurationUiState.Loading)
@@ -92,14 +95,24 @@ class StoreProductConfigurationViewModel @Inject constructor(
     private var availableStores: List<BusinessStore> = emptyList()
     private var selectedStoreId: String? = null
 
+    private fun allowed(store: BusinessStore): Boolean = authorization.allows(store.businessId, store.id)
     init {
-        load()
+        if (authorization.enforced) {
+            viewModelScope.launch {
+                authorization.changes.collectLatest {
+                    accessObservation?.cancel(); contentObservation?.cancel()
+                    availableStores = emptyList(); selectedStoreId = null; _operations.value = emptyMap()
+                    _uiState.value = StoreProductConfigurationUiState.Loading
+                    if (authorization.hasAuthorizedStores()) load()
+                }
+            }
+        } else load()
     }
 
     fun retry() = load()
 
     fun selectStore(storeId: String) {
-        if (availableStores.none { it.id == storeId } || selectedStoreId == storeId) return
+        if (availableStores.none { it.id == storeId && allowed(it) } || selectedStoreId == storeId) return
         selectedStoreId = storeId
         observeSelectedStore()
     }
@@ -119,6 +132,7 @@ class StoreProductConfigurationViewModel @Inject constructor(
     ) {
         val state = _uiState.value as? StoreProductConfigurationUiState.Success ?: return
         val store = state.stores.singleOrNull { it.id == state.selectedStoreId } ?: return
+        if (!allowed(store)) return
         val item = state.products.singleOrNull { it.product.id == productId }
         if (item == null || item.product.businessId != store.businessId) {
             showError(storeProductConfigurationId(store.id, productId), "Producto no autorizado. Actualiza la lista.")
@@ -168,6 +182,7 @@ class StoreProductConfigurationViewModel @Inject constructor(
     }
 
     private fun load() {
+        if (!authorization.hasAuthorizedStores()) return
         accessObservation?.cancel()
         contentObservation?.cancel()
         availableStores = emptyList()
@@ -229,7 +244,7 @@ class StoreProductConfigurationViewModel @Inject constructor(
                     )
                 }
                 is ApiResult.Success -> {
-                    availableStores = result.data.distinctBy { it.id }
+                    availableStores = result.data.filter(::allowed).distinctBy { it.id }
                     if (availableStores.isEmpty()) {
                         selectedStoreId = null
                         contentObservation?.cancel()

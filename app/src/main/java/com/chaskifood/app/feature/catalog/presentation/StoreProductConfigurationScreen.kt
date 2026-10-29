@@ -1,5 +1,7 @@
 package com.chaskifood.app.feature.catalog.presentation
 
+import com.chaskifood.app.core.navigation.LocalProtectedAction
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -75,6 +77,7 @@ fun StoreProductConfigurationScreen(
     modifier: Modifier = Modifier,
     viewModel: StoreProductConfigurationViewModel = hiltViewModel(),
 ) {
+    val authorize = LocalProtectedAction.current
     val state by viewModel.uiState.collectAsState()
     val operations by viewModel.operations.collectAsState()
 
@@ -83,8 +86,8 @@ fun StoreProductConfigurationScreen(
         operations = operations,
         onBack = onBack,
         onRetry = viewModel::retry,
-        onSelectStore = viewModel::selectStore,
-        onSave = viewModel::saveConfiguration,
+        onSelectStore = { id -> authorize { viewModel.selectStore(id) } },
+        onSave = { id, price, availability -> authorize { viewModel.saveConfiguration(id, price, availability) } },
         onClearFeedback = viewModel::clearOperationFeedback,
         modifier = modifier,
     )

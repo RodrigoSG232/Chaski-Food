@@ -1,5 +1,7 @@
 package com.chaskifood.app.feature.business.presentation
 
+import com.chaskifood.app.core.navigation.LocalProtectedAction
+
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -104,6 +106,7 @@ fun StoreOperationsScreen(
     modifier: Modifier = Modifier,
     viewModel: StoreOperationsViewModel = hiltViewModel(),
 ) {
+    val authorize = LocalProtectedAction.current
     val uiState by viewModel.uiState.collectAsState()
     val operations by viewModel.operations.collectAsState()
     val draftStates = rememberSaveableStateHolder()
@@ -204,11 +207,11 @@ fun StoreOperationsScreen(
                                         pauseSuccessRevision = operations[store.id]?.successRevision ?: 0L
                                         pauseStoreId = store.id
                                     } else {
-                                        viewModel.updateStatus(store.id, newStatus, null)
+                                        authorize { viewModel.updateStatus(store.id, newStatus, null) }
                                     }
                                 },
                                 onSaveHours = { newHours ->
-                                    viewModel.updateHours(store.id, newHours)
+                                    authorize { viewModel.updateHours(store.id, newHours) }
                                 },
                             )
                             Spacer(Modifier.height(16.dp))
@@ -227,7 +230,7 @@ fun StoreOperationsScreen(
             operationState = pauseOperation,
             onDismiss = { pauseStoreId = null },
             onConfirm = { reason ->
-                viewModel.updateStatus(storeId, OperationalStatus.PAUSED, reason)
+                authorize { viewModel.updateStatus(storeId, OperationalStatus.PAUSED, reason) }
             },
         )
     } }

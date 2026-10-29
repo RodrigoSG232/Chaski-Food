@@ -57,6 +57,12 @@ class ResolveAccess {
                 grants += AccessGrant(AccessCapability.START_PURCHASE, AccessScope.Account(session.uid))
                 // Pendiente/observada/rechazada ya tienen solicitud: no crear otra.
                 if (owner == null) grants += AccessGrant(AccessCapability.REQUEST_BUSINESS, AccessScope.Account(session.uid))
+                else {
+                    val scope = AccessScope.Business(owner.businessId)
+                    grants += AccessGrant(AccessCapability.READ_OWN_BUSINESS_STATUS, scope)
+                    if (owner.status in setOf(AccessBusinessStatus.OBSERVED, AccessBusinessStatus.REJECTED))
+                        grants += AccessGrant(AccessCapability.RESUBMIT_BUSINESS, scope)
+                }
             }
             CommercialExperience.OWNER -> {
                 checkNotNull(owner)

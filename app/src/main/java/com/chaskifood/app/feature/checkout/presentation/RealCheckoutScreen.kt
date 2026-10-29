@@ -1,5 +1,8 @@
 package com.chaskifood.app.feature.checkout.presentation
 
+import com.chaskifood.app.core.navigation.LocalProtectedAction
+import com.chaskifood.app.core.navigation.LocalNavigationAccess
+
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -49,11 +52,13 @@ fun RealCheckoutScreen(
     modifier: Modifier = Modifier,
     viewModel: CheckoutViewModel = hiltViewModel(),
 ) {
+    val authorize = LocalProtectedAction.current
+    val origin = LocalNavigationAccess.current?.current()?.origin
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val lifecycleOwner = LocalLifecycleOwner.current
-    DisposableEffect(lifecycleOwner, viewModel) {
+    DisposableEffect(lifecycleOwner, viewModel, origin) {
         val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME) viewModel.review()
+            if (event == Lifecycle.Event.ON_RESUME) authorize { viewModel.review() }
             if (event == Lifecycle.Event.ON_PAUSE) viewModel.onScreenPaused()
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -80,14 +85,14 @@ fun RealCheckoutScreen(
                 }
                 state.result == null -> {
                     item("changed") { CheckoutMessage("La compra cambió. Vuelve a comprobarla antes de continuar.") }
-                    item("review-again") { ChaskiButton("Volver a comprobar", onClick = viewModel::review) }
+                    item("review-again") { ChaskiButton("Volver a comprobar", onClick = { authorize { viewModel.review() } }) }
                 }
                 state.result is CheckoutReviewResult.SignedOut -> item("signed-out") {
                     CheckoutMessage("Inicia sesión para revisar tu compra.")
                 }
                 state.result is CheckoutReviewResult.Error -> {
                     item("error") { CheckoutMessage((state.result as CheckoutReviewResult.Error).message) }
-                    item("retry") { ChaskiButton("Reintentar", onClick = viewModel::review) }
+                    item("retry") { ChaskiButton("Reintentar", onClick = { authorize { viewModel.review() } }) }
                 }
                 state.result is CheckoutReviewResult.Blocked -> {
                     val blocked = state.result as CheckoutReviewResult.Blocked
@@ -100,7 +105,7 @@ fun RealCheckoutScreen(
                     }
                     item("cart-action") { ChaskiButton("Volver al carrito", onClick = onOpenCart,
                         variant = ChaskiButtonVariant.Outlined) }
-                    item("retry") { ChaskiButton("Volver a comprobar", onClick = viewModel::review) }
+                    item("retry") { ChaskiButton("Volver a comprobar", onClick = { authorize { viewModel.review() } }) }
                 }
                 state.result is CheckoutReviewResult.Ready -> {
                     val quote = (state.result as CheckoutReviewResult.Ready).quote
@@ -127,7 +132,7 @@ fun RealCheckoutScreen(
                                 Text("Revisa los nuevos importes antes de continuar.")
                                 ChaskiButton(
                                     text = if (state.acceptedPriceChanges) "Precios revisados" else "Aceptar precios actualizados",
-                                    onClick = viewModel::acceptPriceChanges,
+                                    onClick = { authorize { viewModel.acceptPriceChanges() } },
                                     enabled = !state.acceptedPriceChanges,
                                     variant = ChaskiButtonVariant.Outlined,
                                 )
@@ -143,7 +148,7 @@ fun RealCheckoutScreen(
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     RadioButton(
                                         selected = state.paymentMethod == CheckoutPaymentMethod.CASH_ON_DELIVERY,
-                                        onClick = { viewModel.selectPaymentMethod(CheckoutPaymentMethod.CASH_ON_DELIVERY) },
+                                        onClick = { authorize { viewModel.selectPaymentMethod(CheckoutPaymentMethod.CASH_ON_DELIVERY) } },
                                     )
                                     Text("Efectivo al recibir", modifier = Modifier.weight(1f))
                                 }
@@ -160,7 +165,7 @@ fun RealCheckoutScreen(
                         )
                     }
                     item("review-again") {
-                        ChaskiButton("Volver a comprobar", onClick = viewModel::review,
+                        ChaskiButton("Volver a comprobar", onClick = { authorize { viewModel.review() } },
                             variant = ChaskiButtonVariant.Outlined)
                     }
                 }

@@ -1,5 +1,9 @@
 package com.chaskifood.app.feature.cart.presentation
 
+import com.chaskifood.app.core.navigation.ChaskiDestinations
+
+import com.chaskifood.app.core.navigation.LocalProtectedAction
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -69,6 +73,7 @@ fun CartScreen(
     viewModel: CartViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val purchase = LocalProtectedAction.current
     Scaffold(
         modifier = modifier,
         containerColor = ChaskiBackground,
@@ -78,12 +83,12 @@ fun CartScreen(
             state = state,
             onBack = onBack,
             onExploreProducts = onExploreProducts,
-            onCheckout = onCheckout,
+            onCheckout = { purchase(onCheckout) },
             onSignIn = onSignIn,
             onSelectAddress = onSelectAddress,
             onRetry = viewModel::retryLoading,
-            onChangeQuantity = viewModel::changeQuantity,
-            onRemoveProduct = viewModel::removeProduct,
+            onChangeQuantity = { id, quantity -> purchase { viewModel.changeQuantity(id, quantity) } },
+            onRemoveProduct = { id -> purchase { viewModel.removeProduct(id) } },
             onDismissMessage = viewModel::dismissMessage,
             modifier = Modifier.padding(padding),
         )

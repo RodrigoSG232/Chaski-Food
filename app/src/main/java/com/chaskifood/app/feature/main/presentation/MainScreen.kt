@@ -1,5 +1,11 @@
 package com.chaskifood.app.feature.main.presentation
 
+import com.chaskifood.app.ui.components.EmptyState
+
+import com.chaskifood.app.core.navigation.ChaskiDestinations
+
+import com.chaskifood.app.core.navigation.LocalNavigationAccess
+
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.material3.Scaffold
@@ -52,6 +58,7 @@ fun MainScreen(
     onSignOut: () -> Unit = {},
 ) {
     val navController = rememberNavController()
+    val access = LocalNavigationAccess.current
 
     LaunchedEffect(requestedTab) {
         if (requestedTab != null) {
@@ -71,7 +78,7 @@ fun MainScreen(
             modifier = Modifier.padding(innerPadding).consumeWindowInsets(innerPadding),
         ) {
             composable(ChaskiTab.HOME.route) {
-                HomeScreen(
+                if (access == null || access.allows(ChaskiDestinations.CART)) HomeScreen(
                     deliveryAddress = deliveryAddress,
                     deliveryAddressUnavailable = deliveryAddressUnavailable,
                     deliveryNotice = deliveryNotice,
@@ -81,14 +88,14 @@ fun MainScreen(
                     onOpenLocations = onOpenLocations,
                     onOpenCart = onOpenCart,
                     cartUnits = cartUnits,
-                )
+                ) else EmptyState("Utiliza Cuenta para acceder a tus funciones autorizadas.")
             }
             composable(ChaskiTab.SEARCH.route) {
-                OfferSearchScreen(
+                if (access == null || access.allows(ChaskiDestinations.CART)) OfferSearchScreen(
                     onStoreClick = onRestaurantClick,
                     onProductClick = onProductClick,
                     onSelectAddress = onOpenLocations,
-                )
+                ) else EmptyState("Las compras nuevas no están habilitadas para esta cuenta.")
             }
             composable(ChaskiTab.ORDERS.route) {
                 OrdersScreen(

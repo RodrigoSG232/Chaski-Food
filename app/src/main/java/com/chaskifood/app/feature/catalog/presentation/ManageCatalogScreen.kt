@@ -2,6 +2,8 @@
 
 package com.chaskifood.app.feature.catalog.presentation
 
+import com.chaskifood.app.core.navigation.LocalProtectedAction
+
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -117,6 +119,7 @@ fun ManageCatalogScreen(
     modifier: Modifier = Modifier,
     viewModel: ManageCatalogViewModel = hiltViewModel(),
 ) {
+    val authorize = LocalProtectedAction.current
     val uiState by viewModel.uiState.collectAsState()
     val actionMessage by viewModel.actionMessage.collectAsState()
     val saving by viewModel.saving.collectAsState()
@@ -261,7 +264,7 @@ fun ManageCatalogScreen(
                                     showCategoryDialog = true
                                 },
                                 onToggleStatus = { id, active ->
-                                    viewModel.toggleCategoryStatus(id, active)
+                                    authorize { viewModel.toggleCategoryStatus(id, active) }
                                 },
                             )
                         } else {
@@ -275,7 +278,7 @@ fun ManageCatalogScreen(
                                     showProductDialog = true
                                 },
                                 onToggleStatus = { id, active ->
-                                    viewModel.toggleProductStatus(id, active)
+                                    authorize { viewModel.toggleProductStatus(id, active) }
                                 },
                             )
                         }
@@ -311,7 +314,7 @@ fun ManageCatalogScreen(
                                 saving = saving, saveError = saveError,
                                 onDismiss = { if (!saving) { showCategoryDialog = false; draftStates.removeState("category") } },
                                 onSave = { cat ->
-                                    viewModel.saveCategory(cat) { showCategoryDialog = false; draftStates.removeState("category") }
+                                    authorize { viewModel.saveCategory(cat) { showCategoryDialog = false; draftStates.removeState("category") } }
                                 },
                             )
                         }
@@ -326,7 +329,7 @@ fun ManageCatalogScreen(
                                 saving = saving, saveError = saveError,
                                 onDismiss = { if (!saving) { showProductDialog = false; draftStates.removeState("product") } },
                                 onSave = { prod ->
-                                    viewModel.saveProduct(prod) { showProductDialog = false; draftStates.removeState("product") }
+                                    authorize { viewModel.saveProduct(prod) { showProductDialog = false; draftStates.removeState("product") } }
                                 },
                             )
                         }

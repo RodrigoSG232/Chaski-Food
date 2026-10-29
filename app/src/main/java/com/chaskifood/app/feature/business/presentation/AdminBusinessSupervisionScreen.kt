@@ -1,5 +1,7 @@
 package com.chaskifood.app.feature.business.presentation
 
+import com.chaskifood.app.core.navigation.LocalProtectedAction
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -61,6 +63,7 @@ fun AdminBusinessSupervisionScreen(
     modifier: Modifier = Modifier,
     viewModel: AdminBusinessSupervisionViewModel = hiltViewModel(),
 ) {
+    val authorize = LocalProtectedAction.current
     val selectedFilter by viewModel.selectedFilter.collectAsState()
     val filteredResult by viewModel.filteredRequests.collectAsState()
     val actionState by viewModel.actionState.collectAsState()
@@ -171,10 +174,10 @@ fun AdminBusinessSupervisionScreen(
                                     suspendRequestId = request.id
                                 },
                                 onReactivate = {
-                                    viewModel.reactivateBusiness(
+                                    authorize { viewModel.reactivateBusiness(
                                         request = request,
                                         onSuccess = {},
-                                    )
+                                    ) }
                                 },
                                 onManageStores = { viewModel.superviseStores(request) },
                             )
@@ -193,7 +196,7 @@ fun AdminBusinessSupervisionScreen(
     selectedBusiness?.let { business ->
         AdminStoreSupervisionDialog(
             businessName = business.businessName, stores = stores, actionState = actionState,
-            onDismiss = { viewModel.superviseStores(null) }, onChange = viewModel::changeStoreStatus,
+            onDismiss = { viewModel.superviseStores(null) }, onChange = { store, reason -> authorize { viewModel.changeStoreStatus(store, reason) } },
         )
     }
     activeSuspendRequest?.let { request ->
@@ -230,13 +233,13 @@ fun AdminBusinessSupervisionScreen(
             confirmButton = {
                 Button(
                     onClick = {
-                        viewModel.suspendBusiness(
+                        authorize { viewModel.suspendBusiness(
                             request = request,
                             reason = suspendReasonInput,
                             onSuccess = {
                                 suspendRequestId = null
                             },
-                        )
+                        ) }
                     },
                     enabled = suspendReasonInput.isNotBlank() && actionState !is UiState.Loading,
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD32F2F)),

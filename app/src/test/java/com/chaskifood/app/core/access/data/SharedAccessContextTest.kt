@@ -133,4 +133,33 @@ class SharedAccessContextTest {
         assertEquals(AccessContextPhase.SIGNED_OUT, f.context.states.value.phase)
     }
 
-}
+    @Test fun `accion comprueba lease monotona aunque temporizador no haya corrido`() = runTest {
+        val driver = Driver(); val reader = Reader(); var now = 0L
+        val identity = SharedAccessIdentitySource(driver, backgroundScope)
+        val context = SharedAccessContext(identity, reader, backgroundScope, true, 1_000) { now }
+        runCurrent(); driver.login(); runCurrent()
+        var allowed = false
+        context.runIfCurrent { allowed = it.resolution is AccessResolution.Resolved }
+        assertTrue(allowed)
+        now = 1_001
+        context.runIfCurrent { allowed = it.resolution is AccessResolution.Resolved }
+        assertFalse(allowed); assertEquals(AccessCheckProblem.EXPIRED, context.currentState().problem)
+        assertEquals(1, reader.calls)
+    }
+    @Test fun `credencial cambiada antes de publicacion UI no concede acciones`() = runTest {
+        val f = Fixture(this); runCurrent(); f.driver.login(); runCurrent()
+        f.driver.credentialCurrent = false
+        var executed = false
+        assertFalse(f.context.runIfCurrent { executed = true })
+        assertFalse(executed)
+        assertFalse(f.context.currentState().resolution is AccessResolution.Resolved)
+    }
+    @Test fun `segundo plano invalida sin consultar ni borrar y refresh recupera`() = runTest {
+        val f = Fixture(this); runCurrent(); f.driver.login(); runCurrent()
+        val generation = f.context.states.value.origin.generation
+        f.context.invalidate(); assertFalse(f.context.currentState().resolution is AccessResolution.Resolved)
+        assertEquals(1, f.reader.calls)
+        f.context.refresh(); runCurrent()
+        assertEquals(generation, f.context.currentState().origin.generation)
+        assertTrue(f.context.currentState().resolution is AccessResolution.Resolved)
+    }}

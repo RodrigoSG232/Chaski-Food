@@ -63,10 +63,14 @@ class FirebaseAccessIdentityDriver(private val auth: FirebaseAuth) : AccessIdent
             else {
                 publish(IdentityObservation.Loading)
                 try {
-                    if (snapshot.reload) user.reload().await()
-                    val claims = user.getIdToken(snapshot.reload).await().claims
-                    publish(IdentityObservation.Authenticated(checkNotNull(snapshot.key), user.uid, user.email,
-                        if (user.isEmailVerified) EmailVerification.VERIFIED else EmailVerification.UNVERIFIED, claims["admin"] == true, snapshot.epoch))
+                    val observation = kotlinx.coroutines.withTimeoutOrNull(12_000) {
+                        if (snapshot.reload) user.reload().await()
+                        val claims = user.getIdToken(snapshot.reload).await().claims
+                        IdentityObservation.Authenticated(checkNotNull(snapshot.key), user.uid, user.email,
+                            if (user.isEmailVerified) EmailVerification.VERIFIED else EmailVerification.UNVERIFIED,
+                            claims["admin"] == true, snapshot.epoch)
+                    }
+                    publish(observation ?: IdentityObservation.Failed)
                 } catch (cancelled: CancellationException) { throw cancelled }
                 catch (_: Exception) { publish(IdentityObservation.Failed) }
             }

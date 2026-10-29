@@ -14,7 +14,7 @@ data class AccessContextState(val origin: AccessProvenance, val resolution: Acce
  * La lease solo invalida; no hace polling ni convierte una cache en autorizacion permanente.
  */
 class SharedAccessContext(private val identity: SharedAccessIdentitySource, private val facts: AccessFactsReader,
-    private val scope: CoroutineScope, private val enabled: Boolean, private val validityMillis: Long = 60_000L) {
+    private val scope: CoroutineScope, private val enabled: Boolean, private val validityMillis: Long = 60_000L, private val monotonicMillis: () -> Long = { System.nanoTime() / 1_000_000L }) {
     init { require(validityMillis > 0) }
     private val gate = Any()
     private val evaluate = EvaluateAccessEvent()
@@ -26,9 +26,11 @@ class SharedAccessContext(private val identity: SharedAccessIdentitySource, priv
     private var work: Job? = null
     private var revisionSession: AccessSession? = null
     private var latestRevision: Long? = null
+    private var validUntil: Long? = null
     init { scope.launch { identity.states.collect { start(it) } } }
 
     private fun restricted(state: AccessIdentityState, problem: AccessCheckProblem? = null) {
+        validUntil = null
         val event = if (state.availability == IdentityAvailability.READY && state.identity == AccessIdentity.SignedOut)
             AccessEvent.Identity(state.origin, state.identity)
         else AccessEvent.Facts(state.origin, if (problem == null) AccessFacts.Loading else AccessFacts.Unverifiable)
@@ -62,6 +64,7 @@ class SharedAccessContext(private val identity: SharedAccessIdentitySource, priv
                     val resolution = evaluate(state.origin, state.identity, AccessEvent.Facts(state.origin, checked.facts))
                     if (resolution != null) {
                         if (checked.revision != null) { revisionSession = session; latestRevision = checked.revision }
+                        validUntil = if (resolution is AccessResolution.Resolved) monotonicMillis() + validityMillis else null
                         mutable.value = AccessContextState(state.origin, resolution, checked.revision, checked.problem, when (resolution) {
                             is AccessResolution.Resolved -> AccessContextPhase.RESOLVED
                             is AccessResolution.Conflict -> AccessContextPhase.CONFLICT
@@ -80,9 +83,27 @@ class SharedAccessContext(private val identity: SharedAccessIdentitySource, priv
         }
     }
     /** Invalida antes del refresh suspendido; otra respuesta no puede restaurar permisos viejos. */
+    fun invalidate(problem: AccessCheckProblem? = null) = synchronized(gate) {
+        work?.cancel(); ++ticket; restricted(identity.states.value, if (enabled) problem else AccessCheckProblem.ENVIRONMENT_UNAVAILABLE)
+    }
     suspend fun refresh() {
         synchronized(gate) { work?.cancel(); ++ticket; restricted(identity.states.value,
             if (enabled) null else AccessCheckProblem.ENVIRONMENT_UNAVAILABLE) }
         if (enabled) identity.refresh()
+    }
+    /** También se comprueba al ejecutar acciones: un dispositivo suspendido no prolonga la lease. */
+    fun currentState(): AccessContextState = synchronized(gate) {
+        val state = identity.states.value
+        if (mutable.value.origin != state.origin) restricted(state)
+        if (mutable.value.phase == AccessContextPhase.RESOLVED && !identity.publishIfCurrent(state) {}) restricted(state, AccessCheckProblem.UNAVAILABLE)
+        if (validUntil?.let { monotonicMillis() >= it } == true) restricted(state, AccessCheckProblem.EXPIRED)
+        mutable.value
+    }
+    /** Sin suspensión entre validar la identidad/lease y despachar la acción de presentación. */
+    fun runIfCurrent(action: (AccessContextState) -> Unit): Boolean = synchronized(gate) {
+        val expected = identity.states.value
+        val snapshot = currentState()
+        if (snapshot.origin != expected.origin) false
+        else identity.publishIfCurrent(expected) { action(snapshot) }
     }
 }

@@ -1,5 +1,7 @@
 package com.chaskifood.app.feature.business.presentation
 
+import com.chaskifood.app.core.access.domain.StoreAuthorization
+
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.chaskifood.app.core.common.ApiResult
@@ -43,6 +45,7 @@ class StoreOperationsViewModel @Inject constructor(
     private val storeRepository: StoreRepository,
     private val authRepository: AuthRepository,
     private val businessRepository: BusinessRepository,
+    private val authorization: StoreAuthorization,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<StoreOperationsUiState>(StoreOperationsUiState.Loading)
@@ -52,13 +55,27 @@ class StoreOperationsViewModel @Inject constructor(
     val operations = _operations.asStateFlow()
 
     private var observation: Job? = null
-    init { loadAssignedStores() }
+    private fun allowed(store: BusinessStore): Boolean = authorization.allows(store.businessId, store.id)
+    private var permissionObservation: Job? = null
+    init {
+        if (authorization.enforced) {
+            permissionObservation = viewModelScope.launch {
+                authorization.changes.collectLatest {
+                    observation?.cancel()
+                    _operations.value = emptyMap()
+                    _uiState.value = StoreOperationsUiState.Loading
+                    if (authorization.hasAuthorizedStores()) loadAssignedStores()
+                }
+            }
+        } else loadAssignedStores()
+    }
     fun clearOperationFeedback(storeId: String) {
         val state = _operations.value[storeId] ?: return
         if (!state.saving) _operations.value += storeId to state.copy(error = null, message = null)
     }
 
     fun loadAssignedStores() {
+        if (!authorization.hasAuthorizedStores()) return
         observation?.cancel()
         observation = viewModelScope.launch {
             _uiState.value = StoreOperationsUiState.Loading
@@ -90,10 +107,10 @@ class StoreOperationsViewModel @Inject constructor(
                             }
                             stores.collectLatest { result ->
                                 _uiState.value = when (result) {
-                                    is ApiResult.Success -> if (result.data.isEmpty()) {
+                                    is ApiResult.Success -> if (result.data.none(::allowed)) {
                                         StoreOperationsUiState.NoStoresAssigned
                                     } else {
-                                        StoreOperationsUiState.Success(result.data)
+                                        StoreOperationsUiState.Success(result.data.filter(::allowed))
                                     }
                                     is ApiResult.Failure -> StoreOperationsUiState.Error(
                                         result.message ?: "No se pudieron cargar los locales.",
@@ -108,7 +125,7 @@ class StoreOperationsViewModel @Inject constructor(
     }
 
     private fun assigned(storeId: String): Boolean =
-        (_uiState.value as? StoreOperationsUiState.Success)?.stores?.any { it.id == storeId } == true
+        (_uiState.value as? StoreOperationsUiState.Success)?.stores?.any { it.id == storeId && allowed(it) } == true
 
     fun updateStatus(storeId: String, status: OperationalStatus, pauseReason: String? = null) {
         val message = when (status) {
