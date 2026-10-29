@@ -5,6 +5,7 @@ import android.content.Intent
 import android.os.Build
 import android.content.pm.PackageManager
 import android.Manifest
+import android.util.Base64
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.core.app.ActivityScenario
 import com.chaskifood.app.MainActivity
@@ -64,8 +65,14 @@ class OrderNotificationEmulatorTest {
             val tokens=FirebaseBuyerTokenSource(auth,sessions)
             val current=sessions.current()
             val order=retrofit.create(StoreOrdersApi::class.java).page("hu16-e2e-store","Bearer ${tokens.token(current.uid!!,current.generation)}",null).body()!!.orders.single()
-            val data=mapOf("type" to "NEW_ORDER","eventId" to "new_order_${order.orderId}","orderId" to order.orderId,
+            val expected=mapOf("type" to "NEW_ORDER","eventId" to "new_order_${order.orderId}","orderId" to order.orderId,
                 "businessId" to "hu16-e2e-owner","storeId" to "hu16-e2e-store","recipientUid" to "hu16-e2e-manager")
+            val encoded=InstrumentationRegistry.getArguments().getString("hu16NoticePayload")
+            val data=if(encoded==null)expected else {
+                val raw=String(Base64.decode(encoded,Base64.URL_SAFE or Base64.NO_WRAP),Charsets.UTF_8)
+                val decoded=kotlinx.serialization.json.Json.parseToJsonElement(raw) as kotlinx.serialization.json.JsonObject
+                decoded.mapValues{(_,value)->(value as kotlinx.serialization.json.JsonPrimitive).content}.also {assertEquals(expected,it)}
+            }
             val coordinator=NotificationCoordinator(android,sessions,tokens,shared,scope,retrofit)
             coordinator.start()
             if(Build.VERSION.SDK_INT>=33)assertEquals(PackageManager.PERMISSION_DENIED,

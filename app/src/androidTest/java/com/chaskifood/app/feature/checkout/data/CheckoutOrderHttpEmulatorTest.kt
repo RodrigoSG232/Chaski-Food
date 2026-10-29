@@ -1,6 +1,17 @@
 package com.chaskifood.app.feature.checkout.data
 
 import android.util.Log
+import androidx.compose.ui.test.*
+import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.lifecycle.ViewModelStore
+import com.chaskifood.app.core.access.data.*
+import com.chaskifood.app.feature.checkout.presentation.CheckoutViewModel
+import com.chaskifood.app.feature.checkout.presentation.RealCheckoutScreen
+import com.chaskifood.app.ui.theme.ChaskiTheme
+import org.junit.Rule
+import java.util.UUID
 import androidx.room.Room
 import androidx.test.platform.app.InstrumentationRegistry
 import com.chaskifood.app.BuildConfig
@@ -30,6 +41,7 @@ import retrofit2.converter.kotlinx.serialization.asConverterFactory
 
 /** Prepared/cleaned by orderAndroid.fixture.ts, exclusively with emulator demo data. */
 class CheckoutOrderHttpEmulatorTest {
+    @get:Rule val compose=createComposeRule()
     @Test fun realReviewRoomPost201AndGet200AreIdempotent()=runBlocking {
         require(BuildConfig.FIREBASE_MODE=="LOCAL")
         val host=CheckoutEmulatorFixture.HOST
@@ -39,7 +51,11 @@ class CheckoutOrderHttpEmulatorTest {
         val auth=FirebaseAuth.getInstance(app).apply{useEmulator(host,9099)}
         val db=FirebaseFirestore.getInstance(app).apply{useEmulator(host,8089)
             firestoreSettings=FirebaseFirestoreSettings.Builder().setPersistenceEnabled(false).build()}
-        val room=Room.inMemoryDatabaseBuilder(android,ChaskiDatabase::class.java).build()
+        val closure=InstrumentationRegistry.getArguments().getString("hu16Closure")=="enabled"
+        val databaseName="hu16-closure-${UUID.randomUUID()}.db"
+        val room=if(closure)Room.databaseBuilder(android,ChaskiDatabase::class.java,databaseName).build()
+            else Room.inMemoryDatabaseBuilder(android,ChaskiDatabase::class.java).build()
+        val models=ViewModelStore()
         val scope=CoroutineScope(SupervisorJob()+Dispatchers.Default)
         try {
             Log.i("HU16E2E","phase=auth")
@@ -52,18 +68,45 @@ class CheckoutOrderHttpEmulatorTest {
             val address=Address("address","","Parque público Lima",AddressCoordinates(-12.05,-77.04),"Puerta pública","Llamar al llegar",1,1)
             addresses.set(user.uid,address);selection.select(user.uid,address.id)
             val cart=Cart(user.uid,listOf(CartProductSnapshot("hu16-e2e-owner","hu16-e2e-store","hu16-e2e-product","Plato ficticio",1000,2)))
-            room.cartDao().saveCart(cart.toEntity(),cart.toItemEntities())
-            val contexts=CheckoutContextSource(sessions,DefaultCartRepository(sessions,addresses,offers,local),addresses,
+            val cartRepository=DefaultCartRepository(sessions,addresses,offers,local)
+            if(closure){
+                assertTrue(cartRepository.addProduct("hu16-e2e-store","hu16-e2e-product",2) is CartOperationResult.Updated)
+                assertTrue(cartRepository.changeQuantity("hu16-e2e-product",3) is CartOperationResult.Updated)
+                assertTrue(cartRepository.changeQuantity("hu16-e2e-product",2) is CartOperationResult.Updated)
+            }else room.cartDao().saveCart(cart.toEntity(),cart.toItemEntities())
+            val contexts=CheckoutContextSource(sessions,cartRepository,addresses,
                 StoredCheckoutLocalSnapshotReader(local,selection))
             val observed=contexts.observe().stateIn(scope,SharingStarted.Eagerly,CheckoutContextState.Loading)
             val context=withTimeout(10000){observed.filterIsInstance<CheckoutContextState.Ready>().first()}.context
             val json=Json{ignoreUnknownKeys=true}
+            var persistedBeforePost=false
+            val loseResponse=closure && InstrumentationRegistry.getArguments().getString("hu16LoseResponse")=="enabled"
+            val posts=java.util.concurrent.atomic.AtomicInteger(0)
+            val lost=java.util.concurrent.atomic.AtomicBoolean(false)
+            val client=OkHttpClient.Builder().addInterceptor {chain->
+                if(closure && chain.request().method=="POST" && chain.request().url.encodedPath.endsWith("/orders")){
+                    posts.incrementAndGet()
+                    runBlocking {val frozen=room.checkoutIntentDao().unresolved(user.uid)
+                        check(frozen!=null && frozen.state=="IN_FLIGHT");persistedBeforePost=true}
+                }
+                val response=chain.proceed(chain.request())
+                if(loseResponse && chain.request().method=="POST" && chain.request().url.encodedPath.endsWith("/orders") &&
+                    response.code==201 && lost.compareAndSet(false,true)){
+                    response.close();throw java.net.SocketTimeoutException("LOCAL simulated lost response AFTER backend commit")
+                }
+                response
+            }.build()
             val retrofit=Retrofit.Builder().baseUrl("http://$host:5001/demo-chaski-hu15/southamerica-west1/foodApi/api/v1/")
-                .client(OkHttpClient()).addConverterFactory(json.asConverterFactory("application/json".toMediaType())).build()
+                .client(client).addConverterFactory(json.asConverterFactory("application/json".toMediaType())).build()
             val tokens=FirebaseBuyerTokenSource(auth,sessions);val orderHttp=HttpOrderReader(retrofit.create(OrderApi::class.java),tokens)
             val store=CheckoutIntentStore(room,sessions,contexts,SystemCheckoutClock())
+            val driver=FirebaseAccessIdentityDriver(auth)
+            val identity=SharedAccessIdentitySource(driver,scope)
+            val shared=SharedAccessContext(identity,RemoteAccessFacts(retrofit.create(AccessFactsApi::class.java),driver,json,true),scope,true)
+            withTimeout(15000){shared.states.first {it.phase==AccessContextPhase.RESOLVED}}
+            val authorization=SharedCheckoutPurchaseGuard(shared)
             var canPurchase=true
-            val operations=CheckoutOrderOperations(store,sessions,orderHttp,CheckoutPurchaseGuard {uid,buy->uid==user.uid&&(!buy||canPurchase)})
+            val operations=CheckoutOrderOperations(store,sessions,orderHttp,CheckoutPurchaseGuard {uid,buy->authorization.allows(uid,buy)&&(!buy||canPurchase)})
             val repository=FirebaseCheckoutRepository(contexts,offers,db,
                 HttpStorePurchaseEligibilityReader(retrofit.create(StoreEligibilityApi::class.java),tokens),
                 HttpDeliveryQuoteReader(retrofit.create(DeliveryQuoteApi::class.java),tokens,json),SystemCheckoutClock(),
@@ -75,7 +118,32 @@ class CheckoutOrderHttpEmulatorTest {
             assertNotNull(reviewed.quote.acceptedPurchase)
             assertEquals("Negocio ficticio",reviewed.quote.acceptedPurchase!!.businessName)
             Log.i("HU16E2E","phase=confirm")
-            val first=repository.confirm(context,reviewed.quote) as CheckoutConfirmation.Success
+            val first=if(closure){
+                lateinit var model:CheckoutViewModel
+                compose.runOnUiThread {model=CheckoutViewModel(repository,SystemCheckoutClock());models.put("checkout",model)}
+                compose.setContent {ChaskiTheme {RealCheckoutScreen(onBack={},onOpenCart={},onSelectAddress={},viewModel=model)}}
+                compose.waitUntil(25000){model.uiState.value.result is CheckoutReviewResult.Ready}
+                compose.onNode(hasScrollAction()).performScrollToNode(hasText("Efectivo al recibir"))
+                compose.onNode(SemanticsMatcher.expectValue(SemanticsProperties.Role,Role.RadioButton)).performClick()
+                compose.onNode(hasScrollAction()).performScrollToNode(hasText("Confirmar pedido"))
+                compose.onNodeWithText("Confirmar pedido").performClick()
+                if(loseResponse){
+                    compose.waitUntil(25000){model.uiState.value.confirmation is CheckoutConfirmation.Pending}
+                    assertFalse(room.cartDao().getCart(user.uid)!!.items.isEmpty())
+                    val pending=room.checkoutIntentDao().unresolved(user.uid)!!
+                    assertEquals("UNKNOWN",pending.state)
+                    compose.onNode(hasScrollAction()).performScrollToNode(hasText("Consultar resultado"))
+                    compose.onNodeWithText("Consultar resultado").performClick()
+                }
+                compose.waitUntil(25000){model.uiState.value.confirmation is CheckoutConfirmation.Success}
+                val success=model.uiState.value.confirmation as CheckoutConfirmation.Success
+                compose.onNode(hasScrollAction()).performScrollToNode(hasText("Pedido confirmado: ${success.receipt.orderId}"))
+                compose.onNodeWithText("Pedido confirmado: ${success.receipt.orderId}").assertIsDisplayed()
+                assertTrue(persistedBeforePost);assertEquals(1,posts.get())
+                assertEquals("987654321",success.receipt.accepted.storePhone)
+                assertEquals("",success.receipt.accepted.delivery.label);assertNull(success.receipt.accepted.buyerPhone)
+                success
+            }else repository.confirm(context,reviewed.quote) as CheckoutConfirmation.Success
             assertTrue(first.cartConsumed);assertTrue(room.cartDao().getCart(user.uid)!!.items.isEmpty())
             Log.i("HU16E2E","phase=recover")
             val recovered=orderHttp.execute(com.chaskifood.app.feature.checkout.domain.OrderIntent(first.receipt.intentId,first.receipt.accepted),
@@ -86,6 +154,15 @@ class CheckoutOrderHttpEmulatorTest {
             val own=repository.recover(user.uid,sessions.current().generation,first.receipt.intentId) as CheckoutConfirmation.Success
             assertEquals(first.receipt.orderId,own.receipt.orderId);assertEquals(cart,room.cartDao().getCart(user.uid)!!.toDomain())
             assertEquals(CheckoutConfirmation.PurchaseForbidden,repository.confirm(context,reviewed.quote))
-        } finally {scope.cancel();room.close();auth.signOut();withTimeoutOrNull(3000){db.terminate().await()};app.delete()}
+            if(closure){
+                Room.databaseBuilder(android,ChaskiDatabase::class.java,databaseName).build().let {reopened->
+                    try {val stored=reopened.checkoutIntentDao().get(user.uid,first.receipt.intentId)!!
+                        assertEquals("SUCCEEDED",stored.state);assertEquals(first.receipt.orderId,stored.receiptOrderId)
+                        assertTrue(stored.receiptApplied)
+                    }finally{reopened.close()}
+                }
+                Log.i("HU16E2E","phase=ui-room-http-recovery-verified")
+            }
+        } finally {compose.runOnUiThread {models.clear()};scope.cancel();room.close();if(closure)android.deleteDatabase(databaseName);auth.signOut();withTimeoutOrNull(3000){db.terminate().await()};app.delete()}
     }
 }
