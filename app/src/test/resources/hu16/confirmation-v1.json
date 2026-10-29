@@ -1,0 +1,2235 @@
+{
+  "protocol": "hu16-v1",
+  "intentId": "12345678-1234-4234-8234-123456789abc",
+  "validCases": [
+    {
+      "name": "base",
+      "purchase": {
+        "ownerUid": "buyer-demo",
+        "businessId": "business-demo",
+        "storeId": "store-demo",
+        "businessName": "Comida de prueba",
+        "storeName": "Local público",
+        "storePhone": null,
+        "buyerName": "Comprador ficticio",
+        "buyerPhone": null,
+        "pickup": {
+          "addressText": "Plaza pública Lima",
+          "location": {
+            "latitude": -12.0464,
+            "longitude": -77.0428
+          },
+          "reference": null,
+          "instructions": null
+        },
+        "delivery": {
+          "addressId": "address-demo",
+          "label": "Destino público",
+          "destination": {
+            "addressText": "Parque público Lima",
+            "location": {
+              "latitude": -12.05,
+              "longitude": -77.04
+            },
+            "reference": "Puerta norte",
+            "instructions": "Llamar al llegar"
+          }
+        },
+        "items": [
+          {
+            "productId": "p-b",
+            "categoryId": "c-1",
+            "name": "Producto B",
+            "quantity": 1,
+            "unitPriceMinor": 1200
+          },
+          {
+            "productId": "p-a",
+            "categoryId": "c-1",
+            "name": "Producto A",
+            "quantity": 2,
+            "unitPriceMinor": 350
+          }
+        ],
+        "amounts": {
+          "subtotalMinor": 1900,
+          "deliveryFeeMinor": 300,
+          "totalMinor": 2200
+        },
+        "currency": "PEN",
+        "paymentMethod": "CASH_ON_DELIVERY",
+        "deliveryQuote": {
+          "quoteId": "quote-demo",
+          "distanceMeters": 1250.0,
+          "tariffVersion": "lima-driving-car-v1",
+          "quotedAtEpochMillis": 1800000000000,
+          "expiresAtEpochMillis": 1800000300000
+        }
+      },
+      "requiresAcceptance": false,
+      "requiresNewRoute": false,
+      "expected": {
+        "canonicalConsent": "{\"accepted\":{\"amounts\":{\"deliveryFeeMinor\":300,\"subtotalMinor\":1900,\"totalMinor\":2200},\"businessId\":\"business-demo\",\"businessName\":\"Comida de prueba\",\"buyerName\":\"Comprador ficticio\",\"buyerPhone\":null,\"currency\":\"PEN\",\"delivery\":{\"addressId\":\"address-demo\",\"destination\":{\"addressText\":\"Parque público Lima\",\"instructions\":\"Llamar al llegar\",\"location\":{\"latitudeBits\":\"c02819999999999a\",\"longitudeBits\":\"c053428f5c28f5c3\"},\"reference\":\"Puerta norte\"},\"label\":\"Destino público\"},\"deliveryQuote\":{\"distanceBits\":\"4093880000000000\",\"expiresAtEpochMillis\":1800000300000,\"quoteId\":\"quote-demo\",\"quotedAtEpochMillis\":1800000000000,\"tariffVersion\":\"lima-driving-car-v1\"},\"items\":[{\"categoryId\":\"c-1\",\"name\":\"Producto A\",\"productId\":\"p-a\",\"quantity\":2,\"unitPriceMinor\":350},{\"categoryId\":\"c-1\",\"name\":\"Producto B\",\"productId\":\"p-b\",\"quantity\":1,\"unitPriceMinor\":1200}],\"ownerUid\":\"buyer-demo\",\"paymentMethod\":\"CASH_ON_DELIVERY\",\"pickup\":{\"addressText\":\"Plaza pública Lima\",\"instructions\":null,\"location\":{\"latitudeBits\":\"c02817c1bda5119d\",\"longitudeBits\":\"c05342bd3c361134\"},\"reference\":null},\"storeId\":\"store-demo\",\"storeName\":\"Local público\",\"storePhone\":null},\"version\":\"hu16-consent-v1\"}",
+        "consentHash": "ea16785a0d0d7aacca35b3959863a3f3699ebe8411c9546029e15cb479a5a9d9",
+        "logisticsHash": "90d7ec5a2dec36564a17bbd5757258f8e5f0c96b76c7c8ea3c9d977631a18b43",
+        "requestHash": "893fb5ba58ad040f2edf323267b726fc76e888ee935f22622ff4fe899dc57929"
+      }
+    },
+    {
+      "name": "reordered",
+      "purchase": {
+        "ownerUid": "buyer-demo",
+        "businessId": "business-demo",
+        "storeId": "store-demo",
+        "businessName": "Comida de prueba",
+        "storeName": "Local público",
+        "storePhone": null,
+        "buyerName": "Comprador ficticio",
+        "buyerPhone": null,
+        "pickup": {
+          "addressText": "Plaza pública Lima",
+          "location": {
+            "latitude": -12.0464,
+            "longitude": -77.0428
+          },
+          "reference": null,
+          "instructions": null
+        },
+        "delivery": {
+          "addressId": "address-demo",
+          "label": "Destino público",
+          "destination": {
+            "addressText": "Parque público Lima",
+            "location": {
+              "latitude": -12.05,
+              "longitude": -77.04
+            },
+            "reference": "Puerta norte",
+            "instructions": "Llamar al llegar"
+          }
+        },
+        "items": [
+          {
+            "productId": "p-a",
+            "categoryId": "c-1",
+            "name": "Producto A",
+            "quantity": 2,
+            "unitPriceMinor": 350
+          },
+          {
+            "productId": "p-b",
+            "categoryId": "c-1",
+            "name": "Producto B",
+            "quantity": 1,
+            "unitPriceMinor": 1200
+          }
+        ],
+        "amounts": {
+          "subtotalMinor": 1900,
+          "deliveryFeeMinor": 300,
+          "totalMinor": 2200
+        },
+        "currency": "PEN",
+        "paymentMethod": "CASH_ON_DELIVERY",
+        "deliveryQuote": {
+          "quoteId": "quote-demo",
+          "distanceMeters": 1250.0,
+          "tariffVersion": "lima-driving-car-v1",
+          "quotedAtEpochMillis": 1800000000000,
+          "expiresAtEpochMillis": 1800000300000
+        }
+      },
+      "requiresAcceptance": false,
+      "requiresNewRoute": false,
+      "expected": {
+        "canonicalConsent": "{\"accepted\":{\"amounts\":{\"deliveryFeeMinor\":300,\"subtotalMinor\":1900,\"totalMinor\":2200},\"businessId\":\"business-demo\",\"businessName\":\"Comida de prueba\",\"buyerName\":\"Comprador ficticio\",\"buyerPhone\":null,\"currency\":\"PEN\",\"delivery\":{\"addressId\":\"address-demo\",\"destination\":{\"addressText\":\"Parque público Lima\",\"instructions\":\"Llamar al llegar\",\"location\":{\"latitudeBits\":\"c02819999999999a\",\"longitudeBits\":\"c053428f5c28f5c3\"},\"reference\":\"Puerta norte\"},\"label\":\"Destino público\"},\"deliveryQuote\":{\"distanceBits\":\"4093880000000000\",\"expiresAtEpochMillis\":1800000300000,\"quoteId\":\"quote-demo\",\"quotedAtEpochMillis\":1800000000000,\"tariffVersion\":\"lima-driving-car-v1\"},\"items\":[{\"categoryId\":\"c-1\",\"name\":\"Producto A\",\"productId\":\"p-a\",\"quantity\":2,\"unitPriceMinor\":350},{\"categoryId\":\"c-1\",\"name\":\"Producto B\",\"productId\":\"p-b\",\"quantity\":1,\"unitPriceMinor\":1200}],\"ownerUid\":\"buyer-demo\",\"paymentMethod\":\"CASH_ON_DELIVERY\",\"pickup\":{\"addressText\":\"Plaza pública Lima\",\"instructions\":null,\"location\":{\"latitudeBits\":\"c02817c1bda5119d\",\"longitudeBits\":\"c05342bd3c361134\"},\"reference\":null},\"storeId\":\"store-demo\",\"storeName\":\"Local público\",\"storePhone\":null},\"version\":\"hu16-consent-v1\"}",
+        "consentHash": "ea16785a0d0d7aacca35b3959863a3f3699ebe8411c9546029e15cb479a5a9d9",
+        "logisticsHash": "90d7ec5a2dec36564a17bbd5757258f8e5f0c96b76c7c8ea3c9d977631a18b43",
+        "requestHash": "893fb5ba58ad040f2edf323267b726fc76e888ee935f22622ff4fe899dc57929"
+      }
+    },
+    {
+      "name": "price-up",
+      "purchase": {
+        "ownerUid": "buyer-demo",
+        "businessId": "business-demo",
+        "storeId": "store-demo",
+        "businessName": "Comida de prueba",
+        "storeName": "Local público",
+        "storePhone": null,
+        "buyerName": "Comprador ficticio",
+        "buyerPhone": null,
+        "pickup": {
+          "addressText": "Plaza pública Lima",
+          "location": {
+            "latitude": -12.0464,
+            "longitude": -77.0428
+          },
+          "reference": null,
+          "instructions": null
+        },
+        "delivery": {
+          "addressId": "address-demo",
+          "label": "Destino público",
+          "destination": {
+            "addressText": "Parque público Lima",
+            "location": {
+              "latitude": -12.05,
+              "longitude": -77.04
+            },
+            "reference": "Puerta norte",
+            "instructions": "Llamar al llegar"
+          }
+        },
+        "items": [
+          {
+            "productId": "p-b",
+            "categoryId": "c-1",
+            "name": "Producto B",
+            "quantity": 1,
+            "unitPriceMinor": 1300
+          },
+          {
+            "productId": "p-a",
+            "categoryId": "c-1",
+            "name": "Producto A",
+            "quantity": 2,
+            "unitPriceMinor": 350
+          }
+        ],
+        "amounts": {
+          "subtotalMinor": 2000,
+          "deliveryFeeMinor": 300,
+          "totalMinor": 2300
+        },
+        "currency": "PEN",
+        "paymentMethod": "CASH_ON_DELIVERY",
+        "deliveryQuote": {
+          "quoteId": "quote-demo",
+          "distanceMeters": 1250.0,
+          "tariffVersion": "lima-driving-car-v1",
+          "quotedAtEpochMillis": 1800000000000,
+          "expiresAtEpochMillis": 1800000300000
+        }
+      },
+      "requiresAcceptance": true,
+      "requiresNewRoute": false,
+      "expected": {
+        "canonicalConsent": "{\"accepted\":{\"amounts\":{\"deliveryFeeMinor\":300,\"subtotalMinor\":2000,\"totalMinor\":2300},\"businessId\":\"business-demo\",\"businessName\":\"Comida de prueba\",\"buyerName\":\"Comprador ficticio\",\"buyerPhone\":null,\"currency\":\"PEN\",\"delivery\":{\"addressId\":\"address-demo\",\"destination\":{\"addressText\":\"Parque público Lima\",\"instructions\":\"Llamar al llegar\",\"location\":{\"latitudeBits\":\"c02819999999999a\",\"longitudeBits\":\"c053428f5c28f5c3\"},\"reference\":\"Puerta norte\"},\"label\":\"Destino público\"},\"deliveryQuote\":{\"distanceBits\":\"4093880000000000\",\"expiresAtEpochMillis\":1800000300000,\"quoteId\":\"quote-demo\",\"quotedAtEpochMillis\":1800000000000,\"tariffVersion\":\"lima-driving-car-v1\"},\"items\":[{\"categoryId\":\"c-1\",\"name\":\"Producto A\",\"productId\":\"p-a\",\"quantity\":2,\"unitPriceMinor\":350},{\"categoryId\":\"c-1\",\"name\":\"Producto B\",\"productId\":\"p-b\",\"quantity\":1,\"unitPriceMinor\":1300}],\"ownerUid\":\"buyer-demo\",\"paymentMethod\":\"CASH_ON_DELIVERY\",\"pickup\":{\"addressText\":\"Plaza pública Lima\",\"instructions\":null,\"location\":{\"latitudeBits\":\"c02817c1bda5119d\",\"longitudeBits\":\"c05342bd3c361134\"},\"reference\":null},\"storeId\":\"store-demo\",\"storeName\":\"Local público\",\"storePhone\":null},\"version\":\"hu16-consent-v1\"}",
+        "consentHash": "ec9833220b2727fc297ce3e9d7a2c04f09662d4faec7ebbf00b77ee9cdfc625e",
+        "logisticsHash": "90d7ec5a2dec36564a17bbd5757258f8e5f0c96b76c7c8ea3c9d977631a18b43",
+        "requestHash": "cf8f66e0109653314efa8a69a083ff411d9e924e2fdc0af7b17bf894366e449d"
+      }
+    },
+    {
+      "name": "price-down",
+      "purchase": {
+        "ownerUid": "buyer-demo",
+        "businessId": "business-demo",
+        "storeId": "store-demo",
+        "businessName": "Comida de prueba",
+        "storeName": "Local público",
+        "storePhone": null,
+        "buyerName": "Comprador ficticio",
+        "buyerPhone": null,
+        "pickup": {
+          "addressText": "Plaza pública Lima",
+          "location": {
+            "latitude": -12.0464,
+            "longitude": -77.0428
+          },
+          "reference": null,
+          "instructions": null
+        },
+        "delivery": {
+          "addressId": "address-demo",
+          "label": "Destino público",
+          "destination": {
+            "addressText": "Parque público Lima",
+            "location": {
+              "latitude": -12.05,
+              "longitude": -77.04
+            },
+            "reference": "Puerta norte",
+            "instructions": "Llamar al llegar"
+          }
+        },
+        "items": [
+          {
+            "productId": "p-b",
+            "categoryId": "c-1",
+            "name": "Producto B",
+            "quantity": 1,
+            "unitPriceMinor": 1100
+          },
+          {
+            "productId": "p-a",
+            "categoryId": "c-1",
+            "name": "Producto A",
+            "quantity": 2,
+            "unitPriceMinor": 350
+          }
+        ],
+        "amounts": {
+          "subtotalMinor": 1800,
+          "deliveryFeeMinor": 300,
+          "totalMinor": 2100
+        },
+        "currency": "PEN",
+        "paymentMethod": "CASH_ON_DELIVERY",
+        "deliveryQuote": {
+          "quoteId": "quote-demo",
+          "distanceMeters": 1250.0,
+          "tariffVersion": "lima-driving-car-v1",
+          "quotedAtEpochMillis": 1800000000000,
+          "expiresAtEpochMillis": 1800000300000
+        }
+      },
+      "requiresAcceptance": true,
+      "requiresNewRoute": false,
+      "expected": {
+        "canonicalConsent": "{\"accepted\":{\"amounts\":{\"deliveryFeeMinor\":300,\"subtotalMinor\":1800,\"totalMinor\":2100},\"businessId\":\"business-demo\",\"businessName\":\"Comida de prueba\",\"buyerName\":\"Comprador ficticio\",\"buyerPhone\":null,\"currency\":\"PEN\",\"delivery\":{\"addressId\":\"address-demo\",\"destination\":{\"addressText\":\"Parque público Lima\",\"instructions\":\"Llamar al llegar\",\"location\":{\"latitudeBits\":\"c02819999999999a\",\"longitudeBits\":\"c053428f5c28f5c3\"},\"reference\":\"Puerta norte\"},\"label\":\"Destino público\"},\"deliveryQuote\":{\"distanceBits\":\"4093880000000000\",\"expiresAtEpochMillis\":1800000300000,\"quoteId\":\"quote-demo\",\"quotedAtEpochMillis\":1800000000000,\"tariffVersion\":\"lima-driving-car-v1\"},\"items\":[{\"categoryId\":\"c-1\",\"name\":\"Producto A\",\"productId\":\"p-a\",\"quantity\":2,\"unitPriceMinor\":350},{\"categoryId\":\"c-1\",\"name\":\"Producto B\",\"productId\":\"p-b\",\"quantity\":1,\"unitPriceMinor\":1100}],\"ownerUid\":\"buyer-demo\",\"paymentMethod\":\"CASH_ON_DELIVERY\",\"pickup\":{\"addressText\":\"Plaza pública Lima\",\"instructions\":null,\"location\":{\"latitudeBits\":\"c02817c1bda5119d\",\"longitudeBits\":\"c05342bd3c361134\"},\"reference\":null},\"storeId\":\"store-demo\",\"storeName\":\"Local público\",\"storePhone\":null},\"version\":\"hu16-consent-v1\"}",
+        "consentHash": "f9239987b20ccf1dbe7e62d345cb9ba07620a8e94204b3918f61cd9165b486ca",
+        "logisticsHash": "90d7ec5a2dec36564a17bbd5757258f8e5f0c96b76c7c8ea3c9d977631a18b43",
+        "requestHash": "2d8bbfc3ca0cb4e8ccbb8302b5f0de30478ee6bf4b97748f3ac06071c0f4a86b"
+      }
+    },
+    {
+      "name": "instructions",
+      "purchase": {
+        "ownerUid": "buyer-demo",
+        "businessId": "business-demo",
+        "storeId": "store-demo",
+        "businessName": "Comida de prueba",
+        "storeName": "Local público",
+        "storePhone": null,
+        "buyerName": "Comprador ficticio",
+        "buyerPhone": null,
+        "pickup": {
+          "addressText": "Plaza pública Lima",
+          "location": {
+            "latitude": -12.0464,
+            "longitude": -77.0428
+          },
+          "reference": null,
+          "instructions": null
+        },
+        "delivery": {
+          "addressId": "address-demo",
+          "label": "Destino público",
+          "destination": {
+            "addressText": "Parque público Lima",
+            "location": {
+              "latitude": -12.05,
+              "longitude": -77.04
+            },
+            "reference": "Puerta norte",
+            "instructions": "Esperar en puerta"
+          }
+        },
+        "items": [
+          {
+            "productId": "p-b",
+            "categoryId": "c-1",
+            "name": "Producto B",
+            "quantity": 1,
+            "unitPriceMinor": 1200
+          },
+          {
+            "productId": "p-a",
+            "categoryId": "c-1",
+            "name": "Producto A",
+            "quantity": 2,
+            "unitPriceMinor": 350
+          }
+        ],
+        "amounts": {
+          "subtotalMinor": 1900,
+          "deliveryFeeMinor": 300,
+          "totalMinor": 2200
+        },
+        "currency": "PEN",
+        "paymentMethod": "CASH_ON_DELIVERY",
+        "deliveryQuote": {
+          "quoteId": "quote-demo",
+          "distanceMeters": 1250.0,
+          "tariffVersion": "lima-driving-car-v1",
+          "quotedAtEpochMillis": 1800000000000,
+          "expiresAtEpochMillis": 1800000300000
+        }
+      },
+      "requiresAcceptance": true,
+      "requiresNewRoute": false,
+      "expected": {
+        "canonicalConsent": "{\"accepted\":{\"amounts\":{\"deliveryFeeMinor\":300,\"subtotalMinor\":1900,\"totalMinor\":2200},\"businessId\":\"business-demo\",\"businessName\":\"Comida de prueba\",\"buyerName\":\"Comprador ficticio\",\"buyerPhone\":null,\"currency\":\"PEN\",\"delivery\":{\"addressId\":\"address-demo\",\"destination\":{\"addressText\":\"Parque público Lima\",\"instructions\":\"Esperar en puerta\",\"location\":{\"latitudeBits\":\"c02819999999999a\",\"longitudeBits\":\"c053428f5c28f5c3\"},\"reference\":\"Puerta norte\"},\"label\":\"Destino público\"},\"deliveryQuote\":{\"distanceBits\":\"4093880000000000\",\"expiresAtEpochMillis\":1800000300000,\"quoteId\":\"quote-demo\",\"quotedAtEpochMillis\":1800000000000,\"tariffVersion\":\"lima-driving-car-v1\"},\"items\":[{\"categoryId\":\"c-1\",\"name\":\"Producto A\",\"productId\":\"p-a\",\"quantity\":2,\"unitPriceMinor\":350},{\"categoryId\":\"c-1\",\"name\":\"Producto B\",\"productId\":\"p-b\",\"quantity\":1,\"unitPriceMinor\":1200}],\"ownerUid\":\"buyer-demo\",\"paymentMethod\":\"CASH_ON_DELIVERY\",\"pickup\":{\"addressText\":\"Plaza pública Lima\",\"instructions\":null,\"location\":{\"latitudeBits\":\"c02817c1bda5119d\",\"longitudeBits\":\"c05342bd3c361134\"},\"reference\":null},\"storeId\":\"store-demo\",\"storeName\":\"Local público\",\"storePhone\":null},\"version\":\"hu16-consent-v1\"}",
+        "consentHash": "e6b2e7869de7ea18194b59ce819a2a7b178eb3bc12329608f661740fd50aa1ea",
+        "logisticsHash": "90d7ec5a2dec36564a17bbd5757258f8e5f0c96b76c7c8ea3c9d977631a18b43",
+        "requestHash": "fd6cbcfbb23dbd482582000a456e6e1067df6663ad4c2a78d687eee5f62f584d"
+      }
+    },
+    {
+      "name": "text-only",
+      "purchase": {
+        "ownerUid": "buyer-demo",
+        "businessId": "business-demo",
+        "storeId": "store-demo",
+        "businessName": "Comida de prueba",
+        "storeName": "Local público",
+        "storePhone": null,
+        "buyerName": "Comprador ficticio",
+        "buyerPhone": null,
+        "pickup": {
+          "addressText": "Plaza pública Lima",
+          "location": {
+            "latitude": -12.0464,
+            "longitude": -77.0428
+          },
+          "reference": null,
+          "instructions": null
+        },
+        "delivery": {
+          "addressId": "address-demo",
+          "label": "Destino público",
+          "destination": {
+            "addressText": "Otro texto, mismo punto",
+            "location": {
+              "latitude": -12.05,
+              "longitude": -77.04
+            },
+            "reference": "Puerta norte",
+            "instructions": "Llamar al llegar"
+          }
+        },
+        "items": [
+          {
+            "productId": "p-b",
+            "categoryId": "c-1",
+            "name": "Producto B",
+            "quantity": 1,
+            "unitPriceMinor": 1200
+          },
+          {
+            "productId": "p-a",
+            "categoryId": "c-1",
+            "name": "Producto A",
+            "quantity": 2,
+            "unitPriceMinor": 350
+          }
+        ],
+        "amounts": {
+          "subtotalMinor": 1900,
+          "deliveryFeeMinor": 300,
+          "totalMinor": 2200
+        },
+        "currency": "PEN",
+        "paymentMethod": "CASH_ON_DELIVERY",
+        "deliveryQuote": {
+          "quoteId": "quote-demo",
+          "distanceMeters": 1250.0,
+          "tariffVersion": "lima-driving-car-v1",
+          "quotedAtEpochMillis": 1800000000000,
+          "expiresAtEpochMillis": 1800000300000
+        }
+      },
+      "requiresAcceptance": true,
+      "requiresNewRoute": false,
+      "expected": {
+        "canonicalConsent": "{\"accepted\":{\"amounts\":{\"deliveryFeeMinor\":300,\"subtotalMinor\":1900,\"totalMinor\":2200},\"businessId\":\"business-demo\",\"businessName\":\"Comida de prueba\",\"buyerName\":\"Comprador ficticio\",\"buyerPhone\":null,\"currency\":\"PEN\",\"delivery\":{\"addressId\":\"address-demo\",\"destination\":{\"addressText\":\"Otro texto, mismo punto\",\"instructions\":\"Llamar al llegar\",\"location\":{\"latitudeBits\":\"c02819999999999a\",\"longitudeBits\":\"c053428f5c28f5c3\"},\"reference\":\"Puerta norte\"},\"label\":\"Destino público\"},\"deliveryQuote\":{\"distanceBits\":\"4093880000000000\",\"expiresAtEpochMillis\":1800000300000,\"quoteId\":\"quote-demo\",\"quotedAtEpochMillis\":1800000000000,\"tariffVersion\":\"lima-driving-car-v1\"},\"items\":[{\"categoryId\":\"c-1\",\"name\":\"Producto A\",\"productId\":\"p-a\",\"quantity\":2,\"unitPriceMinor\":350},{\"categoryId\":\"c-1\",\"name\":\"Producto B\",\"productId\":\"p-b\",\"quantity\":1,\"unitPriceMinor\":1200}],\"ownerUid\":\"buyer-demo\",\"paymentMethod\":\"CASH_ON_DELIVERY\",\"pickup\":{\"addressText\":\"Plaza pública Lima\",\"instructions\":null,\"location\":{\"latitudeBits\":\"c02817c1bda5119d\",\"longitudeBits\":\"c05342bd3c361134\"},\"reference\":null},\"storeId\":\"store-demo\",\"storeName\":\"Local público\",\"storePhone\":null},\"version\":\"hu16-consent-v1\"}",
+        "consentHash": "85c2263c937975bcef75864a1ddbe98d6e71f502e40eb669984399bd26cde892",
+        "logisticsHash": "90d7ec5a2dec36564a17bbd5757258f8e5f0c96b76c7c8ea3c9d977631a18b43",
+        "requestHash": "9b385df3a7ab79d5964e92e1f154b661edadf8be43fc3dca9d4cdaaab5e3684f"
+      }
+    },
+    {
+      "name": "reference",
+      "purchase": {
+        "ownerUid": "buyer-demo",
+        "businessId": "business-demo",
+        "storeId": "store-demo",
+        "businessName": "Comida de prueba",
+        "storeName": "Local público",
+        "storePhone": null,
+        "buyerName": "Comprador ficticio",
+        "buyerPhone": null,
+        "pickup": {
+          "addressText": "Plaza pública Lima",
+          "location": {
+            "latitude": -12.0464,
+            "longitude": -77.0428
+          },
+          "reference": null,
+          "instructions": null
+        },
+        "delivery": {
+          "addressId": "address-demo",
+          "label": "Destino público",
+          "destination": {
+            "addressText": "Parque público Lima",
+            "location": {
+              "latitude": -12.05,
+              "longitude": -77.04
+            },
+            "reference": "Puerta sur",
+            "instructions": "Llamar al llegar"
+          }
+        },
+        "items": [
+          {
+            "productId": "p-b",
+            "categoryId": "c-1",
+            "name": "Producto B",
+            "quantity": 1,
+            "unitPriceMinor": 1200
+          },
+          {
+            "productId": "p-a",
+            "categoryId": "c-1",
+            "name": "Producto A",
+            "quantity": 2,
+            "unitPriceMinor": 350
+          }
+        ],
+        "amounts": {
+          "subtotalMinor": 1900,
+          "deliveryFeeMinor": 300,
+          "totalMinor": 2200
+        },
+        "currency": "PEN",
+        "paymentMethod": "CASH_ON_DELIVERY",
+        "deliveryQuote": {
+          "quoteId": "quote-demo",
+          "distanceMeters": 1250.0,
+          "tariffVersion": "lima-driving-car-v1",
+          "quotedAtEpochMillis": 1800000000000,
+          "expiresAtEpochMillis": 1800000300000
+        }
+      },
+      "requiresAcceptance": true,
+      "requiresNewRoute": false,
+      "expected": {
+        "canonicalConsent": "{\"accepted\":{\"amounts\":{\"deliveryFeeMinor\":300,\"subtotalMinor\":1900,\"totalMinor\":2200},\"businessId\":\"business-demo\",\"businessName\":\"Comida de prueba\",\"buyerName\":\"Comprador ficticio\",\"buyerPhone\":null,\"currency\":\"PEN\",\"delivery\":{\"addressId\":\"address-demo\",\"destination\":{\"addressText\":\"Parque público Lima\",\"instructions\":\"Llamar al llegar\",\"location\":{\"latitudeBits\":\"c02819999999999a\",\"longitudeBits\":\"c053428f5c28f5c3\"},\"reference\":\"Puerta sur\"},\"label\":\"Destino público\"},\"deliveryQuote\":{\"distanceBits\":\"4093880000000000\",\"expiresAtEpochMillis\":1800000300000,\"quoteId\":\"quote-demo\",\"quotedAtEpochMillis\":1800000000000,\"tariffVersion\":\"lima-driving-car-v1\"},\"items\":[{\"categoryId\":\"c-1\",\"name\":\"Producto A\",\"productId\":\"p-a\",\"quantity\":2,\"unitPriceMinor\":350},{\"categoryId\":\"c-1\",\"name\":\"Producto B\",\"productId\":\"p-b\",\"quantity\":1,\"unitPriceMinor\":1200}],\"ownerUid\":\"buyer-demo\",\"paymentMethod\":\"CASH_ON_DELIVERY\",\"pickup\":{\"addressText\":\"Plaza pública Lima\",\"instructions\":null,\"location\":{\"latitudeBits\":\"c02817c1bda5119d\",\"longitudeBits\":\"c05342bd3c361134\"},\"reference\":null},\"storeId\":\"store-demo\",\"storeName\":\"Local público\",\"storePhone\":null},\"version\":\"hu16-consent-v1\"}",
+        "consentHash": "502013a461afe692559ec74d748552ba702f111eb727c2f49b9518c27468ace8",
+        "logisticsHash": "90d7ec5a2dec36564a17bbd5757258f8e5f0c96b76c7c8ea3c9d977631a18b43",
+        "requestHash": "a6acbbc9414955c091aae116b055ea1aa827efad5a944807f5cdde7715eaf5cc"
+      }
+    },
+    {
+      "name": "coordinates",
+      "purchase": {
+        "ownerUid": "buyer-demo",
+        "businessId": "business-demo",
+        "storeId": "store-demo",
+        "businessName": "Comida de prueba",
+        "storeName": "Local público",
+        "storePhone": null,
+        "buyerName": "Comprador ficticio",
+        "buyerPhone": null,
+        "pickup": {
+          "addressText": "Plaza pública Lima",
+          "location": {
+            "latitude": -12.0464,
+            "longitude": -77.0428
+          },
+          "reference": null,
+          "instructions": null
+        },
+        "delivery": {
+          "addressId": "address-demo",
+          "label": "Destino público",
+          "destination": {
+            "addressText": "Parque público Lima",
+            "location": {
+              "latitude": -12.051,
+              "longitude": -77.04
+            },
+            "reference": "Puerta norte",
+            "instructions": "Llamar al llegar"
+          }
+        },
+        "items": [
+          {
+            "productId": "p-b",
+            "categoryId": "c-1",
+            "name": "Producto B",
+            "quantity": 1,
+            "unitPriceMinor": 1200
+          },
+          {
+            "productId": "p-a",
+            "categoryId": "c-1",
+            "name": "Producto A",
+            "quantity": 2,
+            "unitPriceMinor": 350
+          }
+        ],
+        "amounts": {
+          "subtotalMinor": 1900,
+          "deliveryFeeMinor": 300,
+          "totalMinor": 2200
+        },
+        "currency": "PEN",
+        "paymentMethod": "CASH_ON_DELIVERY",
+        "deliveryQuote": {
+          "quoteId": "quote-demo",
+          "distanceMeters": 1250.0,
+          "tariffVersion": "lima-driving-car-v1",
+          "quotedAtEpochMillis": 1800000000000,
+          "expiresAtEpochMillis": 1800000300000
+        }
+      },
+      "requiresAcceptance": true,
+      "requiresNewRoute": true,
+      "expected": {
+        "canonicalConsent": "{\"accepted\":{\"amounts\":{\"deliveryFeeMinor\":300,\"subtotalMinor\":1900,\"totalMinor\":2200},\"businessId\":\"business-demo\",\"businessName\":\"Comida de prueba\",\"buyerName\":\"Comprador ficticio\",\"buyerPhone\":null,\"currency\":\"PEN\",\"delivery\":{\"addressId\":\"address-demo\",\"destination\":{\"addressText\":\"Parque público Lima\",\"instructions\":\"Llamar al llegar\",\"location\":{\"latitudeBits\":\"c0281a1cac083127\",\"longitudeBits\":\"c053428f5c28f5c3\"},\"reference\":\"Puerta norte\"},\"label\":\"Destino público\"},\"deliveryQuote\":{\"distanceBits\":\"4093880000000000\",\"expiresAtEpochMillis\":1800000300000,\"quoteId\":\"quote-demo\",\"quotedAtEpochMillis\":1800000000000,\"tariffVersion\":\"lima-driving-car-v1\"},\"items\":[{\"categoryId\":\"c-1\",\"name\":\"Producto A\",\"productId\":\"p-a\",\"quantity\":2,\"unitPriceMinor\":350},{\"categoryId\":\"c-1\",\"name\":\"Producto B\",\"productId\":\"p-b\",\"quantity\":1,\"unitPriceMinor\":1200}],\"ownerUid\":\"buyer-demo\",\"paymentMethod\":\"CASH_ON_DELIVERY\",\"pickup\":{\"addressText\":\"Plaza pública Lima\",\"instructions\":null,\"location\":{\"latitudeBits\":\"c02817c1bda5119d\",\"longitudeBits\":\"c05342bd3c361134\"},\"reference\":null},\"storeId\":\"store-demo\",\"storeName\":\"Local público\",\"storePhone\":null},\"version\":\"hu16-consent-v1\"}",
+        "consentHash": "a2a4f5fb7f052e33fd1fed69c79edc2b5339f98c59473ba11d52cf1faef069bd",
+        "logisticsHash": "bed90203674448efda3724abebd8e2c3bbb1e06d404098a49ac179039c67a7b0",
+        "requestHash": "1eba0aa4973909213203b824b30ce6ca4de7d1e838c2fea06dfd7c1b82fc0531"
+      }
+    },
+    {
+      "name": "store",
+      "purchase": {
+        "ownerUid": "buyer-demo",
+        "businessId": "business-demo",
+        "storeId": "other-store",
+        "businessName": "Comida de prueba",
+        "storeName": "Local público",
+        "storePhone": null,
+        "buyerName": "Comprador ficticio",
+        "buyerPhone": null,
+        "pickup": {
+          "addressText": "Plaza pública Lima",
+          "location": {
+            "latitude": -12.0464,
+            "longitude": -77.0428
+          },
+          "reference": null,
+          "instructions": null
+        },
+        "delivery": {
+          "addressId": "address-demo",
+          "label": "Destino público",
+          "destination": {
+            "addressText": "Parque público Lima",
+            "location": {
+              "latitude": -12.05,
+              "longitude": -77.04
+            },
+            "reference": "Puerta norte",
+            "instructions": "Llamar al llegar"
+          }
+        },
+        "items": [
+          {
+            "productId": "p-b",
+            "categoryId": "c-1",
+            "name": "Producto B",
+            "quantity": 1,
+            "unitPriceMinor": 1200
+          },
+          {
+            "productId": "p-a",
+            "categoryId": "c-1",
+            "name": "Producto A",
+            "quantity": 2,
+            "unitPriceMinor": 350
+          }
+        ],
+        "amounts": {
+          "subtotalMinor": 1900,
+          "deliveryFeeMinor": 300,
+          "totalMinor": 2200
+        },
+        "currency": "PEN",
+        "paymentMethod": "CASH_ON_DELIVERY",
+        "deliveryQuote": {
+          "quoteId": "quote-demo",
+          "distanceMeters": 1250.0,
+          "tariffVersion": "lima-driving-car-v1",
+          "quotedAtEpochMillis": 1800000000000,
+          "expiresAtEpochMillis": 1800000300000
+        }
+      },
+      "requiresAcceptance": true,
+      "requiresNewRoute": true,
+      "expected": {
+        "canonicalConsent": "{\"accepted\":{\"amounts\":{\"deliveryFeeMinor\":300,\"subtotalMinor\":1900,\"totalMinor\":2200},\"businessId\":\"business-demo\",\"businessName\":\"Comida de prueba\",\"buyerName\":\"Comprador ficticio\",\"buyerPhone\":null,\"currency\":\"PEN\",\"delivery\":{\"addressId\":\"address-demo\",\"destination\":{\"addressText\":\"Parque público Lima\",\"instructions\":\"Llamar al llegar\",\"location\":{\"latitudeBits\":\"c02819999999999a\",\"longitudeBits\":\"c053428f5c28f5c3\"},\"reference\":\"Puerta norte\"},\"label\":\"Destino público\"},\"deliveryQuote\":{\"distanceBits\":\"4093880000000000\",\"expiresAtEpochMillis\":1800000300000,\"quoteId\":\"quote-demo\",\"quotedAtEpochMillis\":1800000000000,\"tariffVersion\":\"lima-driving-car-v1\"},\"items\":[{\"categoryId\":\"c-1\",\"name\":\"Producto A\",\"productId\":\"p-a\",\"quantity\":2,\"unitPriceMinor\":350},{\"categoryId\":\"c-1\",\"name\":\"Producto B\",\"productId\":\"p-b\",\"quantity\":1,\"unitPriceMinor\":1200}],\"ownerUid\":\"buyer-demo\",\"paymentMethod\":\"CASH_ON_DELIVERY\",\"pickup\":{\"addressText\":\"Plaza pública Lima\",\"instructions\":null,\"location\":{\"latitudeBits\":\"c02817c1bda5119d\",\"longitudeBits\":\"c05342bd3c361134\"},\"reference\":null},\"storeId\":\"other-store\",\"storeName\":\"Local público\",\"storePhone\":null},\"version\":\"hu16-consent-v1\"}",
+        "consentHash": "700666734ae190396a6bd571cd926e1accd198a52a0e375189e063f82994209c",
+        "logisticsHash": "a8ee735970898af5253f0447f0418a0e2d640b945c9d551f57ab6de7ea2c3e81",
+        "requestHash": "dace42a98c1896b277e0577d66884d1f53dfd1b700abd7047b52e06624d16b8d"
+      }
+    },
+    {
+      "name": "contact-present",
+      "purchase": {
+        "ownerUid": "buyer-demo",
+        "businessId": "business-demo",
+        "storeId": "store-demo",
+        "businessName": "Comida de prueba",
+        "storeName": "Local público",
+        "storePhone": null,
+        "buyerName": "Comprador ficticio",
+        "buyerPhone": "+51999999999",
+        "pickup": {
+          "addressText": "Plaza pública Lima",
+          "location": {
+            "latitude": -12.0464,
+            "longitude": -77.0428
+          },
+          "reference": null,
+          "instructions": null
+        },
+        "delivery": {
+          "addressId": "address-demo",
+          "label": "Destino público",
+          "destination": {
+            "addressText": "Parque público Lima",
+            "location": {
+              "latitude": -12.05,
+              "longitude": -77.04
+            },
+            "reference": "Puerta norte",
+            "instructions": "Llamar al llegar"
+          }
+        },
+        "items": [
+          {
+            "productId": "p-b",
+            "categoryId": "c-1",
+            "name": "Producto B",
+            "quantity": 1,
+            "unitPriceMinor": 1200
+          },
+          {
+            "productId": "p-a",
+            "categoryId": "c-1",
+            "name": "Producto A",
+            "quantity": 2,
+            "unitPriceMinor": 350
+          }
+        ],
+        "amounts": {
+          "subtotalMinor": 1900,
+          "deliveryFeeMinor": 300,
+          "totalMinor": 2200
+        },
+        "currency": "PEN",
+        "paymentMethod": "CASH_ON_DELIVERY",
+        "deliveryQuote": {
+          "quoteId": "quote-demo",
+          "distanceMeters": 1250.0,
+          "tariffVersion": "lima-driving-car-v1",
+          "quotedAtEpochMillis": 1800000000000,
+          "expiresAtEpochMillis": 1800000300000
+        }
+      },
+      "requiresAcceptance": true,
+      "requiresNewRoute": false,
+      "expected": {
+        "canonicalConsent": "{\"accepted\":{\"amounts\":{\"deliveryFeeMinor\":300,\"subtotalMinor\":1900,\"totalMinor\":2200},\"businessId\":\"business-demo\",\"businessName\":\"Comida de prueba\",\"buyerName\":\"Comprador ficticio\",\"buyerPhone\":\"+51999999999\",\"currency\":\"PEN\",\"delivery\":{\"addressId\":\"address-demo\",\"destination\":{\"addressText\":\"Parque público Lima\",\"instructions\":\"Llamar al llegar\",\"location\":{\"latitudeBits\":\"c02819999999999a\",\"longitudeBits\":\"c053428f5c28f5c3\"},\"reference\":\"Puerta norte\"},\"label\":\"Destino público\"},\"deliveryQuote\":{\"distanceBits\":\"4093880000000000\",\"expiresAtEpochMillis\":1800000300000,\"quoteId\":\"quote-demo\",\"quotedAtEpochMillis\":1800000000000,\"tariffVersion\":\"lima-driving-car-v1\"},\"items\":[{\"categoryId\":\"c-1\",\"name\":\"Producto A\",\"productId\":\"p-a\",\"quantity\":2,\"unitPriceMinor\":350},{\"categoryId\":\"c-1\",\"name\":\"Producto B\",\"productId\":\"p-b\",\"quantity\":1,\"unitPriceMinor\":1200}],\"ownerUid\":\"buyer-demo\",\"paymentMethod\":\"CASH_ON_DELIVERY\",\"pickup\":{\"addressText\":\"Plaza pública Lima\",\"instructions\":null,\"location\":{\"latitudeBits\":\"c02817c1bda5119d\",\"longitudeBits\":\"c05342bd3c361134\"},\"reference\":null},\"storeId\":\"store-demo\",\"storeName\":\"Local público\",\"storePhone\":null},\"version\":\"hu16-consent-v1\"}",
+        "consentHash": "04accf1a68c8e9bee1239b31fd4712eb649d2a311a61eda176b5b95eb6a4026f",
+        "logisticsHash": "90d7ec5a2dec36564a17bbd5757258f8e5f0c96b76c7c8ea3c9d977631a18b43",
+        "requestHash": "69b7cb077bc2dd30a9e793713fa9f19593695b12aa762e78889e466a17e2d9b2"
+      }
+    },
+    {
+      "name": "unicode-escaping",
+      "purchase": {
+        "ownerUid": "buyer-demo",
+        "businessId": "business-demo",
+        "storeId": "store-demo",
+        "businessName": "Comida de prueba",
+        "storeName": "Local público",
+        "storePhone": null,
+        "buyerName": "Comprador ficticio",
+        "buyerPhone": null,
+        "pickup": {
+          "addressText": "Plaza pública Lima",
+          "location": {
+            "latitude": -12.0464,
+            "longitude": -77.0428
+          },
+          "reference": null,
+          "instructions": null
+        },
+        "delivery": {
+          "addressId": "address-demo",
+          "label": "Destino público",
+          "destination": {
+            "addressText": "Parque público Lima",
+            "location": {
+              "latitude": -12.05,
+              "longitude": -77.04
+            },
+            "reference": "Puerta norte",
+            "instructions": "Llamar al llegar"
+          }
+        },
+        "items": [
+          {
+            "productId": "p-b",
+            "categoryId": "c-1",
+            "name": "Menú 🍲 \"prueba\"\\\n\t\b\f\r\u0001",
+            "quantity": 1,
+            "unitPriceMinor": 1200
+          },
+          {
+            "productId": "p-a",
+            "categoryId": "c-1",
+            "name": "Producto A",
+            "quantity": 2,
+            "unitPriceMinor": 350
+          }
+        ],
+        "amounts": {
+          "subtotalMinor": 1900,
+          "deliveryFeeMinor": 300,
+          "totalMinor": 2200
+        },
+        "currency": "PEN",
+        "paymentMethod": "CASH_ON_DELIVERY",
+        "deliveryQuote": {
+          "quoteId": "quote-demo",
+          "distanceMeters": 1250.0,
+          "tariffVersion": "lima-driving-car-v1",
+          "quotedAtEpochMillis": 1800000000000,
+          "expiresAtEpochMillis": 1800000300000
+        }
+      },
+      "requiresAcceptance": true,
+      "requiresNewRoute": false,
+      "expected": {
+        "canonicalConsent": "{\"accepted\":{\"amounts\":{\"deliveryFeeMinor\":300,\"subtotalMinor\":1900,\"totalMinor\":2200},\"businessId\":\"business-demo\",\"businessName\":\"Comida de prueba\",\"buyerName\":\"Comprador ficticio\",\"buyerPhone\":null,\"currency\":\"PEN\",\"delivery\":{\"addressId\":\"address-demo\",\"destination\":{\"addressText\":\"Parque público Lima\",\"instructions\":\"Llamar al llegar\",\"location\":{\"latitudeBits\":\"c02819999999999a\",\"longitudeBits\":\"c053428f5c28f5c3\"},\"reference\":\"Puerta norte\"},\"label\":\"Destino público\"},\"deliveryQuote\":{\"distanceBits\":\"4093880000000000\",\"expiresAtEpochMillis\":1800000300000,\"quoteId\":\"quote-demo\",\"quotedAtEpochMillis\":1800000000000,\"tariffVersion\":\"lima-driving-car-v1\"},\"items\":[{\"categoryId\":\"c-1\",\"name\":\"Producto A\",\"productId\":\"p-a\",\"quantity\":2,\"unitPriceMinor\":350},{\"categoryId\":\"c-1\",\"name\":\"Menú 🍲 \\\"prueba\\\"\\\\\\n\\t\\b\\f\\r\\u0001\",\"productId\":\"p-b\",\"quantity\":1,\"unitPriceMinor\":1200}],\"ownerUid\":\"buyer-demo\",\"paymentMethod\":\"CASH_ON_DELIVERY\",\"pickup\":{\"addressText\":\"Plaza pública Lima\",\"instructions\":null,\"location\":{\"latitudeBits\":\"c02817c1bda5119d\",\"longitudeBits\":\"c05342bd3c361134\"},\"reference\":null},\"storeId\":\"store-demo\",\"storeName\":\"Local público\",\"storePhone\":null},\"version\":\"hu16-consent-v1\"}",
+        "consentHash": "3d203f20b611419184469f7fe67de2fd57df54775b0cd7018adfd3f51cfc97fa",
+        "logisticsHash": "90d7ec5a2dec36564a17bbd5757258f8e5f0c96b76c7c8ea3c9d977631a18b43",
+        "requestHash": "ceedddc6360090d3421c0880d36bf869b18df619f06ca31d92f7721da43da960"
+      }
+    },
+    {
+      "name": "negative-zero",
+      "purchase": {
+        "ownerUid": "buyer-demo",
+        "businessId": "business-demo",
+        "storeId": "store-demo",
+        "businessName": "Comida de prueba",
+        "storeName": "Local público",
+        "storePhone": null,
+        "buyerName": "Comprador ficticio",
+        "buyerPhone": null,
+        "pickup": {
+          "addressText": "Plaza pública Lima",
+          "location": {
+            "latitude": -0.0,
+            "longitude": -77.0428
+          },
+          "reference": null,
+          "instructions": null
+        },
+        "delivery": {
+          "addressId": "address-demo",
+          "label": "Destino público",
+          "destination": {
+            "addressText": "Parque público Lima",
+            "location": {
+              "latitude": -12.05,
+              "longitude": -77.04
+            },
+            "reference": "Puerta norte",
+            "instructions": "Llamar al llegar"
+          }
+        },
+        "items": [
+          {
+            "productId": "p-b",
+            "categoryId": "c-1",
+            "name": "Producto B",
+            "quantity": 1,
+            "unitPriceMinor": 1200
+          },
+          {
+            "productId": "p-a",
+            "categoryId": "c-1",
+            "name": "Producto A",
+            "quantity": 2,
+            "unitPriceMinor": 350
+          }
+        ],
+        "amounts": {
+          "subtotalMinor": 1900,
+          "deliveryFeeMinor": 300,
+          "totalMinor": 2200
+        },
+        "currency": "PEN",
+        "paymentMethod": "CASH_ON_DELIVERY",
+        "deliveryQuote": {
+          "quoteId": "quote-demo",
+          "distanceMeters": 1250.0,
+          "tariffVersion": "lima-driving-car-v1",
+          "quotedAtEpochMillis": 1800000000000,
+          "expiresAtEpochMillis": 1800000300000
+        }
+      },
+      "requiresAcceptance": true,
+      "requiresNewRoute": true,
+      "expected": {
+        "canonicalConsent": "{\"accepted\":{\"amounts\":{\"deliveryFeeMinor\":300,\"subtotalMinor\":1900,\"totalMinor\":2200},\"businessId\":\"business-demo\",\"businessName\":\"Comida de prueba\",\"buyerName\":\"Comprador ficticio\",\"buyerPhone\":null,\"currency\":\"PEN\",\"delivery\":{\"addressId\":\"address-demo\",\"destination\":{\"addressText\":\"Parque público Lima\",\"instructions\":\"Llamar al llegar\",\"location\":{\"latitudeBits\":\"c02819999999999a\",\"longitudeBits\":\"c053428f5c28f5c3\"},\"reference\":\"Puerta norte\"},\"label\":\"Destino público\"},\"deliveryQuote\":{\"distanceBits\":\"4093880000000000\",\"expiresAtEpochMillis\":1800000300000,\"quoteId\":\"quote-demo\",\"quotedAtEpochMillis\":1800000000000,\"tariffVersion\":\"lima-driving-car-v1\"},\"items\":[{\"categoryId\":\"c-1\",\"name\":\"Producto A\",\"productId\":\"p-a\",\"quantity\":2,\"unitPriceMinor\":350},{\"categoryId\":\"c-1\",\"name\":\"Producto B\",\"productId\":\"p-b\",\"quantity\":1,\"unitPriceMinor\":1200}],\"ownerUid\":\"buyer-demo\",\"paymentMethod\":\"CASH_ON_DELIVERY\",\"pickup\":{\"addressText\":\"Plaza pública Lima\",\"instructions\":null,\"location\":{\"latitudeBits\":\"0000000000000000\",\"longitudeBits\":\"c05342bd3c361134\"},\"reference\":null},\"storeId\":\"store-demo\",\"storeName\":\"Local público\",\"storePhone\":null},\"version\":\"hu16-consent-v1\"}",
+        "consentHash": "87b77da211a96f0b5879eb100c42ddefe244cb8d642e6a4e4b16a35cf06c7b6c",
+        "logisticsHash": "e4f788d6a65a78957da3e895b45d337fa8d8c329511b6f663a64e49e197efb9c",
+        "requestHash": "c7b5329c0c8bdc351a0decbfe482738fd6c5f418ff4fb03ebe72c0106770ff51"
+      }
+    },
+    {
+      "name": "maximum-safe",
+      "purchase": {
+        "ownerUid": "buyer-demo",
+        "businessId": "business-demo",
+        "storeId": "store-demo",
+        "businessName": "Comida de prueba",
+        "storeName": "Local público",
+        "storePhone": null,
+        "buyerName": "Comprador ficticio",
+        "buyerPhone": null,
+        "pickup": {
+          "addressText": "Plaza pública Lima",
+          "location": {
+            "latitude": -12.0464,
+            "longitude": -77.0428
+          },
+          "reference": null,
+          "instructions": null
+        },
+        "delivery": {
+          "addressId": "address-demo",
+          "label": "Destino público",
+          "destination": {
+            "addressText": "Parque público Lima",
+            "location": {
+              "latitude": -12.05,
+              "longitude": -77.04
+            },
+            "reference": "Puerta norte",
+            "instructions": "Llamar al llegar"
+          }
+        },
+        "items": [
+          {
+            "productId": "p-max",
+            "categoryId": "c-1",
+            "name": "Límite técnico",
+            "quantity": 1,
+            "unitPriceMinor": 9007199254740691
+          }
+        ],
+        "amounts": {
+          "subtotalMinor": 9007199254740691,
+          "deliveryFeeMinor": 300,
+          "totalMinor": 9007199254740991
+        },
+        "currency": "PEN",
+        "paymentMethod": "CASH_ON_DELIVERY",
+        "deliveryQuote": {
+          "quoteId": "quote-demo",
+          "distanceMeters": 1250.0,
+          "tariffVersion": "lima-driving-car-v1",
+          "quotedAtEpochMillis": 1800000000000,
+          "expiresAtEpochMillis": 1800000300000
+        }
+      },
+      "requiresAcceptance": true,
+      "requiresNewRoute": false,
+      "expected": {
+        "canonicalConsent": "{\"accepted\":{\"amounts\":{\"deliveryFeeMinor\":300,\"subtotalMinor\":9007199254740691,\"totalMinor\":9007199254740991},\"businessId\":\"business-demo\",\"businessName\":\"Comida de prueba\",\"buyerName\":\"Comprador ficticio\",\"buyerPhone\":null,\"currency\":\"PEN\",\"delivery\":{\"addressId\":\"address-demo\",\"destination\":{\"addressText\":\"Parque público Lima\",\"instructions\":\"Llamar al llegar\",\"location\":{\"latitudeBits\":\"c02819999999999a\",\"longitudeBits\":\"c053428f5c28f5c3\"},\"reference\":\"Puerta norte\"},\"label\":\"Destino público\"},\"deliveryQuote\":{\"distanceBits\":\"4093880000000000\",\"expiresAtEpochMillis\":1800000300000,\"quoteId\":\"quote-demo\",\"quotedAtEpochMillis\":1800000000000,\"tariffVersion\":\"lima-driving-car-v1\"},\"items\":[{\"categoryId\":\"c-1\",\"name\":\"Límite técnico\",\"productId\":\"p-max\",\"quantity\":1,\"unitPriceMinor\":9007199254740691}],\"ownerUid\":\"buyer-demo\",\"paymentMethod\":\"CASH_ON_DELIVERY\",\"pickup\":{\"addressText\":\"Plaza pública Lima\",\"instructions\":null,\"location\":{\"latitudeBits\":\"c02817c1bda5119d\",\"longitudeBits\":\"c05342bd3c361134\"},\"reference\":null},\"storeId\":\"store-demo\",\"storeName\":\"Local público\",\"storePhone\":null},\"version\":\"hu16-consent-v1\"}",
+        "consentHash": "2a5e7156ea5153bc030b0b9916699dccfc4690d479000643cc24002b2d1e2286",
+        "logisticsHash": "90d7ec5a2dec36564a17bbd5757258f8e5f0c96b76c7c8ea3c9d977631a18b43",
+        "requestHash": "c01a95d79d09afca7fc6df8f4b630ed9b531ea930da5a9ed0c71b83b7a2c219b"
+      }
+    }
+  ],
+  "invalidCases": [
+    {
+      "name": "zero-quantity",
+      "purchase": {
+        "ownerUid": "buyer-demo",
+        "businessId": "business-demo",
+        "storeId": "store-demo",
+        "businessName": "Comida de prueba",
+        "storeName": "Local público",
+        "storePhone": null,
+        "buyerName": "Comprador ficticio",
+        "buyerPhone": null,
+        "pickup": {
+          "addressText": "Plaza pública Lima",
+          "location": {
+            "latitude": -12.0464,
+            "longitude": -77.0428
+          },
+          "reference": null,
+          "instructions": null
+        },
+        "delivery": {
+          "addressId": "address-demo",
+          "label": "Destino público",
+          "destination": {
+            "addressText": "Parque público Lima",
+            "location": {
+              "latitude": -12.05,
+              "longitude": -77.04
+            },
+            "reference": "Puerta norte",
+            "instructions": "Llamar al llegar"
+          }
+        },
+        "items": [
+          {
+            "productId": "p-b",
+            "categoryId": "c-1",
+            "name": "Producto B",
+            "quantity": 0,
+            "unitPriceMinor": 1200
+          },
+          {
+            "productId": "p-a",
+            "categoryId": "c-1",
+            "name": "Producto A",
+            "quantity": 2,
+            "unitPriceMinor": 350
+          }
+        ],
+        "amounts": {
+          "subtotalMinor": 1900,
+          "deliveryFeeMinor": 300,
+          "totalMinor": 2200
+        },
+        "currency": "PEN",
+        "paymentMethod": "CASH_ON_DELIVERY",
+        "deliveryQuote": {
+          "quoteId": "quote-demo",
+          "distanceMeters": 1250.0,
+          "tariffVersion": "lima-driving-car-v1",
+          "quotedAtEpochMillis": 1800000000000,
+          "expiresAtEpochMillis": 1800000300000
+        }
+      }
+    },
+    {
+      "name": "negative-quantity",
+      "purchase": {
+        "ownerUid": "buyer-demo",
+        "businessId": "business-demo",
+        "storeId": "store-demo",
+        "businessName": "Comida de prueba",
+        "storeName": "Local público",
+        "storePhone": null,
+        "buyerName": "Comprador ficticio",
+        "buyerPhone": null,
+        "pickup": {
+          "addressText": "Plaza pública Lima",
+          "location": {
+            "latitude": -12.0464,
+            "longitude": -77.0428
+          },
+          "reference": null,
+          "instructions": null
+        },
+        "delivery": {
+          "addressId": "address-demo",
+          "label": "Destino público",
+          "destination": {
+            "addressText": "Parque público Lima",
+            "location": {
+              "latitude": -12.05,
+              "longitude": -77.04
+            },
+            "reference": "Puerta norte",
+            "instructions": "Llamar al llegar"
+          }
+        },
+        "items": [
+          {
+            "productId": "p-b",
+            "categoryId": "c-1",
+            "name": "Producto B",
+            "quantity": -1,
+            "unitPriceMinor": 1200
+          },
+          {
+            "productId": "p-a",
+            "categoryId": "c-1",
+            "name": "Producto A",
+            "quantity": 2,
+            "unitPriceMinor": 350
+          }
+        ],
+        "amounts": {
+          "subtotalMinor": 1900,
+          "deliveryFeeMinor": 300,
+          "totalMinor": 2200
+        },
+        "currency": "PEN",
+        "paymentMethod": "CASH_ON_DELIVERY",
+        "deliveryQuote": {
+          "quoteId": "quote-demo",
+          "distanceMeters": 1250.0,
+          "tariffVersion": "lima-driving-car-v1",
+          "quotedAtEpochMillis": 1800000000000,
+          "expiresAtEpochMillis": 1800000300000
+        }
+      }
+    },
+    {
+      "name": "fractional-quantity",
+      "purchase": {
+        "ownerUid": "buyer-demo",
+        "businessId": "business-demo",
+        "storeId": "store-demo",
+        "businessName": "Comida de prueba",
+        "storeName": "Local público",
+        "storePhone": null,
+        "buyerName": "Comprador ficticio",
+        "buyerPhone": null,
+        "pickup": {
+          "addressText": "Plaza pública Lima",
+          "location": {
+            "latitude": -12.0464,
+            "longitude": -77.0428
+          },
+          "reference": null,
+          "instructions": null
+        },
+        "delivery": {
+          "addressId": "address-demo",
+          "label": "Destino público",
+          "destination": {
+            "addressText": "Parque público Lima",
+            "location": {
+              "latitude": -12.05,
+              "longitude": -77.04
+            },
+            "reference": "Puerta norte",
+            "instructions": "Llamar al llegar"
+          }
+        },
+        "items": [
+          {
+            "productId": "p-b",
+            "categoryId": "c-1",
+            "name": "Producto B",
+            "quantity": 1.5,
+            "unitPriceMinor": 1200
+          },
+          {
+            "productId": "p-a",
+            "categoryId": "c-1",
+            "name": "Producto A",
+            "quantity": 2,
+            "unitPriceMinor": 350
+          }
+        ],
+        "amounts": {
+          "subtotalMinor": 1900,
+          "deliveryFeeMinor": 300,
+          "totalMinor": 2200
+        },
+        "currency": "PEN",
+        "paymentMethod": "CASH_ON_DELIVERY",
+        "deliveryQuote": {
+          "quoteId": "quote-demo",
+          "distanceMeters": 1250.0,
+          "tariffVersion": "lima-driving-car-v1",
+          "quotedAtEpochMillis": 1800000000000,
+          "expiresAtEpochMillis": 1800000300000
+        }
+      }
+    },
+    {
+      "name": "quantity-int-overflow",
+      "purchase": {
+        "ownerUid": "buyer-demo",
+        "businessId": "business-demo",
+        "storeId": "store-demo",
+        "businessName": "Comida de prueba",
+        "storeName": "Local público",
+        "storePhone": null,
+        "buyerName": "Comprador ficticio",
+        "buyerPhone": null,
+        "pickup": {
+          "addressText": "Plaza pública Lima",
+          "location": {
+            "latitude": -12.0464,
+            "longitude": -77.0428
+          },
+          "reference": null,
+          "instructions": null
+        },
+        "delivery": {
+          "addressId": "address-demo",
+          "label": "Destino público",
+          "destination": {
+            "addressText": "Parque público Lima",
+            "location": {
+              "latitude": -12.05,
+              "longitude": -77.04
+            },
+            "reference": "Puerta norte",
+            "instructions": "Llamar al llegar"
+          }
+        },
+        "items": [
+          {
+            "productId": "p-b",
+            "categoryId": "c-1",
+            "name": "Producto B",
+            "quantity": 2147483648,
+            "unitPriceMinor": 1200
+          },
+          {
+            "productId": "p-a",
+            "categoryId": "c-1",
+            "name": "Producto A",
+            "quantity": 2,
+            "unitPriceMinor": 350
+          }
+        ],
+        "amounts": {
+          "subtotalMinor": 1900,
+          "deliveryFeeMinor": 300,
+          "totalMinor": 2200
+        },
+        "currency": "PEN",
+        "paymentMethod": "CASH_ON_DELIVERY",
+        "deliveryQuote": {
+          "quoteId": "quote-demo",
+          "distanceMeters": 1250.0,
+          "tariffVersion": "lima-driving-car-v1",
+          "quotedAtEpochMillis": 1800000000000,
+          "expiresAtEpochMillis": 1800000300000
+        }
+      }
+    },
+    {
+      "name": "zero-price",
+      "purchase": {
+        "ownerUid": "buyer-demo",
+        "businessId": "business-demo",
+        "storeId": "store-demo",
+        "businessName": "Comida de prueba",
+        "storeName": "Local público",
+        "storePhone": null,
+        "buyerName": "Comprador ficticio",
+        "buyerPhone": null,
+        "pickup": {
+          "addressText": "Plaza pública Lima",
+          "location": {
+            "latitude": -12.0464,
+            "longitude": -77.0428
+          },
+          "reference": null,
+          "instructions": null
+        },
+        "delivery": {
+          "addressId": "address-demo",
+          "label": "Destino público",
+          "destination": {
+            "addressText": "Parque público Lima",
+            "location": {
+              "latitude": -12.05,
+              "longitude": -77.04
+            },
+            "reference": "Puerta norte",
+            "instructions": "Llamar al llegar"
+          }
+        },
+        "items": [
+          {
+            "productId": "p-b",
+            "categoryId": "c-1",
+            "name": "Producto B",
+            "quantity": 1,
+            "unitPriceMinor": 0
+          },
+          {
+            "productId": "p-a",
+            "categoryId": "c-1",
+            "name": "Producto A",
+            "quantity": 2,
+            "unitPriceMinor": 350
+          }
+        ],
+        "amounts": {
+          "subtotalMinor": 1900,
+          "deliveryFeeMinor": 300,
+          "totalMinor": 2200
+        },
+        "currency": "PEN",
+        "paymentMethod": "CASH_ON_DELIVERY",
+        "deliveryQuote": {
+          "quoteId": "quote-demo",
+          "distanceMeters": 1250.0,
+          "tariffVersion": "lima-driving-car-v1",
+          "quotedAtEpochMillis": 1800000000000,
+          "expiresAtEpochMillis": 1800000300000
+        }
+      }
+    },
+    {
+      "name": "negative-price",
+      "purchase": {
+        "ownerUid": "buyer-demo",
+        "businessId": "business-demo",
+        "storeId": "store-demo",
+        "businessName": "Comida de prueba",
+        "storeName": "Local público",
+        "storePhone": null,
+        "buyerName": "Comprador ficticio",
+        "buyerPhone": null,
+        "pickup": {
+          "addressText": "Plaza pública Lima",
+          "location": {
+            "latitude": -12.0464,
+            "longitude": -77.0428
+          },
+          "reference": null,
+          "instructions": null
+        },
+        "delivery": {
+          "addressId": "address-demo",
+          "label": "Destino público",
+          "destination": {
+            "addressText": "Parque público Lima",
+            "location": {
+              "latitude": -12.05,
+              "longitude": -77.04
+            },
+            "reference": "Puerta norte",
+            "instructions": "Llamar al llegar"
+          }
+        },
+        "items": [
+          {
+            "productId": "p-b",
+            "categoryId": "c-1",
+            "name": "Producto B",
+            "quantity": 1,
+            "unitPriceMinor": -1
+          },
+          {
+            "productId": "p-a",
+            "categoryId": "c-1",
+            "name": "Producto A",
+            "quantity": 2,
+            "unitPriceMinor": 350
+          }
+        ],
+        "amounts": {
+          "subtotalMinor": 1900,
+          "deliveryFeeMinor": 300,
+          "totalMinor": 2200
+        },
+        "currency": "PEN",
+        "paymentMethod": "CASH_ON_DELIVERY",
+        "deliveryQuote": {
+          "quoteId": "quote-demo",
+          "distanceMeters": 1250.0,
+          "tariffVersion": "lima-driving-car-v1",
+          "quotedAtEpochMillis": 1800000000000,
+          "expiresAtEpochMillis": 1800000300000
+        }
+      }
+    },
+    {
+      "name": "fractional-minor",
+      "purchase": {
+        "ownerUid": "buyer-demo",
+        "businessId": "business-demo",
+        "storeId": "store-demo",
+        "businessName": "Comida de prueba",
+        "storeName": "Local público",
+        "storePhone": null,
+        "buyerName": "Comprador ficticio",
+        "buyerPhone": null,
+        "pickup": {
+          "addressText": "Plaza pública Lima",
+          "location": {
+            "latitude": -12.0464,
+            "longitude": -77.0428
+          },
+          "reference": null,
+          "instructions": null
+        },
+        "delivery": {
+          "addressId": "address-demo",
+          "label": "Destino público",
+          "destination": {
+            "addressText": "Parque público Lima",
+            "location": {
+              "latitude": -12.05,
+              "longitude": -77.04
+            },
+            "reference": "Puerta norte",
+            "instructions": "Llamar al llegar"
+          }
+        },
+        "items": [
+          {
+            "productId": "p-b",
+            "categoryId": "c-1",
+            "name": "Producto B",
+            "quantity": 1,
+            "unitPriceMinor": 1200.5
+          },
+          {
+            "productId": "p-a",
+            "categoryId": "c-1",
+            "name": "Producto A",
+            "quantity": 2,
+            "unitPriceMinor": 350
+          }
+        ],
+        "amounts": {
+          "subtotalMinor": 1900,
+          "deliveryFeeMinor": 300,
+          "totalMinor": 2200
+        },
+        "currency": "PEN",
+        "paymentMethod": "CASH_ON_DELIVERY",
+        "deliveryQuote": {
+          "quoteId": "quote-demo",
+          "distanceMeters": 1250.0,
+          "tariffVersion": "lima-driving-car-v1",
+          "quotedAtEpochMillis": 1800000000000,
+          "expiresAtEpochMillis": 1800000300000
+        }
+      }
+    },
+    {
+      "name": "unsafe-minor",
+      "purchase": {
+        "ownerUid": "buyer-demo",
+        "businessId": "business-demo",
+        "storeId": "store-demo",
+        "businessName": "Comida de prueba",
+        "storeName": "Local público",
+        "storePhone": null,
+        "buyerName": "Comprador ficticio",
+        "buyerPhone": null,
+        "pickup": {
+          "addressText": "Plaza pública Lima",
+          "location": {
+            "latitude": -12.0464,
+            "longitude": -77.0428
+          },
+          "reference": null,
+          "instructions": null
+        },
+        "delivery": {
+          "addressId": "address-demo",
+          "label": "Destino público",
+          "destination": {
+            "addressText": "Parque público Lima",
+            "location": {
+              "latitude": -12.05,
+              "longitude": -77.04
+            },
+            "reference": "Puerta norte",
+            "instructions": "Llamar al llegar"
+          }
+        },
+        "items": [
+          {
+            "productId": "p-b",
+            "categoryId": "c-1",
+            "name": "Producto B",
+            "quantity": 1,
+            "unitPriceMinor": 9007199254740992
+          },
+          {
+            "productId": "p-a",
+            "categoryId": "c-1",
+            "name": "Producto A",
+            "quantity": 2,
+            "unitPriceMinor": 350
+          }
+        ],
+        "amounts": {
+          "subtotalMinor": 1900,
+          "deliveryFeeMinor": 300,
+          "totalMinor": 2200
+        },
+        "currency": "PEN",
+        "paymentMethod": "CASH_ON_DELIVERY",
+        "deliveryQuote": {
+          "quoteId": "quote-demo",
+          "distanceMeters": 1250.0,
+          "tariffVersion": "lima-driving-car-v1",
+          "quotedAtEpochMillis": 1800000000000,
+          "expiresAtEpochMillis": 1800000300000
+        }
+      }
+    },
+    {
+      "name": "altered-total",
+      "purchase": {
+        "ownerUid": "buyer-demo",
+        "businessId": "business-demo",
+        "storeId": "store-demo",
+        "businessName": "Comida de prueba",
+        "storeName": "Local público",
+        "storePhone": null,
+        "buyerName": "Comprador ficticio",
+        "buyerPhone": null,
+        "pickup": {
+          "addressText": "Plaza pública Lima",
+          "location": {
+            "latitude": -12.0464,
+            "longitude": -77.0428
+          },
+          "reference": null,
+          "instructions": null
+        },
+        "delivery": {
+          "addressId": "address-demo",
+          "label": "Destino público",
+          "destination": {
+            "addressText": "Parque público Lima",
+            "location": {
+              "latitude": -12.05,
+              "longitude": -77.04
+            },
+            "reference": "Puerta norte",
+            "instructions": "Llamar al llegar"
+          }
+        },
+        "items": [
+          {
+            "productId": "p-b",
+            "categoryId": "c-1",
+            "name": "Producto B",
+            "quantity": 1,
+            "unitPriceMinor": 1200
+          },
+          {
+            "productId": "p-a",
+            "categoryId": "c-1",
+            "name": "Producto A",
+            "quantity": 2,
+            "unitPriceMinor": 350
+          }
+        ],
+        "amounts": {
+          "subtotalMinor": 1900,
+          "deliveryFeeMinor": 300,
+          "totalMinor": 2201
+        },
+        "currency": "PEN",
+        "paymentMethod": "CASH_ON_DELIVERY",
+        "deliveryQuote": {
+          "quoteId": "quote-demo",
+          "distanceMeters": 1250.0,
+          "tariffVersion": "lima-driving-car-v1",
+          "quotedAtEpochMillis": 1800000000000,
+          "expiresAtEpochMillis": 1800000300000
+        }
+      }
+    },
+    {
+      "name": "altered-subtotal",
+      "purchase": {
+        "ownerUid": "buyer-demo",
+        "businessId": "business-demo",
+        "storeId": "store-demo",
+        "businessName": "Comida de prueba",
+        "storeName": "Local público",
+        "storePhone": null,
+        "buyerName": "Comprador ficticio",
+        "buyerPhone": null,
+        "pickup": {
+          "addressText": "Plaza pública Lima",
+          "location": {
+            "latitude": -12.0464,
+            "longitude": -77.0428
+          },
+          "reference": null,
+          "instructions": null
+        },
+        "delivery": {
+          "addressId": "address-demo",
+          "label": "Destino público",
+          "destination": {
+            "addressText": "Parque público Lima",
+            "location": {
+              "latitude": -12.05,
+              "longitude": -77.04
+            },
+            "reference": "Puerta norte",
+            "instructions": "Llamar al llegar"
+          }
+        },
+        "items": [
+          {
+            "productId": "p-b",
+            "categoryId": "c-1",
+            "name": "Producto B",
+            "quantity": 1,
+            "unitPriceMinor": 1200
+          },
+          {
+            "productId": "p-a",
+            "categoryId": "c-1",
+            "name": "Producto A",
+            "quantity": 2,
+            "unitPriceMinor": 350
+          }
+        ],
+        "amounts": {
+          "subtotalMinor": 1901,
+          "deliveryFeeMinor": 300,
+          "totalMinor": 2200
+        },
+        "currency": "PEN",
+        "paymentMethod": "CASH_ON_DELIVERY",
+        "deliveryQuote": {
+          "quoteId": "quote-demo",
+          "distanceMeters": 1250.0,
+          "tariffVersion": "lima-driving-car-v1",
+          "quotedAtEpochMillis": 1800000000000,
+          "expiresAtEpochMillis": 1800000300000
+        }
+      }
+    },
+    {
+      "name": "overflow-product",
+      "purchase": {
+        "ownerUid": "buyer-demo",
+        "businessId": "business-demo",
+        "storeId": "store-demo",
+        "businessName": "Comida de prueba",
+        "storeName": "Local público",
+        "storePhone": null,
+        "buyerName": "Comprador ficticio",
+        "buyerPhone": null,
+        "pickup": {
+          "addressText": "Plaza pública Lima",
+          "location": {
+            "latitude": -12.0464,
+            "longitude": -77.0428
+          },
+          "reference": null,
+          "instructions": null
+        },
+        "delivery": {
+          "addressId": "address-demo",
+          "label": "Destino público",
+          "destination": {
+            "addressText": "Parque público Lima",
+            "location": {
+              "latitude": -12.05,
+              "longitude": -77.04
+            },
+            "reference": "Puerta norte",
+            "instructions": "Llamar al llegar"
+          }
+        },
+        "items": [
+          {
+            "productId": "p-b",
+            "categoryId": "c-1",
+            "name": "Producto B",
+            "quantity": 2,
+            "unitPriceMinor": 9007199254740991
+          },
+          {
+            "productId": "p-a",
+            "categoryId": "c-1",
+            "name": "Producto A",
+            "quantity": 2,
+            "unitPriceMinor": 350
+          }
+        ],
+        "amounts": {
+          "subtotalMinor": 1900,
+          "deliveryFeeMinor": 300,
+          "totalMinor": 2200
+        },
+        "currency": "PEN",
+        "paymentMethod": "CASH_ON_DELIVERY",
+        "deliveryQuote": {
+          "quoteId": "quote-demo",
+          "distanceMeters": 1250.0,
+          "tariffVersion": "lima-driving-car-v1",
+          "quotedAtEpochMillis": 1800000000000,
+          "expiresAtEpochMillis": 1800000300000
+        }
+      }
+    },
+    {
+      "name": "overflow-sum",
+      "purchase": {
+        "ownerUid": "buyer-demo",
+        "businessId": "business-demo",
+        "storeId": "store-demo",
+        "businessName": "Comida de prueba",
+        "storeName": "Local público",
+        "storePhone": null,
+        "buyerName": "Comprador ficticio",
+        "buyerPhone": null,
+        "pickup": {
+          "addressText": "Plaza pública Lima",
+          "location": {
+            "latitude": -12.0464,
+            "longitude": -77.0428
+          },
+          "reference": null,
+          "instructions": null
+        },
+        "delivery": {
+          "addressId": "address-demo",
+          "label": "Destino público",
+          "destination": {
+            "addressText": "Parque público Lima",
+            "location": {
+              "latitude": -12.05,
+              "longitude": -77.04
+            },
+            "reference": "Puerta norte",
+            "instructions": "Llamar al llegar"
+          }
+        },
+        "items": [
+          {
+            "productId": "p-b",
+            "categoryId": "c-1",
+            "name": "Producto B",
+            "quantity": 1,
+            "unitPriceMinor": 9007199254740991
+          },
+          {
+            "productId": "p-a",
+            "categoryId": "c-1",
+            "name": "Producto A",
+            "quantity": 2,
+            "unitPriceMinor": 350
+          }
+        ],
+        "amounts": {
+          "subtotalMinor": 1900,
+          "deliveryFeeMinor": 300,
+          "totalMinor": 2200
+        },
+        "currency": "PEN",
+        "paymentMethod": "CASH_ON_DELIVERY",
+        "deliveryQuote": {
+          "quoteId": "quote-demo",
+          "distanceMeters": 1250.0,
+          "tariffVersion": "lima-driving-car-v1",
+          "quotedAtEpochMillis": 1800000000000,
+          "expiresAtEpochMillis": 1800000300000
+        }
+      }
+    },
+    {
+      "name": "duplicate-product",
+      "purchase": {
+        "ownerUid": "buyer-demo",
+        "businessId": "business-demo",
+        "storeId": "store-demo",
+        "businessName": "Comida de prueba",
+        "storeName": "Local público",
+        "storePhone": null,
+        "buyerName": "Comprador ficticio",
+        "buyerPhone": null,
+        "pickup": {
+          "addressText": "Plaza pública Lima",
+          "location": {
+            "latitude": -12.0464,
+            "longitude": -77.0428
+          },
+          "reference": null,
+          "instructions": null
+        },
+        "delivery": {
+          "addressId": "address-demo",
+          "label": "Destino público",
+          "destination": {
+            "addressText": "Parque público Lima",
+            "location": {
+              "latitude": -12.05,
+              "longitude": -77.04
+            },
+            "reference": "Puerta norte",
+            "instructions": "Llamar al llegar"
+          }
+        },
+        "items": [
+          {
+            "productId": "p-a",
+            "categoryId": "c-1",
+            "name": "Producto B",
+            "quantity": 1,
+            "unitPriceMinor": 1200
+          },
+          {
+            "productId": "p-a",
+            "categoryId": "c-1",
+            "name": "Producto A",
+            "quantity": 2,
+            "unitPriceMinor": 350
+          }
+        ],
+        "amounts": {
+          "subtotalMinor": 1900,
+          "deliveryFeeMinor": 300,
+          "totalMinor": 2200
+        },
+        "currency": "PEN",
+        "paymentMethod": "CASH_ON_DELIVERY",
+        "deliveryQuote": {
+          "quoteId": "quote-demo",
+          "distanceMeters": 1250.0,
+          "tariffVersion": "lima-driving-car-v1",
+          "quotedAtEpochMillis": 1800000000000,
+          "expiresAtEpochMillis": 1800000300000
+        }
+      }
+    },
+    {
+      "name": "empty-cart",
+      "purchase": {
+        "ownerUid": "buyer-demo",
+        "businessId": "business-demo",
+        "storeId": "store-demo",
+        "businessName": "Comida de prueba",
+        "storeName": "Local público",
+        "storePhone": null,
+        "buyerName": "Comprador ficticio",
+        "buyerPhone": null,
+        "pickup": {
+          "addressText": "Plaza pública Lima",
+          "location": {
+            "latitude": -12.0464,
+            "longitude": -77.0428
+          },
+          "reference": null,
+          "instructions": null
+        },
+        "delivery": {
+          "addressId": "address-demo",
+          "label": "Destino público",
+          "destination": {
+            "addressText": "Parque público Lima",
+            "location": {
+              "latitude": -12.05,
+              "longitude": -77.04
+            },
+            "reference": "Puerta norte",
+            "instructions": "Llamar al llegar"
+          }
+        },
+        "items": [],
+        "amounts": {
+          "subtotalMinor": 1900,
+          "deliveryFeeMinor": 300,
+          "totalMinor": 2200
+        },
+        "currency": "PEN",
+        "paymentMethod": "CASH_ON_DELIVERY",
+        "deliveryQuote": {
+          "quoteId": "quote-demo",
+          "distanceMeters": 1250.0,
+          "tariffVersion": "lima-driving-car-v1",
+          "quotedAtEpochMillis": 1800000000000,
+          "expiresAtEpochMillis": 1800000300000
+        }
+      }
+    },
+    {
+      "name": "wrong-currency",
+      "purchase": {
+        "ownerUid": "buyer-demo",
+        "businessId": "business-demo",
+        "storeId": "store-demo",
+        "businessName": "Comida de prueba",
+        "storeName": "Local público",
+        "storePhone": null,
+        "buyerName": "Comprador ficticio",
+        "buyerPhone": null,
+        "pickup": {
+          "addressText": "Plaza pública Lima",
+          "location": {
+            "latitude": -12.0464,
+            "longitude": -77.0428
+          },
+          "reference": null,
+          "instructions": null
+        },
+        "delivery": {
+          "addressId": "address-demo",
+          "label": "Destino público",
+          "destination": {
+            "addressText": "Parque público Lima",
+            "location": {
+              "latitude": -12.05,
+              "longitude": -77.04
+            },
+            "reference": "Puerta norte",
+            "instructions": "Llamar al llegar"
+          }
+        },
+        "items": [
+          {
+            "productId": "p-b",
+            "categoryId": "c-1",
+            "name": "Producto B",
+            "quantity": 1,
+            "unitPriceMinor": 1200
+          },
+          {
+            "productId": "p-a",
+            "categoryId": "c-1",
+            "name": "Producto A",
+            "quantity": 2,
+            "unitPriceMinor": 350
+          }
+        ],
+        "amounts": {
+          "subtotalMinor": 1900,
+          "deliveryFeeMinor": 300,
+          "totalMinor": 2200
+        },
+        "currency": "USD",
+        "paymentMethod": "CASH_ON_DELIVERY",
+        "deliveryQuote": {
+          "quoteId": "quote-demo",
+          "distanceMeters": 1250.0,
+          "tariffVersion": "lima-driving-car-v1",
+          "quotedAtEpochMillis": 1800000000000,
+          "expiresAtEpochMillis": 1800000300000
+        }
+      }
+    },
+    {
+      "name": "unsupported-payment",
+      "purchase": {
+        "ownerUid": "buyer-demo",
+        "businessId": "business-demo",
+        "storeId": "store-demo",
+        "businessName": "Comida de prueba",
+        "storeName": "Local público",
+        "storePhone": null,
+        "buyerName": "Comprador ficticio",
+        "buyerPhone": null,
+        "pickup": {
+          "addressText": "Plaza pública Lima",
+          "location": {
+            "latitude": -12.0464,
+            "longitude": -77.0428
+          },
+          "reference": null,
+          "instructions": null
+        },
+        "delivery": {
+          "addressId": "address-demo",
+          "label": "Destino público",
+          "destination": {
+            "addressText": "Parque público Lima",
+            "location": {
+              "latitude": -12.05,
+              "longitude": -77.04
+            },
+            "reference": "Puerta norte",
+            "instructions": "Llamar al llegar"
+          }
+        },
+        "items": [
+          {
+            "productId": "p-b",
+            "categoryId": "c-1",
+            "name": "Producto B",
+            "quantity": 1,
+            "unitPriceMinor": 1200
+          },
+          {
+            "productId": "p-a",
+            "categoryId": "c-1",
+            "name": "Producto A",
+            "quantity": 2,
+            "unitPriceMinor": 350
+          }
+        ],
+        "amounts": {
+          "subtotalMinor": 1900,
+          "deliveryFeeMinor": 300,
+          "totalMinor": 2200
+        },
+        "currency": "PEN",
+        "paymentMethod": "DIGITAL",
+        "deliveryQuote": {
+          "quoteId": "quote-demo",
+          "distanceMeters": 1250.0,
+          "tariffVersion": "lima-driving-car-v1",
+          "quotedAtEpochMillis": 1800000000000,
+          "expiresAtEpochMillis": 1800000300000
+        }
+      }
+    },
+    {
+      "name": "invalid-coordinates",
+      "purchase": {
+        "ownerUid": "buyer-demo",
+        "businessId": "business-demo",
+        "storeId": "store-demo",
+        "businessName": "Comida de prueba",
+        "storeName": "Local público",
+        "storePhone": null,
+        "buyerName": "Comprador ficticio",
+        "buyerPhone": null,
+        "pickup": {
+          "addressText": "Plaza pública Lima",
+          "location": {
+            "latitude": 91,
+            "longitude": -77.0428
+          },
+          "reference": null,
+          "instructions": null
+        },
+        "delivery": {
+          "addressId": "address-demo",
+          "label": "Destino público",
+          "destination": {
+            "addressText": "Parque público Lima",
+            "location": {
+              "latitude": -12.05,
+              "longitude": -77.04
+            },
+            "reference": "Puerta norte",
+            "instructions": "Llamar al llegar"
+          }
+        },
+        "items": [
+          {
+            "productId": "p-b",
+            "categoryId": "c-1",
+            "name": "Producto B",
+            "quantity": 1,
+            "unitPriceMinor": 1200
+          },
+          {
+            "productId": "p-a",
+            "categoryId": "c-1",
+            "name": "Producto A",
+            "quantity": 2,
+            "unitPriceMinor": 350
+          }
+        ],
+        "amounts": {
+          "subtotalMinor": 1900,
+          "deliveryFeeMinor": 300,
+          "totalMinor": 2200
+        },
+        "currency": "PEN",
+        "paymentMethod": "CASH_ON_DELIVERY",
+        "deliveryQuote": {
+          "quoteId": "quote-demo",
+          "distanceMeters": 1250.0,
+          "tariffVersion": "lima-driving-car-v1",
+          "quotedAtEpochMillis": 1800000000000,
+          "expiresAtEpochMillis": 1800000300000
+        }
+      }
+    },
+    {
+      "name": "negative-distance",
+      "purchase": {
+        "ownerUid": "buyer-demo",
+        "businessId": "business-demo",
+        "storeId": "store-demo",
+        "businessName": "Comida de prueba",
+        "storeName": "Local público",
+        "storePhone": null,
+        "buyerName": "Comprador ficticio",
+        "buyerPhone": null,
+        "pickup": {
+          "addressText": "Plaza pública Lima",
+          "location": {
+            "latitude": -12.0464,
+            "longitude": -77.0428
+          },
+          "reference": null,
+          "instructions": null
+        },
+        "delivery": {
+          "addressId": "address-demo",
+          "label": "Destino público",
+          "destination": {
+            "addressText": "Parque público Lima",
+            "location": {
+              "latitude": -12.05,
+              "longitude": -77.04
+            },
+            "reference": "Puerta norte",
+            "instructions": "Llamar al llegar"
+          }
+        },
+        "items": [
+          {
+            "productId": "p-b",
+            "categoryId": "c-1",
+            "name": "Producto B",
+            "quantity": 1,
+            "unitPriceMinor": 1200
+          },
+          {
+            "productId": "p-a",
+            "categoryId": "c-1",
+            "name": "Producto A",
+            "quantity": 2,
+            "unitPriceMinor": 350
+          }
+        ],
+        "amounts": {
+          "subtotalMinor": 1900,
+          "deliveryFeeMinor": 300,
+          "totalMinor": 2200
+        },
+        "currency": "PEN",
+        "paymentMethod": "CASH_ON_DELIVERY",
+        "deliveryQuote": {
+          "quoteId": "quote-demo",
+          "distanceMeters": -1,
+          "tariffVersion": "lima-driving-car-v1",
+          "quotedAtEpochMillis": 1800000000000,
+          "expiresAtEpochMillis": 1800000300000
+        }
+      }
+    },
+    {
+      "name": "incoherent-dates",
+      "purchase": {
+        "ownerUid": "buyer-demo",
+        "businessId": "business-demo",
+        "storeId": "store-demo",
+        "businessName": "Comida de prueba",
+        "storeName": "Local público",
+        "storePhone": null,
+        "buyerName": "Comprador ficticio",
+        "buyerPhone": null,
+        "pickup": {
+          "addressText": "Plaza pública Lima",
+          "location": {
+            "latitude": -12.0464,
+            "longitude": -77.0428
+          },
+          "reference": null,
+          "instructions": null
+        },
+        "delivery": {
+          "addressId": "address-demo",
+          "label": "Destino público",
+          "destination": {
+            "addressText": "Parque público Lima",
+            "location": {
+              "latitude": -12.05,
+              "longitude": -77.04
+            },
+            "reference": "Puerta norte",
+            "instructions": "Llamar al llegar"
+          }
+        },
+        "items": [
+          {
+            "productId": "p-b",
+            "categoryId": "c-1",
+            "name": "Producto B",
+            "quantity": 1,
+            "unitPriceMinor": 1200
+          },
+          {
+            "productId": "p-a",
+            "categoryId": "c-1",
+            "name": "Producto A",
+            "quantity": 2,
+            "unitPriceMinor": 350
+          }
+        ],
+        "amounts": {
+          "subtotalMinor": 1900,
+          "deliveryFeeMinor": 300,
+          "totalMinor": 2200
+        },
+        "currency": "PEN",
+        "paymentMethod": "CASH_ON_DELIVERY",
+        "deliveryQuote": {
+          "quoteId": "quote-demo",
+          "distanceMeters": 1250.0,
+          "tariffVersion": "lima-driving-car-v1",
+          "quotedAtEpochMillis": 1800000000000,
+          "expiresAtEpochMillis": 1800000000000
+        }
+      }
+    },
+    {
+      "name": "empty-name",
+      "purchase": {
+        "ownerUid": "buyer-demo",
+        "businessId": "business-demo",
+        "storeId": "store-demo",
+        "businessName": "Comida de prueba",
+        "storeName": " ",
+        "storePhone": null,
+        "buyerName": "Comprador ficticio",
+        "buyerPhone": null,
+        "pickup": {
+          "addressText": "Plaza pública Lima",
+          "location": {
+            "latitude": -12.0464,
+            "longitude": -77.0428
+          },
+          "reference": null,
+          "instructions": null
+        },
+        "delivery": {
+          "addressId": "address-demo",
+          "label": "Destino público",
+          "destination": {
+            "addressText": "Parque público Lima",
+            "location": {
+              "latitude": -12.05,
+              "longitude": -77.04
+            },
+            "reference": "Puerta norte",
+            "instructions": "Llamar al llegar"
+          }
+        },
+        "items": [
+          {
+            "productId": "p-b",
+            "categoryId": "c-1",
+            "name": "Producto B",
+            "quantity": 1,
+            "unitPriceMinor": 1200
+          },
+          {
+            "productId": "p-a",
+            "categoryId": "c-1",
+            "name": "Producto A",
+            "quantity": 2,
+            "unitPriceMinor": 350
+          }
+        ],
+        "amounts": {
+          "subtotalMinor": 1900,
+          "deliveryFeeMinor": 300,
+          "totalMinor": 2200
+        },
+        "currency": "PEN",
+        "paymentMethod": "CASH_ON_DELIVERY",
+        "deliveryQuote": {
+          "quoteId": "quote-demo",
+          "distanceMeters": 1250.0,
+          "tariffVersion": "lima-driving-car-v1",
+          "quotedAtEpochMillis": 1800000000000,
+          "expiresAtEpochMillis": 1800000300000
+        }
+      }
+    }
+  ]
+}
