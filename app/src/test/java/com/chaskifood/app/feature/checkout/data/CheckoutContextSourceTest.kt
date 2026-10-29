@@ -120,6 +120,17 @@ class CheckoutContextSourceTest {
         assertEquals(CheckoutContextState.Ready(original), observed.last())
         assertFalse(source.isCurrent(original))
     }
+    @Test fun `revision durable invalida contexto aunque el carrito sea identico`() = runTest {
+        val observed = mutableListOf<CheckoutContextState>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { source.observe().collect(observed::add) }
+        val initial = (observed.last() as CheckoutContextState.Ready).context
+        local.revisions.value = 2L
+        runCurrent()
+        assertEquals(2L, (observed.last() as CheckoutContextState.Ready).context.cartRevision)
+        assertFalse(source.isCurrent(initial))
+        assertEquals(initial.cart, (observed.last() as CheckoutContextState.Ready).context.cart)
+    }
+
 }
 
 private fun cart(quantity: Int = 1) = Cart("A", listOf(
@@ -166,9 +177,11 @@ private class FakeCheckoutLocalSnapshotReader(
     private val carts: FakeCheckoutCarts,
     private val addresses: FakeCheckoutAddresses,
 ) : CheckoutLocalSnapshotReader {
+    val revisions = MutableStateFlow(0L)
+    override fun observeRevision(ownerUid: String): Flow<Long> = revisions
     var committed: CheckoutLocalSnapshot? = null
     override suspend fun read(session: CartSession): CheckoutLocalSnapshot = committed ?: CheckoutLocalSnapshot(
         carts.states.value,
-        (addresses.states.value as? AddressBookState.Ready)?.book?.selectedAddressId,
+        (addresses.states.value as? AddressBookState.Ready)?.book?.selectedAddressId, revisions.value,
     )
 }

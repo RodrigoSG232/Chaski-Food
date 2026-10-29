@@ -18,6 +18,9 @@ import retrofit2.Retrofit
 @InstallIn(SingletonComponent::class)
 internal abstract class CheckoutDataModule {
     @Binds
+    abstract fun bindPreparationGuard(impl: CheckoutContextSource): CheckoutPreparationGuard
+
+    @Binds
     abstract fun bindEligibility(impl: HttpStorePurchaseEligibilityReader): StorePurchaseEligibilityReader
 
     @Binds

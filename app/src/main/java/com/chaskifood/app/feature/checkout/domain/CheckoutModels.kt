@@ -86,6 +86,7 @@ data class CheckoutContext(
     val sessionGeneration: Long,
     val cart: Cart,
     val selectedAddress: Address?,
+    val cartRevision: Long = 0,
 )
 
 sealed interface CheckoutContextState {
