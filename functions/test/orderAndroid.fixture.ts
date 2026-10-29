@@ -42,11 +42,14 @@ async function run() {
     await access.execute({uid:actors[1],email:`${actors[1]}@example.test`,emailVerified:true,admin:false},
       {action:"ASSIGN",operationId:"assign-android",expectedRevision:revisions.get(actors[3])!,businessId:actors[1],
         email:`${actors[3]}@example.test`,storeIds:["hu16-e2e-store"],fullName:"Responsable ficticio",phone:"000"});
+    const inbox=process.env.HU16_INBOX_ANDROID==="enabled";
+    const classes="com.chaskifood.app.feature.checkout.data.CheckoutOrderHttpEmulatorTest"+
+      (inbox?",com.chaskifood.app.feature.orders.data.StoreOrdersHttpEmulatorTest":"");
     const result=spawnSync(process.env.ANDROID_ADB!,["-s",process.env.ANDROID_SERIAL??"emulator-5554","shell","am","instrument","-w","-r",
-      "-e","class","com.chaskifood.app.feature.checkout.data.CheckoutOrderHttpEmulatorTest","-e","hu15Host","127.0.0.1","-e","timeout_msec","60000",
+      "-e","class",classes,"-e","hu15Host","127.0.0.1","-e","timeout_msec","60000",
       "com.chaskifood.app.test/androidx.test.runner.AndroidJUnitRunner"],{encoding:"utf8",timeout:180000});
     const output=(result.stdout??"")+(result.stderr??"");process.stdout.write(output);
-    if(result.error||result.status!==0||!output.includes("OK (1 test)")||output.includes("FAILURES"))throw new Error("ANDROID_ORDER_E2E_FAILED");
+    if(result.error||result.status!==0||!output.includes(inbox?"OK (2 tests)":"OK (1 test)")||output.includes("FAILURES"))throw new Error("ANDROID_ORDER_E2E_FAILED");
   } finally {
     for(const path of docs)await db.recursiveDelete(db.doc(path));
     for(const collection of ["food_orders","delivery_quotes","order_events"]) {

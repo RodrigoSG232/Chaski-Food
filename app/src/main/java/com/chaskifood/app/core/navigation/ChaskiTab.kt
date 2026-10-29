@@ -50,6 +50,7 @@ object ChaskiDestinations {
     const val ADMIN_BUSINESS_SUPERVISION = "admin_business_supervision"
     const val ADMIN_AUDIT_LOG = "admin_audit_log"
     const val MANAGE_STORES = "manage_stores"
+    const val STORE_ORDERS = "store_orders"
     const val STORE_OPERATIONS = "store_operations"
     const val MANAGE_CATALOG = "manage_catalog"
     const val STORE_PRODUCT_CONFIGURATION = "store_product_configuration"

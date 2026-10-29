@@ -81,7 +81,8 @@ internal fun AccessDestinationGuard(access: AccessNavigationViewModel, navContro
     val route = entry.destination.route
     val businessId = entry.arguments?.getString("businessId")
     val storeId = if (route?.substringBefore('?') == ChaskiDestinations.STORE_OPERATIONS ||
-        route?.substringBefore('?') == ChaskiDestinations.STORE_PRODUCT_CONFIGURATION) entry.arguments?.getString("storeId") else null
+        route?.substringBefore('?') == ChaskiDestinations.STORE_PRODUCT_CONFIGURATION ||
+        route?.startsWith(ChaskiDestinations.STORE_ORDERS + "/") == true) entry.arguments?.getString("storeId") else null
     val allowed = observed.origin == state.origin && AccessNavigationPolicy.allows(state.resolution,
         route, businessId, storeId, entry.arguments?.getBoolean("resubmit") == true)
     val holder = rememberSaveableStateHolder()

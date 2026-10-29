@@ -102,7 +102,8 @@ class BusinessViewModel @Inject constructor(
                                 val hours = store.operatingHours.singleOrNull { it.dayOfWeek == day && it.enabled }
                                 CommercialLocal(store, access.capabilities.allows(AccessCapability.OPERATE_HOURS_AND_OFFERS,
                                     AccessScope.Store(store.businessId, store.id)), store.isWithinOperatingHours(time, day),
-                                    hours?.let { "${it.openTime}–${it.closeTime}" } ?: "Sin atención programada hoy")
+                                    hours?.let { "${it.openTime}–${it.closeTime}" } ?: "Sin atención programada hoy",
+                                    access.capabilities.allows(AccessCapability.READ_STORE_ORDERS, AccessScope.Store(store.businessId,store.id)))
                             }, id, permissionNotice)
                         }
                     }

@@ -231,6 +231,20 @@ export class CommercialAccessService {
     return true; // CLIENT from verified facts; admin claims never bypass these checks.
   }
 
+  /** HU16 inbox: read-only, same HU34 context/index/exclusivity as existing facts.
+   * Status/operational availability do not revoke a verified assignment. */
+  async requireStoreOrderReader(tx: Transaction, actor: CommercialIdentity, storeId: string): Promise<{businessId:string}> {
+    const ctx = await this.context(tx, actor);
+    assertExclusive(ctx.business?.status, ctx.rows, actor.uid);
+    if (ownsCommercialBusiness(ctx.business?.status)) throw new CommercialAccessError("FORBIDDEN",403);
+    if (!actor.emailVerified || ctx.mail?.boundUid !== actor.uid) throw new CommercialAccessError("FORBIDDEN",403);
+    if (ctx.rows.some(row => !["VERIFIED","REVOKED"].includes(row.bindingState)))
+      throw new CommercialAccessError("RECONCILIATION_REQUIRED",503);
+    const assigned = confirmedAssignments(ctx.rows, actor.uid).filter(row => row.assignedStoreIds.includes(storeId));
+    if (assigned.length !== 1) throw new CommercialAccessError("FORBIDDEN",403);
+    return {businessId:assigned[0].businessId};
+  }
+
   async hasReceivingManager(tx: Transaction, businessId: string, storeId: string): Promise<boolean> {
     const docs = await tx.get(this.db.collection("store_managers").where("businessId", "==", businessId));
     let uncertain = false;

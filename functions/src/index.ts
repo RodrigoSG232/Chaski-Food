@@ -1,3 +1,4 @@
+import { StoreOrdersReader } from "./orders/storeOrdersReader";
 import { OrderService } from "./orders/orderService";
 import { OrderHttpError, parseOrderSubmission } from "./orders/orderRequest";
 import { intentId as validateIntentId } from "./orders/orderModels";
@@ -29,6 +30,26 @@ export const foodApi = onRequest({ region: "southamerica-west1", timeoutSeconds:
       const runtime = resolveRuntimeEnvironment(process.env);
       const orderPath = /^\/api\/v1\/orders\/?$/.test(request.path);
       const attemptPath = /^\/api\/v1\/order-attempts\/([^/]+)\/?$/.exec(request.path);
+      const inboxPath = /^\/api\/v1\/stores\/([^/]+)\/orders\/?$/.exec(request.path);
+      if (inboxPath) {
+        if (runtime.mode !== "LOCAL") { response.status(404).json({error:"NOT_FOUND"}); return; }
+        if (request.method !== "GET") { response.status(405).set("Allow","GET").json({error:"METHOD_NOT_ALLOWED"}); return; }
+        try {
+          const app=getRuntimeApp(runtime),auth=getAuth(app);
+          const actor=await verifyCommercialIdentity(auth,request.get("authorization"));
+          const storeId=decodeURIComponent(inboxPath[1]);
+          response.status(200).json(await new StoreOrdersReader(getFirestore(app),auth).page(actor,storeId,request.query));
+        } catch(error) {
+          if(error instanceof AuthenticationRequired) response.status(401).json({error:"AUTHENTICATION_REQUIRED"});
+          else if(error instanceof OrderHttpError) response.status(error.status).json({error:error.code});
+          else if(error instanceof CommercialAccessError) {
+            const denied=["FORBIDDEN","EMAIL_VERIFICATION_REQUIRED","AUTHORIZATION_CONFLICT"].includes(error.code);
+            response.status(denied?403:503).json({error:denied?"ACCESS_DENIED":"AUTHORIZATION_UNAVAILABLE"});
+          } else if(error instanceof URIError) response.status(400).json({error:"INVALID_REQUEST"});
+          else response.status(503).json({error:"INBOX_UNAVAILABLE"});
+        }
+        return;
+      }
       if (orderPath || attemptPath) {
         // HU34 coordination is LOCAL only. Cloud activation must be authorized/coordinated separately.
         if (runtime.mode !== "LOCAL") { response.status(404).json({error:"NOT_FOUND"}); return; }

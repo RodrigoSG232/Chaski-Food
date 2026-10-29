@@ -1,5 +1,7 @@
 package com.chaskifood.app.core.navigation
 
+import com.chaskifood.app.feature.orders.presentation.StoreOrdersScreen
+
 import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.consumeWindowInsets
@@ -320,6 +322,9 @@ fun ChaskiNavHost(
                         navController.navigate(ChaskiDestinations.SOCIAL_ACCOUNTS)
                     },
                     onOpenManageStores = { navController.navigate(ChaskiDestinations.MANAGE_STORES) },
+                    onOpenStoreOrders = { business, store ->
+                        navController.navigate(ChaskiDestinations.STORE_ORDERS + "/${Uri.encode(business)}/${Uri.encode(store)}") { launchSingleTop = true }
+                    },
                     onOpenSelectedHours = { _, store ->
                         navController.navigate(ChaskiDestinations.STORE_OPERATIONS + (store?.let { "?storeId=${Uri.encode(it)}" } ?: ""))
                     },
@@ -598,6 +603,10 @@ fun ChaskiNavHost(
                         navController.popBackStack(ChaskiDestinations.RESTAURANTS, inclusive = false)
                     },
                 )
+            }
+            protectedComposable(access, navController, ChaskiDestinations.STORE_ORDERS + "/{businessId}/{storeId}",
+                arguments = listOf(navArgument("businessId") { type = NavType.StringType }, navArgument("storeId") { type = NavType.StringType })) {
+                StoreOrdersScreen(onBack = { navController.popBackStack() })
             }
             protectedComposable(access, navController, ChaskiDestinations.CHECKOUT_RECOVERY) {
                 RealCheckoutScreen(onBack = { navController.popBackStack() },

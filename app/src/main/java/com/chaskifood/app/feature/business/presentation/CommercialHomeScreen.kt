@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.automirrored.filled.ReceiptLong
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -33,6 +34,7 @@ fun CommercialHomeScreen(
     onHours: (String?, String?) -> Unit,
     onOffers: (String?, String?) -> Unit,
     viewModel: BusinessViewModel = hiltViewModel(),
+    onOrders: (String, String) -> Unit = { _, _ -> },
 ) {
     val state by viewModel.commercialHome.collectAsStateWithLifecycle()
     val access = LocalNavigationAccess.current
@@ -47,7 +49,8 @@ fun CommercialHomeScreen(
         { dispatch(ChaskiDestinations.MANAGE_CATALOG, action = onCatalog) },
         { business, store -> dispatch(ChaskiDestinations.STORE_OPERATIONS, business, store) { onHours(business, store) } },
         { business, store -> dispatch(ChaskiDestinations.STORE_PRODUCT_CONFIGURATION, business, store) { onOffers(business, store) } },
-        { access?.refresh() })
+        { access?.refresh() },
+        { business, store -> dispatch(ChaskiDestinations.STORE_ORDERS + "/{businessId}/{storeId}", business, store) { onOrders(business,store) } })
 }
 
 @Composable
@@ -59,6 +62,7 @@ internal fun CommercialHomeContent(
     onHours: (String?, String?) -> Unit = { _, _ -> },
     onOffers: (String?, String?) -> Unit = { _, _ -> },
     onRetry: () -> Unit = {},
+    onOrders: (String, String) -> Unit = { _, _ -> },
 ) {
     when (state) {
         CommercialHomeState.Loading -> LoadingState()
@@ -111,6 +115,8 @@ internal fun CommercialHomeContent(
                             Text("Estado administrativo: ${when(store.status) { StoreStatus.ACTIVE -> "Activo"; StoreStatus.INACTIVE -> "Inactivo"; StoreStatus.SUSPENDED -> "Suspendido" }}")
                             Text("Estado operativo: ${when(store.operationalStatus) { OperationalStatus.OPEN -> "Abierto"; OperationalStatus.PAUSED -> "Pausado"; OperationalStatus.CLOSED -> "Cerrado" }}")
                         }
+                        if (selected.canReadOrders) CommercialRow(Icons.AutoMirrored.Filled.ReceiptLong, "Pedidos pendientes",
+                            "Bandeja de solo lectura de este local", { onOrders(store.businessId, store.id) })
                         Text("Horario de hoy", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                         Text(selected.todayHours)
                         Text(if (selected.withinSchedule) "Dentro del horario de atención" else "Fuera del horario de atención")

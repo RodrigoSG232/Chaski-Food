@@ -27,7 +27,7 @@ sealed interface CommercialHomeState {
 }
 
 data class CommercialLocal(val store: BusinessStore, val canOperate: Boolean,
-    val withinSchedule: Boolean, val todayHours: String)
+    val withinSchedule: Boolean, val todayHours: String, val canReadOrders: Boolean = false)
 
 internal val CommercialHomeState.origin: AccessProvenance?
     get() = when (this) {

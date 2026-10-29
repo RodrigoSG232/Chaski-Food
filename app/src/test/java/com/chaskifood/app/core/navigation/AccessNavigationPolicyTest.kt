@@ -30,6 +30,23 @@ class AccessNavigationPolicyTest {
             AccessGrant(AccessCapability.READ_PERSONAL_PURCHASES,AccessScope.Account("other"))))),ChaskiDestinations.CHECKOUT_RECOVERY))
     }
 
+    @Test fun `bandeja exige READ_STORE_ORDERS en el local exacto incluso suspendido`() {
+        val route=ChaskiDestinations.STORE_ORDERS+"/{businessId}/{storeId}"
+        val manager=resolved(stores=listOf("one","two"),manager=true)
+        assertTrue(AccessNavigationPolicy.allows(manager,route,"business","one"))
+        assertFalse(AccessNavigationPolicy.allows(manager,route,"business","foreign"))
+        assertFalse(AccessNavigationPolicy.allows(manager,route,"foreign","one"))
+        assertFalse(AccessNavigationPolicy.allows(manager,route))
+        for(denied in listOf(resolved(),resolved(owner()),resolved(admin=true),AccessResolution.SignedOut))
+            assertFalse(AccessNavigationPolicy.allows(denied,route,"business","one"))
+        val paused=ResolveAccess()(identity,AccessFacts.Checked(session,null,
+            listOf(AccessAssignment("business","one","buyer","buyer@example.test",AccessBinding.VERIFIED)),
+            listOf(AccessStore("business","one",AccessBusinessStatus.SUSPENDED,AccessStoreStatus.SUSPENDED,AccessOperationalStatus.PAUSED)),
+            AccessExclusivity.VERIFIED))
+        assertTrue(AccessNavigationPolicy.allows(paused,route,"business","one"))
+        assertFalse(AccessNavigationPolicy.allows(paused,ChaskiDestinations.STORE_OPERATIONS,"business","one"))
+    }
+
     @Test fun `cliente conserva MAIN producto carrito checkout y direcciones`() {
         val client = resolved()
         listOf(ChaskiDestinations.MAIN, ChaskiDestinations.PRODUCT_DETAIL, ChaskiDestinations.CART,

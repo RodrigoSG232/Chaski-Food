@@ -43,6 +43,8 @@ object AccessNavigationPolicy {
             }
         }
         return when {
+            route?.startsWith(ChaskiDestinations.STORE_ORDERS + "/") == true ->
+                businessId != null && storeId != null && has(AccessCapability.READ_STORE_ORDERS)
             route in purchaseRoutes -> has(AccessCapability.START_PURCHASE)
             route in adminRoutes -> access.identity.isAdmin
             route in personalRoutes -> true

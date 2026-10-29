@@ -31,6 +31,15 @@ class CommercialHomeScreenTest {
             operationalStatus=OperationalStatus.CLOSED),!inactive,false,"09:00–18:00")) +
             if(multiple) listOf(CommercialLocal(BusinessStore(id="two",businessId="business",name="Local Dos"),true,true,"08:00–20:00")) else emptyList(),"one")
     private fun show(state:CommercialHomeState) { compose.setContent { ChaskiTheme { CommercialHomeContent(state) } } }
+    @Test fun responsableSuspendidoAbreSoloBandejaDelLocalAsignado() {
+        val state=manager(inactive=true).let {it.copy(locals=it.locals.map{local->local.copy(canReadOrders=true)})}
+        var selected:Pair<String,String>?=null
+        compose.setContent { ChaskiTheme {CommercialHomeContent(state,onOrders={business,store->selected=business to store})} }
+        compose.onNodeWithText("Pedidos pendientes").performScrollTo().performClick()
+        compose.runOnIdle {assertEquals("business" to "one",selected)}
+        compose.onNodeWithText("Horarios y disponibilidad").assertDoesNotExist()
+        compose.onNodeWithText("Aceptar pedido").assertDoesNotExist()
+    }
     @Test fun propietarioAbreDestinosRealesMedianteCallbacks() {
         var stores=0; var catalog=0
         compose.setContent { ChaskiTheme { CommercialHomeContent(owner(),onStores={stores++},onCatalog={catalog++}) } }
