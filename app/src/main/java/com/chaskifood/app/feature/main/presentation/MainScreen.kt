@@ -38,6 +38,7 @@ fun MainScreen(
     deliveryNotice: String? = null,
     onDismissDeliveryNotice: () -> Unit = {},
     onSeeAllRestaurants: () -> Unit = {},
+    onRecoverPurchase: () -> Unit = {},
     onOpenCart: () -> Unit = {},
     cartUnits: Long? = null,
     onRestaurantClick: (String) -> Unit = {},
@@ -125,6 +126,7 @@ fun MainScreen(
             }
             composable(ChaskiTab.ACCOUNT.route) {
                 AccountScreen(
+                    onRecoverPurchase = onRecoverPurchase,
                     onOpenProfileInfo = onOpenProfileInfo,
                     onOpenSecurity = onOpenSecurity,
                     onOpenPaymentMethods = onOpenPaymentMethods,

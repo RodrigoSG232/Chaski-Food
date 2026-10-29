@@ -1,6 +1,8 @@
 package com.chaskifood.app.core.navigation
 
 import androidx.compose.runtime.*
+import androidx.compose.foundation.layout.*
+import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.lifecycle.*
@@ -84,9 +86,17 @@ internal fun AccessDestinationGuard(access: AccessNavigationViewModel, navContro
         route, businessId, storeId, entry.arguments?.getBoolean("resubmit") == true)
     val holder = rememberSaveableStateHolder()
     val resolution = state.resolution as? AccessResolution.Resolved
-    val identityKey = resolution?.identity
+    val identityKey = resolution?.identity ?: (state.resolution as? AccessResolution.Conflict)?.session
     if (!allowed) {
-        RestrictedAccess(state, { access.refresh() })
+        if (route != ChaskiDestinations.CHECKOUT_RECOVERY &&
+            AccessNavigationPolicy.allows(state.resolution, ChaskiDestinations.CHECKOUT_RECOVERY)) {
+            Column(Modifier.fillMaxSize()) {
+                Box(Modifier.weight(1f)) { RestrictedAccess(state, { access.refresh() }) }
+                com.chaskifood.app.ui.components.ChaskiButton("Recuperar compra pendiente", onClick = {
+                    navController.navigate(ChaskiDestinations.CHECKOUT_RECOVERY) { launchSingleTop = true }
+                })
+            }
+        } else RestrictedAccess(state, { access.refresh() })
         return
     }
     val sessionStamp = access.sessionStamp(state.origin)

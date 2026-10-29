@@ -1,5 +1,8 @@
 package com.chaskifood.app.feature.checkout.presentation
 
+import androidx.compose.ui.test.hasScrollAction
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -15,6 +18,8 @@ import com.chaskifood.app.feature.address.domain.model.Address
 import com.chaskifood.app.feature.address.domain.model.AddressCoordinates
 import com.chaskifood.app.feature.cart.domain.Cart
 import com.chaskifood.app.feature.cart.domain.CartProductSnapshot
+import com.chaskifood.app.feature.checkout.domain.*
+import com.chaskifood.app.feature.orders.domain.*
 import com.chaskifood.app.feature.checkout.domain.CheckoutContext
 import com.chaskifood.app.feature.checkout.domain.CheckoutContextState
 import com.chaskifood.app.feature.checkout.domain.CheckoutLine
@@ -118,6 +123,51 @@ class RealCheckoutScreenTest {
         compose.onNodeWithText("Reintentar").assertIsDisplayed()
     }
 
+    @Test fun confirmarPendienteRecuperacionYExitoSinDuplicar() {
+        val repository=ScreenCheckoutRepository()
+        val quote=acceptedScreenQuote()
+        repository.next=CheckoutReviewResult.Ready(quote)
+        repository.confirmGate=CompletableDeferred()
+        val model=CheckoutViewModel(repository,SystemCheckoutClock())
+        show(model)
+        compose.onNodeWithText("Aceptar precios actualizados").performScrollTo().performClick()
+        compose.onNode(SemanticsMatcher.expectValue(SemanticsProperties.Role,Role.RadioButton)).performScrollTo().performClick()
+        compose.onNode(hasScrollAction()).performScrollToNode(hasText("Confirmar pedido"))
+        compose.onNodeWithText("Confirmar pedido").performClick()
+        compose.runOnIdle { model.confirm();assertEquals(1,repository.confirms) }
+        compose.onNodeWithText("Verificando confirmación. No vuelvas a enviar otra compra.").assertIsDisplayed()
+        compose.runOnIdle { repository.confirmGate!!.complete(Unit) }
+        compose.onNodeWithText("Consultar resultado").assertIsDisplayed()
+        compose.runOnIdle { repository.orderResult=CheckoutConfirmation.Success(OrderReceipt("order-local",
+            "00000000-0000-0000-0000-000000000001",quote.acceptedPurchase!!,System.currentTimeMillis()),true) }
+        compose.onNodeWithText("Consultar resultado").performClick()
+        compose.onNodeWithText("Pedido confirmado: order-local").assertIsDisplayed()
+        compose.onNodeWithText("Estado: PENDING_CONFIRMATION").assertIsDisplayed()
+        compose.runOnIdle { assertEquals(1,repository.confirms);assertEquals(1,repository.recoveries) }
+    }
+
+    @Test fun recuperacionPersonalNoIniciaRevisionNiOfreceCompraNueva() {
+        val repository=ScreenCheckoutRepository()
+        repository.pendingOrder=CheckoutConfirmation.Pending("original")
+        val model=CheckoutViewModel(repository,SystemCheckoutClock())
+        compose.setContent { ChaskiTheme { RealCheckoutScreen({}, {}, {}, viewModel=model,recoveryOnly=true) } }
+        compose.onNodeWithText("Consultar resultado").assertIsDisplayed()
+        compose.onNodeWithText("Reintentar intento original").assertDoesNotExist()
+        compose.onNodeWithText("Confirmar pedido").assertDoesNotExist()
+        compose.runOnIdle { assertEquals(0,repository.reviews);assertEquals(0,repository.confirms) }
+    }
+
+    @Test fun erroresDefinitivosConflictoYRevisionRequeridaMuestranAccionesSeguras() {
+        val state=androidx.compose.runtime.mutableStateOf<CheckoutConfirmation>(CheckoutConfirmation.ReviewRequired)
+        var recoveries=0;var reviews=0
+        compose.setContent { ChaskiTheme { CheckoutConfirmationPanel(state.value,{recoveries++},{},{reviews++}) } }
+        compose.onNodeWithText("Volver a comprobar").performClick()
+        compose.runOnIdle { assertEquals(1,reviews);state.value=CheckoutConfirmation.Conflict("original") }
+        compose.onNodeWithText("Consultar resultado").performClick()
+        compose.runOnIdle { assertEquals(1,recoveries);state.value=CheckoutConfirmation.Rejected("original",OrderRejection.QUOTE_EXPIRED) }
+        compose.onNodeWithText("Revisar nuevamente").assertIsDisplayed()
+    }
+
     private fun show(
         model: CheckoutViewModel,
         onBack: () -> Unit = {},
@@ -137,6 +187,18 @@ private class ScreenCheckoutRepository : CheckoutRepository {
     var next: CheckoutReviewResult = CheckoutReviewResult.Ready(screenQuote())
     var gate: CompletableDeferred<Unit>? = null
     var reviews = 0
+    var confirms = 0
+    var recoveries = 0
+    var confirmGate: CompletableDeferred<Unit>? = null
+    var pendingOrder: CheckoutConfirmation = CheckoutConfirmation.None
+    var orderResult: CheckoutConfirmation = CheckoutConfirmation.Pending("original")
+    override suspend fun pending(ownerUid: String,generation: Long,intentId: String?) = pendingOrder
+    override suspend fun confirm(context: CheckoutContext,quote: CheckoutQuote): CheckoutConfirmation {
+        confirms++;confirmGate?.await();return orderResult
+    }
+    override suspend fun recover(ownerUid: String,generation: Long,intentId: String): CheckoutConfirmation {
+        recoveries++;return orderResult
+    }
 
     override fun observeContext(): Flow<CheckoutContextState> = context
     override suspend fun isContextCurrent(context: CheckoutContext): Boolean =
@@ -166,3 +228,12 @@ private fun screenQuote() = CheckoutQuote(
         com.chaskifood.app.feature.address.domain.model.AddressCoordinates(-12.0, -77.0)),
     deliveryQuoteDeadlineMillis = SystemClock.elapsedRealtime() + 265_000L,
 )
+
+private fun acceptedScreenQuote(): CheckoutQuote {
+    val plain=screenQuote()
+    val q=plain.deliveryQuote.copy(quoteId="quote-local")
+    val accepted=AcceptedPurchase("customer","business","store","Negocio","Local de prueba",null,"Cliente",null,
+        OrderLocationSnapshot("Origen",q.storeLocation),OrderDeliverySnapshot("address","Casa",OrderLocationSnapshot("Lima",q.deliveryLocation,"","")),
+        listOf(OrderItem("product","category","Plato",1,1200)),OrderAmounts(1200,380,1580),AcceptedDeliveryQuote("quote-local",q))
+    return plain.copy(deliveryQuote=q,acceptedPurchase=accepted)
+}

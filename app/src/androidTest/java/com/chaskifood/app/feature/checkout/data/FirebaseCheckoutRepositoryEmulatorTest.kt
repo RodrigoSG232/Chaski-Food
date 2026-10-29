@@ -109,7 +109,9 @@ class FirebaseCheckoutRepositoryEmulatorTest {
         assertEquals(1, fixture.quoteHttpCalls)
         assertEquals(200, fixture.quoteHttpStatus)
         assertEquals("SIMULATED", fixture.quoteRouteSource)
-        assertEquals(3, fixture.quoteBackendReads)
+        // HU16-2: 2 × (3 documentos de contexto + 1 consulta de reutilización); no son lecturas facturadas.
+        assertEquals(8, fixture.quoteBackendReads)
+        assertNotNull(result.quote.deliveryQuote.quoteId)
         assertEquals(1_250.5, result.quote.deliveryQuote.distanceMeters, 0.0)
         assertEquals(300L, result.quote.deliveryFeeMinor)
         assertEquals(CartCurrency.PEN, result.quote.currency)

@@ -29,6 +29,7 @@ object ChaskiDestinations {
     const val MENU_TOPPING = "menu_topping"
     const val YOUR_ORDER = "your_order"
     const val CHECKOUT = "checkout"
+    const val CHECKOUT_RECOVERY = "checkout_recovery"
     const val PAYMENT = "payment"
     const val ADD_CARD = "add_card"
     const val ORDER_PLACED = "order_placed"

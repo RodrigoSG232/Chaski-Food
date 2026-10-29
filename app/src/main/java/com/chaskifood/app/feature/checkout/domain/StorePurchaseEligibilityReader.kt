@@ -6,7 +6,7 @@ interface StorePurchaseEligibilityReader {
 }
 
 sealed interface PurchaseEligibility {
-    data class Eligible(val businessId: String) : PurchaseEligibility
+    data class Eligible(val businessId: String, val businessName: String? = null) : PurchaseEligibility
     data class Blocked(val reason: PurchaseBlockReason) : PurchaseEligibility
     data object SessionChanged : PurchaseEligibility
     data object AuthenticationRequired : PurchaseEligibility

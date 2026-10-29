@@ -1,5 +1,7 @@
 package com.chaskifood.app.feature.checkout.presentation
 
+import androidx.lifecycle.SavedStateHandle
+import com.chaskifood.app.feature.checkout.domain.CheckoutConfirmation
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.chaskifood.app.feature.checkout.domain.CheckoutRepository
@@ -28,6 +30,7 @@ data class CheckoutUiState(
     val result: CheckoutReviewResult? = null,
     val paymentMethod: CheckoutPaymentMethod? = null,
     val acceptedPriceChanges: Boolean = false,
+    val confirmation: CheckoutConfirmation = CheckoutConfirmation.None,
 ) {
     val reviewComplete: Boolean get() = (result as? CheckoutReviewResult.Ready)?.let {
         paymentMethod != null && (!it.quote.hasPriceChanges || acceptedPriceChanges)
@@ -39,9 +42,12 @@ data class CheckoutUiState(
 class CheckoutViewModel @Inject constructor(
     private val repository: CheckoutRepository,
     private val clock: CheckoutClock,
+    private val savedState: SavedStateHandle = SavedStateHandle(),
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(CheckoutUiState())
     val uiState = _uiState.asStateFlow()
+    private var orderJob: Job? = null
+    private var orderTicket = 0L
     private var reviewJob: Job? = null
     private var expiryJob: Job? = null
     private var context: CheckoutContextState = CheckoutContextState.Loading
@@ -66,6 +72,7 @@ class CheckoutViewModel @Inject constructor(
                         (previous.context.ownerUid != current.context.ownerUid ||
                             previous.context.sessionGeneration != current.context.sessionGeneration))
                 val requested = pendingReview
+                if (newSession) { orderJob?.cancel(); orderJob = null; orderTicket++ }
                 context = current
                 reviewJob?.cancel()
                 expiryJob?.cancel()
@@ -80,13 +87,25 @@ class CheckoutViewModel @Inject constructor(
                     },
                     paymentMethod = if (newSession) null else _uiState.value.paymentMethod,
                     acceptedPriceChanges = false,
+                    confirmation = if (newSession) CheckoutConfirmation.None else _uiState.value.confirmation,
                 )
-                if (requested && current is CheckoutContextState.Ready) startReview(current.context)
+                if (requested && current is CheckoutContextState.Ready) pendingReview = true
+                if (current is CheckoutContextState.Ready && (previous == null || newSession)) loadPending()
+                if (pendingReview && current is CheckoutContextState.Ready &&
+                    _uiState.value.confirmation == CheckoutConfirmation.None && orderJob?.isActive != true) startReview(current.context)
             }
         }
     }
 
     fun review() {
+        if (orderJob?.isActive == true && _uiState.value.confirmation == CheckoutConfirmation.None) {
+            pendingReview = true
+            return
+        }
+        if (_uiState.value.confirmation is CheckoutConfirmation.Success ||
+            _uiState.value.confirmation is CheckoutConfirmation.Pending ||
+            _uiState.value.confirmation is CheckoutConfirmation.Conflict || orderJob?.isActive == true) return
+        _uiState.value = _uiState.value.copy(confirmation = CheckoutConfirmation.None)
         val resumedAfterLeaving = needsFreshReview
         needsFreshReview = false
         // ON_RESUME puede repetirse mientras el mismo intento está en curso. Una vez terminado,
@@ -190,6 +209,67 @@ class CheckoutViewModel @Inject constructor(
                     else if (stillCurrent) _uiState.value.copy(acceptedPriceChanges = true)
                     else _uiState.value.copy(result = null, acceptedPriceChanges = false)
             }
+        }
+    }
+
+    fun confirm() {
+        if (orderJob?.isActive == true || expireIfNeeded() || !_uiState.value.reviewComplete ||
+            _uiState.value.confirmation != CheckoutConfirmation.None) return
+        val expected = (context as? CheckoutContextState.Ready)?.context ?: return
+        val quote = (_uiState.value.result as? CheckoutReviewResult.Ready)?.quote ?: return
+        orderAction(expected, working = true) { repository.confirm(expected, quote) }
+    }
+
+    /** Lee Room al abrir; nunca envía POST automáticamente ni restaura consentimiento. */
+    fun loadPending() {
+        if (orderJob?.isActive == true) return
+        val expected = (context as? CheckoutContextState.Ready)?.context ?: return
+        val id = if (savedState.get<String>("order_owner") == expected.ownerUid)
+            savedState.get<String>("order_intent") else null
+        orderAction(expected, working = false) { repository.pending(expected.ownerUid, expected.sessionGeneration, id) }
+    }
+
+    fun recover() {
+        val id = when (val state = _uiState.value.confirmation) {
+            is CheckoutConfirmation.Pending -> state.intentId
+            is CheckoutConfirmation.Conflict -> state.intentId
+            else -> { loadPending(); return }
+        }
+        if (id == null) { loadPending(); return }
+        val expected = (context as? CheckoutContextState.Ready)?.context ?: return
+        orderAction(expected, working = true) { repository.recover(expected.ownerUid, expected.sessionGeneration, id) }
+    }
+
+    fun retryOriginal() {
+        val id = (_uiState.value.confirmation as? CheckoutConfirmation.Pending)?.intentId ?: return
+        val expected = (context as? CheckoutContextState.Ready)?.context ?: return
+        orderAction(expected, working = true) { repository.retry(expected.ownerUid, expected.sessionGeneration, id) }
+    }
+
+    private fun orderAction(expected: CheckoutContext, working: Boolean, action: suspend () -> CheckoutConfirmation) {
+        if (orderJob?.isActive == true) return
+        val ticket = ++orderTicket
+        if (working) _uiState.value = _uiState.value.copy(confirmation = CheckoutConfirmation.Working)
+        orderJob = viewModelScope.launch {
+            val result = try { action() }
+                catch (cancelled: CancellationException) { throw cancelled }
+                catch (_: Exception) { CheckoutConfirmation.StorageError }
+            currentCoroutineContext().ensureActive()
+            val current = (context as? CheckoutContextState.Ready)?.context
+            if (ticket != orderTicket || current?.ownerUid != expected.ownerUid ||
+                current.sessionGeneration != expected.sessionGeneration) return@launch
+            val id = when (result) {
+                is CheckoutConfirmation.Pending -> result.intentId
+                is CheckoutConfirmation.Success -> result.receipt.intentId
+                is CheckoutConfirmation.Rejected -> result.intentId
+                is CheckoutConfirmation.Conflict -> result.intentId
+                else -> null
+            }
+            if (id != null) { savedState["order_owner"] = expected.ownerUid; savedState["order_intent"] = id }
+            _uiState.value = _uiState.value.copy(confirmation = result,
+                acceptedPriceChanges = if (result == CheckoutConfirmation.None) _uiState.value.acceptedPriceChanges else false)
+            if (result == CheckoutConfirmation.None && pendingReview) startReview(current)
+            else if (result != CheckoutConfirmation.None) pendingReview = false
         }
     }
 

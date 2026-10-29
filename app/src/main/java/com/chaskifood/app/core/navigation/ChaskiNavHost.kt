@@ -261,6 +261,7 @@ fun ChaskiNavHost(
                 val cartViewModel: CartViewModel = hiltViewModel(mainEntry)
                 val cartState by cartViewModel.uiState.collectAsStateWithLifecycle()
                 MainScreen(
+                    onRecoverPurchase = { navController.navigate(ChaskiDestinations.CHECKOUT_RECOVERY) { launchSingleTop = true } },
                     requestedTab = ChaskiTab.entries.find { it.route == requestedRoute },
                     onTabRequestHandled = { mainEntry.savedStateHandle[MAIN_TAB_REQUEST] = null },
                     deliveryAddress = addressState.book?.let { book ->
@@ -597,6 +598,10 @@ fun ChaskiNavHost(
                         navController.popBackStack(ChaskiDestinations.RESTAURANTS, inclusive = false)
                     },
                 )
+            }
+            protectedComposable(access, navController, ChaskiDestinations.CHECKOUT_RECOVERY) {
+                RealCheckoutScreen(onBack = { navController.popBackStack() },
+                    onOpenCart = {}, onSelectAddress = {}, recoveryOnly = true)
             }
             protectedComposable(access, navController, ChaskiDestinations.CHECKOUT) {
                 RealCheckoutScreen(

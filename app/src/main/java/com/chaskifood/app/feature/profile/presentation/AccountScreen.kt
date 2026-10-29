@@ -78,6 +78,7 @@ fun AccountScreen(
     onOpenLocations: () -> Unit,
     onOpenSocialAccounts: () -> Unit,
     onOpenReferral: () -> Unit,
+    onRecoverPurchase: () -> Unit = {},
     onOpenBusiness: () -> Unit = {},
     onOpenStoreOperations: () -> Unit = {},
     onOpenManageCatalog: () -> Unit = {},
@@ -100,7 +101,7 @@ fun AccountScreen(
         onOpenProfileInfo, onOpenSecurity, onOpenPaymentMethods, onOpenLocations, onOpenSocialAccounts, onOpenReferral,
         onOpenBusiness, onOpenStoreOperations, onOpenManageCatalog, onOpenStoreProductConfiguration,
         onOpenAdminReview, onOpenAdminSupervision, onOpenAdminAuditLog,
-        { authorize { viewModel.signOut(onSignedOut = onSignOut) } }, modifier)
+        { authorize { viewModel.signOut(onSignedOut = onSignOut) } }, modifier, onRecoverPurchase)
 }
 
 @Composable
@@ -115,6 +116,7 @@ internal fun AccountContent(
     onOpenManageCatalog: () -> Unit = {}, onOpenStoreProductConfiguration: () -> Unit = {},
     onOpenAdminReview: () -> Unit = {}, onOpenAdminSupervision: () -> Unit = {}, onOpenAdminAuditLog: () -> Unit = {},
     onSignOut: () -> Unit = {}, modifier: Modifier = Modifier,
+    onRecoverPurchase: () -> Unit = {},
 ) {
     Column(
         modifier = modifier
@@ -152,6 +154,9 @@ internal fun AccountContent(
             subtitle = currentUser?.displayName ?: stringResource(R.string.profile_info_subtitle),
             onClick = onOpenProfileInfo,
         )
+
+        AccountMenuItem(icon = Icons.Filled.History, title = "Recuperar compra pendiente",
+            subtitle = "Consultar el resultado de una confirmación anterior", onClick = onRecoverPurchase)
 
         if (experience == CommercialExperience.CLIENT) {
         AccountMenuItem(

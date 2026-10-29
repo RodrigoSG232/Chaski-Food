@@ -24,6 +24,14 @@ object AccessNavigationPolicy {
     fun allows(resolution: AccessResolution?, route: String?, businessId: String? = null,
         storeId: String? = null, resubmit: Boolean = false): Boolean {
         if (route in publicRoutes) return true
+        if (route == ChaskiDestinations.CHECKOUT_RECOVERY && businessId == null && storeId == null) {
+            val personal = when (resolution) {
+                is AccessResolution.Resolved -> resolution.identity.session.uid to resolution.capabilities
+                is AccessResolution.Conflict -> resolution.session.uid to resolution.capabilities
+                else -> return false
+            }
+            return personal.second.allows(AccessCapability.READ_PERSONAL_PURCHASES, AccessScope.Account(personal.first))
+        }
         val access = resolution as? AccessResolution.Resolved ?: return false
         val grants = access.capabilities.grants
         fun has(capability: AccessCapability) = grants.any {

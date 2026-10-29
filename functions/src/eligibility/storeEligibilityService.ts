@@ -1,5 +1,5 @@
 import { Firestore } from "firebase-admin/firestore";
-import { businessIdOf, evaluateEligibility } from "./storeEligibilityPolicy";
+import { businessIdOf, evaluateEligibility, eligibleBusinessName } from "./storeEligibilityPolicy";
 
 /** Lee una vista consistente. No escribe ni conserva autorizaciones entre consultas. */
 export async function checkStoreEligibility(db: Firestore, storeId: string) {
@@ -12,7 +12,8 @@ export async function checkStoreEligibility(db: Firestore, storeId: string) {
     const businessId = businessIdOf(data);
     reads++;
     const business = await transaction.get(db.doc(`business_requests/${businessId}`));
-    return { storeId, businessId, decision: evaluateEligibility(data, business.data()), storeData: data };
+    const decision = evaluateEligibility(data, business.data());
+    return { storeId, businessId, decision, ...eligibleBusinessName(decision, business.data()), storeData: data };
   }, { readOnly: true });
   const { storeData, ...publicResult } = result;
   return { result: publicResult, storeData, reads };

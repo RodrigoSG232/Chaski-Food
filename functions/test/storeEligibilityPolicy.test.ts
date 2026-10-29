@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { evaluateEligibility, InconsistentData } from "../src/eligibility/storeEligibilityPolicy";
+import { evaluateEligibility, InconsistentData, eligibleBusinessName } from "../src/eligibility/storeEligibilityPolicy";
 
 const store = { businessId: "business", status: "ACTIVE" };
 for (const [status, expected] of Object.entries({ APPROVED: "ELIGIBLE", SUSPENDED: "BUSINESS_SUSPENDED",
@@ -23,4 +23,15 @@ test("datos inconsistentes nunca habilitan", () => {
 test("operación es pura e ignora privilegios comerciales", () => {
   const business = Object.freeze({ status: "SUSPENDED", admin: true });
   assert.equal(evaluateEligibility(Object.freeze(store), business), "BUSINESS_SUSPENDED");
+});
+
+test("solo ELIGIBLE expone el nombre público sin campos administrativos", () => {
+  const business = { businessName: "Negocio público", ruc: "privado", observations: "privado" };
+  assert.deepEqual(eligibleBusinessName("ELIGIBLE", business), { businessName: "Negocio público" });
+  for (const decision of ["BUSINESS_SUSPENDED", "BUSINESS_NOT_APPROVED", "STORE_UNAVAILABLE"] as const) {
+    assert.deepEqual(eligibleBusinessName(decision, business), {});
+  }
+  for (const businessName of [undefined, null, 12, "", "   "]) {
+    assert.deepEqual(eligibleBusinessName("ELIGIBLE", { businessName }), {});
+  }
 });

@@ -14,6 +14,22 @@ class AccessNavigationPolicyTest {
             stores.map { AccessStore("business", it, AccessBusinessStatus.APPROVED, AccessStoreStatus.ACTIVE, AccessOperationalStatus.CLOSED) },
             AccessExclusivity.VERIFIED))
     private fun owner(status: AccessBusinessStatus = AccessBusinessStatus.APPROVED) = AccessOwnership("business", "buyer", status)
+    @Test fun `recuperacion personal no concede compras nuevas ni ambitos ajenos`() {
+        for (access in listOf(resolved(owner()), resolved(owner(AccessBusinessStatus.SUSPENDED)),
+            resolved(stores=listOf("one"), manager=true))) {
+            assertTrue(AccessNavigationPolicy.allows(access, ChaskiDestinations.CHECKOUT_RECOVERY))
+            assertFalse(AccessNavigationPolicy.allows(access, ChaskiDestinations.CHECKOUT))
+        }
+        val conflict = AccessResolution.Conflict(session,AccessCapabilities(setOf(
+            AccessGrant(AccessCapability.READ_PERSONAL_PURCHASES,AccessScope.Account(session.uid)))))
+        assertTrue(AccessNavigationPolicy.allows(conflict,ChaskiDestinations.CHECKOUT_RECOVERY))
+        assertFalse(AccessNavigationPolicy.allows(conflict,ChaskiDestinations.CHECKOUT))
+        assertFalse(AccessNavigationPolicy.allows(conflict,ChaskiDestinations.MAIN))
+        assertFalse(AccessNavigationPolicy.allows(conflict,ChaskiDestinations.CHECKOUT_RECOVERY,storeId="foreign"))
+        assertFalse(AccessNavigationPolicy.allows(AccessResolution.Conflict(session,AccessCapabilities(setOf(
+            AccessGrant(AccessCapability.READ_PERSONAL_PURCHASES,AccessScope.Account("other"))))),ChaskiDestinations.CHECKOUT_RECOVERY))
+    }
+
     @Test fun `cliente conserva MAIN producto carrito checkout y direcciones`() {
         val client = resolved()
         listOf(ChaskiDestinations.MAIN, ChaskiDestinations.PRODUCT_DETAIL, ChaskiDestinations.CART,

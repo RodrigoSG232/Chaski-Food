@@ -4,6 +4,7 @@ import com.chaskifood.app.feature.checkout.domain.CheckoutRepository
 import com.chaskifood.app.feature.checkout.domain.StorePurchaseEligibilityReader
 import com.chaskifood.app.feature.checkout.domain.DeliveryQuoteReader
 import com.chaskifood.app.feature.checkout.domain.CheckoutClock
+import com.chaskifood.app.feature.checkout.data.remote.OrderApi
 import com.chaskifood.app.feature.checkout.data.remote.DeliveryQuoteApi
 import com.chaskifood.app.feature.checkout.data.remote.StoreEligibilityApi
 import com.chaskifood.app.BuildConfig
@@ -17,6 +18,9 @@ import retrofit2.Retrofit
 @Module
 @InstallIn(SingletonComponent::class)
 internal abstract class CheckoutDataModule {
+    @Binds
+    abstract fun bindPurchaseGuard(impl: SharedCheckoutPurchaseGuard): CheckoutPurchaseGuard
+
     @Binds
     abstract fun bindPreparationGuard(impl: CheckoutContextSource): CheckoutPreparationGuard
 
@@ -33,6 +37,10 @@ internal abstract class CheckoutDataModule {
     abstract fun bindBuyerTokenSource(impl: FirebaseBuyerTokenSource): BuyerTokenSource
 
     companion object {
+        @Provides
+        fun provideOrderApi(retrofit: Retrofit): OrderApi = retrofit.newBuilder()
+            .baseUrl(BuildConfig.ELIGIBILITY_API_BASE_URL).build().create(OrderApi::class.java)
+
         @Provides
         fun provideEligibilityApi(retrofit: Retrofit): StoreEligibilityApi = retrofit.newBuilder()
             .baseUrl(BuildConfig.ELIGIBILITY_API_BASE_URL).build().create(StoreEligibilityApi::class.java)
