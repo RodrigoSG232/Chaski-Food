@@ -125,3 +125,24 @@ test("revocacion invalida lectura y operacion incluso con token anterior", async
   assert.equal(await write(manager, `stores/${store}`, { businessId: owner.uid, status: "ACTIVE", operationalStatus: "CLOSED", imageUrl: "" }), 403);
   assert.equal((await db.doc(`store_managers/${owner.uid}_${manager.email}`).get()).exists, true);
 });
+
+test("HU34 mantiene direcciones personales por UID sin privilegio administrativo transversal", async () => {
+  const actors = [owner, manager, other, admin];
+  const paths = actors.map(actor => `users/${actor.uid}/addresses/hu34-personal`);
+  for (const path of paths) {
+    await db.doc(path).set({ label: "Prueba local", addressText: "Plaza pública de Lima", location: { lat: -12.0464, lng: -77.0428 },
+      reference: "", instructions: "", createdAt: new Date(), updatedAt: new Date() });
+  }
+  const original = (await db.doc(`business_requests/${owner.uid}`).get()).get("status");
+  try {
+    await db.doc(`business_requests/${owner.uid}`).update({ status: "SUSPENDED" });
+    for (let i = 0; i < actors.length; i++) {
+      for (let j = 0; j < paths.length; j++) {
+        assert.equal(await read(actors[i]!, paths[j]!), i === j ? 200 : 403);
+      }
+    }
+  } finally {
+    await db.doc(`business_requests/${owner.uid}`).update({ status: original });
+    await Promise.all(paths.map(path => db.doc(path).delete()));
+  }
+});

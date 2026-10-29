@@ -162,4 +162,21 @@ class SharedAccessContextTest {
         f.context.refresh(); runCurrent()
         assertEquals(generation, f.context.currentState().origin.generation)
         assertTrue(f.context.currentState().resolution is AccessResolution.Resolved)
-    }}
+    }
+
+    @Test fun `vigencia predeterminada expira exactamente a sesenta segundos sin extender cache`() = runTest {
+        var monotonic=0L
+        val driver=Driver()
+        val reader=Reader()
+        val identity=SharedAccessIdentitySource(driver,backgroundScope)
+        val context=SharedAccessContext(identity,reader,backgroundScope,true,monotonicMillis={monotonic})
+        runCurrent();driver.login();runCurrent()
+        assertTrue(context.currentState().resolution is AccessResolution.Resolved)
+        monotonic=59_999
+        assertTrue(context.currentState().resolution is AccessResolution.Resolved)
+        monotonic=60_000
+        assertEquals(AccessCheckProblem.EXPIRED,context.currentState().problem)
+        assertFalse(context.currentState().resolution is AccessResolution.Resolved)
+        assertEquals(1,reader.calls)
+    }
+}

@@ -169,4 +169,48 @@ class CommercialHomeScreenTest {
             compose.onNodeWithText(titles[index]).assertIsDisplayed()
             compose.onNodeWithText("Locales y responsables").assertDoesNotExist()
         }
+    }    @Test fun capturaSelectorAbiertoEnPantallaEstrechaYTextoAmpliado() {
+        compose.setContent {
+            val density=LocalDensity.current
+            CompositionLocalProvider(LocalDensity provides Density(density.density,1.3f)) {
+                ChaskiTheme {Box(Modifier.width(320.dp).fillMaxHeight().safeDrawingPadding()){
+                    CommercialHomeContent(manager(multiple=true))
+                }}
+            }
+        }
+        compose.onNodeWithContentDescription("Cambiar local").performClick()
+        compose.onNodeWithText("Local Dos").assertIsDisplayed()
+        saveVisual("selector-open-320-130")
+    }
+    @Test fun capturaCuentaAdministrativaEnPantallaEstrechaYTextoAmpliado() {
+        compose.setContent {
+            val density=LocalDensity.current
+            CompositionLocalProvider(LocalDensity provides Density(density.density,1.3f)) {
+                ChaskiTheme {Box(Modifier.width(320.dp).fillMaxHeight().safeDrawingPadding()){
+                    AccountContent(verifiedAdmin=true,experience=CommercialExperience.OWNER)
+                }}
+            }
+        }
+        compose.onNodeWithText("ADMINISTRACIÓN CHASKI").performScrollTo().assertIsDisplayed()
+        saveVisual("admin-320-130")
+    }
+    @Test fun capturaPanelRestrictivoEnPantallaEstrechaYTextoAmpliado() {
+        compose.setContent {
+            val density=LocalDensity.current
+            CompositionLocalProvider(LocalDensity provides Density(density.density,1.3f)) {
+                ChaskiTheme {Box(Modifier.width(320.dp).fillMaxHeight().safeDrawingPadding()){
+                    AuthorizationPanelContent(AuthorizationPanel.CONFLICT)
+                }}
+            }
+        }
+        compose.onNodeWithText("Volver a comprobar").assertIsDisplayed()
+        saveVisual("conflict-320-130")
+    }
+    private fun saveVisual(name:String) {
+        compose.waitForIdle();InstrumentationRegistry.getInstrumentation().waitForIdleSync();Thread.sleep(700)
+        val context=InstrumentationRegistry.getInstrumentation().targetContext
+        val bitmap=InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot()
+        java.io.File(context.getExternalFilesDir(null),"hu34-3b3-$name.png").outputStream().use {
+            bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG,100,it)
+        }
     }}
