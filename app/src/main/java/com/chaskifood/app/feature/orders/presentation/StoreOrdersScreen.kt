@@ -19,8 +19,9 @@ import java.text.SimpleDateFormat
 import java.util.*
 
 @Composable
-fun StoreOrdersScreen(onBack:()->Unit,viewModel:StoreOrdersViewModel=hiltViewModel()) {
+fun StoreOrdersScreen(onBack:()->Unit,viewModel:StoreOrdersViewModel=hiltViewModel(),notificationRefresh:String?=null) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    LaunchedEffect(notificationRefresh){if(notificationRefresh!=null)viewModel.refreshFromNotification()}
     val authorize=LocalProtectedAction.current
     StoreOrdersContent(state,onBack,{authorize{viewModel.refresh()}},{authorize{viewModel.loadMore()}})
 }

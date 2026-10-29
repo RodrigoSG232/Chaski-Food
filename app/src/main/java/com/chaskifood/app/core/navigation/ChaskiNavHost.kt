@@ -89,6 +89,32 @@ fun ChaskiNavHost(
 
     val backStackEntry by navController.currentBackStackEntryAsState()
     val accessState by access.states.collectAsStateWithLifecycle()
+    val noticeModel:com.chaskifood.app.core.notifications.NotificationNavigationViewModel=hiltViewModel()
+    val pendingNotice by noticeModel.notifications.pending.collectAsStateWithLifecycle()
+    val permissionContext=androidx.compose.ui.platform.LocalContext.current
+    val permissionLauncher=androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.RequestPermission()){}
+    LaunchedEffect(accessState,pendingNotice) {
+        if(accessState.phase==com.chaskifood.app.core.access.data.AccessContextPhase.RESOLVED){
+            val notice=noticeModel.notifications.takeAuthorized()
+            if(notice!=null){
+                val route=ChaskiDestinations.STORE_ORDERS+"/${Uri.encode(notice.businessId)}/${Uri.encode(notice.storeId)}"
+                access.runIfAllowedFrom(access.current().origin,route,notice.businessId,notice.storeId){
+                    navController.navigate(route){launchSingleTop=true}
+                    navController.currentBackStackEntry?.savedStateHandle?.set("notificationRefresh",java.util.UUID.randomUUID().toString())
+                }
+            }
+            val resolved=accessState.resolution as? com.chaskifood.app.core.access.domain.AccessResolution.Resolved
+            if(android.os.Build.VERSION.SDK_INT>=33 && access.enabled && resolved?.capabilities?.grants?.any {
+                it.capability==com.chaskifood.app.core.access.domain.AccessCapability.READ_STORE_ORDERS}==true){
+                val prefs=permissionContext.getSharedPreferences("notification_permission",android.content.Context.MODE_PRIVATE)
+                if(!prefs.getBoolean("asked",false)){
+                    prefs.edit().putBoolean("asked",true).apply()
+                    permissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+                }
+            }
+        }
+    }
+
     if (access.enabled) {
         val main = runCatching { navController.getBackStackEntry(ChaskiDestinations.MAIN) }.getOrNull()
         if (main != null) {
@@ -110,12 +136,12 @@ fun ChaskiNavHost(
             protectedComposable(access, navController, ChaskiDestinations.SPLASH) {
                 SplashScreen(
                     onNavigateToMain = {
-                        navController.navigate(ChaskiDestinations.MAIN) {
+                        if(navController.currentDestination?.route==ChaskiDestinations.SPLASH)navController.navigate(ChaskiDestinations.MAIN) {
                             popUpTo(ChaskiDestinations.SPLASH) { inclusive = true }
                         }
                     },
                     onNavigateToOnboarding = {
-                        navController.navigate(ChaskiDestinations.ONBOARDING) {
+                        if(navController.currentDestination?.route==ChaskiDestinations.SPLASH)navController.navigate(ChaskiDestinations.ONBOARDING) {
                             popUpTo(ChaskiDestinations.SPLASH) { inclusive = true }
                         }
                     },
@@ -606,7 +632,8 @@ fun ChaskiNavHost(
             }
             protectedComposable(access, navController, ChaskiDestinations.STORE_ORDERS + "/{businessId}/{storeId}",
                 arguments = listOf(navArgument("businessId") { type = NavType.StringType }, navArgument("storeId") { type = NavType.StringType })) {
-                StoreOrdersScreen(onBack = { navController.popBackStack() })
+                val notificationRefresh by it.savedStateHandle.getStateFlow<String?>("notificationRefresh",null).collectAsStateWithLifecycle()
+                StoreOrdersScreen(onBack = { navController.popBackStack() },notificationRefresh=notificationRefresh)
             }
             protectedComposable(access, navController, ChaskiDestinations.CHECKOUT_RECOVERY) {
                 RealCheckoutScreen(onBack = { navController.popBackStack() },

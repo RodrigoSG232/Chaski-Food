@@ -6,8 +6,10 @@ import dagger.hilt.android.HiltAndroidApp
 
 @HiltAndroidApp
 class ChaskiApplication : Application() {
+    @javax.inject.Inject lateinit var notifications:javax.inject.Provider<com.chaskifood.app.core.notifications.NotificationCoordinator>
     override fun onCreate() {
         super.onCreate()
         FirebaseRuntime.configure()
+        notifications.get().start()
     }
 }

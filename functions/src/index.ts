@@ -1,3 +1,4 @@
+import { DeviceRegistry } from "./notifications/deviceRegistry";
 import { StoreOrdersReader } from "./orders/storeOrdersReader";
 import { OrderService } from "./orders/orderService";
 import { OrderHttpError, parseOrderSubmission } from "./orders/orderRequest";
@@ -30,6 +31,24 @@ export const foodApi = onRequest({ region: "southamerica-west1", timeoutSeconds:
       const runtime = resolveRuntimeEnvironment(process.env);
       const orderPath = /^\/api\/v1\/orders\/?$/.test(request.path);
       const attemptPath = /^\/api\/v1\/order-attempts\/([^/]+)\/?$/.exec(request.path);
+      const devicePath = /^\/api\/v1\/devices\/([^/]+)\/?$/.exec(request.path);
+      if(devicePath) {
+        if(runtime.mode!=="LOCAL"){response.status(404).json({error:"NOT_FOUND"});return;}
+        if(!["PUT","DELETE"].includes(request.method)){response.status(405).set("Allow","PUT, DELETE").end();return;}
+        try {
+          const app=getRuntimeApp(runtime),uid=await verifyBuyerToken(getAuth(app),request.get("authorization"));
+          const registry=new DeviceRegistry(getFirestore(app)),id=decodeURIComponent(devicePath[1]);
+          if(Object.keys(request.query).some(k=>request.method!=="DELETE"||k!=="bindingVersion"))throw new OrderHttpError("INVALID_REQUEST",400);
+          if(request.method==="PUT")await registry.put(uid,id,request.body);else await registry.remove(uid,id,Number(request.query.bindingVersion));
+          response.status(204).end();
+        }catch(error){
+          if(error instanceof AuthenticationRequired)response.status(401).json({error:"AUTHENTICATION_REQUIRED"});
+          else if(error instanceof OrderHttpError)response.status(error.status).json({error:error.code});
+          else if(error instanceof URIError)response.status(400).json({error:"INVALID_REQUEST"});
+          else response.status(503).json({error:"DEVICE_REGISTRY_UNAVAILABLE"});
+        }
+        return;
+      }
       const inboxPath = /^\/api\/v1\/stores\/([^/]+)\/orders\/?$/.exec(request.path);
       if (inboxPath) {
         if (runtime.mode !== "LOCAL") { response.status(404).json({error:"NOT_FOUND"}); return; }
@@ -154,3 +173,6 @@ function routeReader(runtime: ReturnType<typeof resolveRuntimeEnvironment>): { r
   if (!key?.trim()) throw new QuoteError("ROUTING_CREDENTIALS_MISSING", 503);
   return { reader: new OpenRouteServiceReader(key), source: "HEIGIT" };
 }
+
+// Activation in Cloud requires separate authorization alongside HU34/order endpoints.
+export { newOrderNotifier } from "./notifications/newOrderNotifier";

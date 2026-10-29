@@ -86,4 +86,13 @@ class StoreOrdersViewModelTest {
         repo.block={gate.await();loaded()};val vm=vm(repo);runCurrent();vm.refresh();vm.refresh();runCurrent();assertEquals(1,repo.calls)
         repo.auth.value=StoreOrdersAuthorization.Allowed(c);runCurrent();assertEquals(1,repo.calls);gate.complete(Unit);runCurrent()
     }
+    @Test fun notificationStartsFreshHttpEvenWhenAnEarlierReadIsStillInFlight()=runTest {
+        val repo=Repo(StoreOrdersAuthorization.Allowed(context()));val gate=CompletableDeferred<Unit>()
+        repo.block={withContext(NonCancellable){gate.await()};loaded("older")}
+        val vm=vm(repo);runCurrent();repo.block={loaded("fresh")};vm.refreshFromNotification();runCurrent()
+        assertEquals(2,repo.calls);assertEquals("fresh",vm.state.value.orders.single().orderId)
+        gate.complete(Unit);runCurrent();assertEquals("fresh",vm.state.value.orders.single().orderId)
+        repo.current=false;vm.refreshFromNotification();runCurrent()
+        assertTrue(vm.state.value.orders.isEmpty());assertEquals(2,repo.calls)
+    }
 }

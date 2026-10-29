@@ -43,13 +43,25 @@ async function run() {
       {action:"ASSIGN",operationId:"assign-android",expectedRevision:revisions.get(actors[3])!,businessId:actors[1],
         email:`${actors[3]}@example.test`,storeIds:["hu16-e2e-store"],fullName:"Responsable ficticio",phone:"000"});
     const inbox=process.env.HU16_INBOX_ANDROID==="enabled";
+    const notifications=process.env.HU16_NOTIFICATIONS_ANDROID==="enabled";
     const classes="com.chaskifood.app.feature.checkout.data.CheckoutOrderHttpEmulatorTest"+
+      (notifications?",com.chaskifood.app.core.notifications.OrderNotificationEmulatorTest":"")+
       (inbox?",com.chaskifood.app.feature.orders.data.StoreOrdersHttpEmulatorTest":"");
+    if(notifications){
+      // Revoking POST_NOTIFICATIONS kills a running app: prepare BEFORE instrumentation, never from a test.
+      const sdk=spawnSync(process.env.ANDROID_ADB!,["-s",process.env.ANDROID_SERIAL??"emulator-5554","shell","getprop","ro.build.version.sdk"],{encoding:"utf8",timeout:15000});
+      if(sdk.error||sdk.status!==0||!Number.isInteger(Number(sdk.stdout.trim())))throw new Error("NOTIFICATION_DEVICE_SETUP_FAILED");
+      if(Number(sdk.stdout.trim())>=33){
+        const reset=spawnSync(process.env.ANDROID_ADB!,["-s",process.env.ANDROID_SERIAL??"emulator-5554","shell","pm","revoke",
+          "com.chaskifood.app","android.permission.POST_NOTIFICATIONS"],{encoding:"utf8",timeout:15000});
+        if(reset.error||reset.status!==0)throw new Error("NOTIFICATION_PERMISSION_SETUP_FAILED");
+      }
+    }
     const result=spawnSync(process.env.ANDROID_ADB!,["-s",process.env.ANDROID_SERIAL??"emulator-5554","shell","am","instrument","-w","-r",
       "-e","class",classes,"-e","hu15Host","127.0.0.1","-e","timeout_msec","60000",
       "com.chaskifood.app.test/androidx.test.runner.AndroidJUnitRunner"],{encoding:"utf8",timeout:180000});
     const output=(result.stdout??"")+(result.stderr??"");process.stdout.write(output);
-    if(result.error||result.status!==0||!output.includes(inbox?"OK (2 tests)":"OK (1 test)")||output.includes("FAILURES"))throw new Error("ANDROID_ORDER_E2E_FAILED");
+    if(result.error||result.status!==0||!output.includes(notifications?(inbox?"OK (3 tests)":"OK (2 tests)"):(inbox?"OK (2 tests)":"OK (1 test)"))||output.includes("FAILURES"))throw new Error("ANDROID_ORDER_E2E_FAILED");
   } finally {
     for(const path of docs)await db.recursiveDelete(db.doc(path));
     for(const collection of ["food_orders","delivery_quotes","order_events"]) {

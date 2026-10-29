@@ -45,6 +45,8 @@ class StoreOrdersViewModel @Inject constructor(private val repository:StoreOrder
         mutable.value=StoreOrdersUiState(loading=false,accessDenied=true,message="La autorización cambió.")
         return null
     }
+    /** A notification is never satisfied by an earlier in-flight HTTP read. */
+    fun refreshFromNotification(){job?.cancel();job=null;usableContext()?.let{fetch(it,null)}}
     fun refresh(){if(job?.isActive==true)return;usableContext()?.let {fetch(it,null)}}
     fun loadMore(){
         if(job?.isActive==true)return

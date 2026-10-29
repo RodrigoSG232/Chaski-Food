@@ -37,6 +37,7 @@ class FirebaseAuthRepository @Inject constructor(
     private val firebaseAuth: FirebaseAuth,
     private val sessionDataStore: SessionDataStore,
     private val profileStore: FirebaseUserProfileStore,
+    private val notifications:com.chaskifood.app.core.notifications.NotificationCoordinator,
 ) : AuthRepository {
 
     private var resendToken: PhoneAuthProvider.ForceResendingToken? = null
@@ -292,6 +293,7 @@ class FirebaseAuthRepository @Inject constructor(
     }
 
     override suspend fun signOut() {
+        notifications.beforeSignOut()
         firebaseAuth.signOut()
         sessionDataStore.clearSession()
     }
