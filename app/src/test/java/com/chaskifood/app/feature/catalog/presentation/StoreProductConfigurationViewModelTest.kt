@@ -305,6 +305,7 @@ private class ConfigurationTestStores : StoreRepository {
     override suspend fun createStore(store: BusinessStore): ApiResult<BusinessStore> = error("unused")
     override suspend fun updateStore(store: BusinessStore): ApiResult<BusinessStore> = error("unused")
     override fun getManagersByBusiness(businessId: String): Flow<ApiResult<List<StoreManager>>> = error("unused")
+    override suspend fun revokeManager(businessId: String, email: String): ApiResult<Unit> = error("unused")
     override suspend fun assignManager(manager: StoreManager): ApiResult<StoreManager> = error("unused")
     override suspend fun updateOperationalStatus(storeId: String, status: OperationalStatus, pauseReason: String?): ApiResult<Unit> = error("unused")
     override suspend fun updateOperatingHours(storeId: String, hours: List<DayOperatingHours>): ApiResult<Unit> = error("unused")

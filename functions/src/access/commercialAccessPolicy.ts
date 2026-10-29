@@ -47,13 +47,13 @@ export function assignmentFrom(id: string, data: Record<string, unknown>): Assig
 export type CommercialCommand = {
   action: "PREPARE" | "APPROVE" | "ASSIGN" | "REVOKE" | "BIND" | "REGISTER" | "RESUBMIT";
   operationId: string; expectedRevision: number; businessId?: string; email?: string;
-  storeIds?: string[]; fullName?: string; phone?: string;
+  storeIds?: string[]; fullName?: string; phone?: string; previousEmail?: string; previousRevision?: number;
   business?: { businessName: string; ruc: string; legalAddress: string; phone: string; email: string; category: string };
 };
 export function parseCommercialCommand(body: unknown): CommercialCommand {
   if (!body || typeof body !== "object" || Array.isArray(body)) throw new CommercialAccessError("INVALID_REQUEST", 400);
   const c = body as Record<string, unknown>;
-  const allowed = ["action", "operationId", "expectedRevision", "businessId", "email", "storeIds", "fullName", "phone", "business"];
+  const allowed = ["action", "operationId", "expectedRevision", "businessId", "email", "storeIds", "fullName", "phone", "business", "previousEmail", "previousRevision"];
   if (Object.keys(c).some(k => !allowed.includes(k)) || !["PREPARE", "APPROVE", "ASSIGN", "REVOKE", "BIND", "REGISTER", "RESUBMIT"].includes(String(c.action)) ||
       !validId(c.operationId) || !Number.isSafeInteger(c.expectedRevision) || Number(c.expectedRevision) < 0) throw new CommercialAccessError("INVALID_REQUEST", 400);
   if (["APPROVE", "ASSIGN", "REVOKE"].includes(String(c.action)) && !validId(c.businessId)) throw new CommercialAccessError("INVALID_REQUEST", 400);
@@ -66,6 +66,10 @@ export function parseCommercialCommand(body: unknown): CommercialCommand {
         !Object.values(b).every(v => typeof v === "string" && v.trim().length > 0) || !/^\d{11}$/.test(String(b.ruc))) throw new CommercialAccessError("INVALID_REQUEST", 400);
     normalizedEmail(b.email);
   }
+  if (c.previousEmail !== undefined) {
+    normalizedEmail(c.previousEmail);
+    if (c.action !== "ASSIGN" || !Number.isSafeInteger(c.previousRevision) || Number(c.previousRevision) < 0) throw new CommercialAccessError("INVALID_REQUEST", 400);
+  } else if (c.previousRevision !== undefined) throw new CommercialAccessError("INVALID_REQUEST", 400);
   for (const field of ["fullName", "phone"]) if (c[field] !== undefined && (typeof c[field] !== "string" || (c[field] as string).length > 1000)) throw new CommercialAccessError("INVALID_REQUEST", 400);
   return c as unknown as CommercialCommand;
 }

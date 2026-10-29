@@ -69,7 +69,7 @@ export class CommercialAccessService {
       revision, sourceHash: rowHash(rows), updatedAt: FieldValue.serverTimestamp(),
     });
     if (ctx.subject.uid) tx.set(this.db.collection(accessIndex).doc(uidKey(ctx.subject.uid)), {
-      kind: "UID", schemaVersion: 1, uid: ctx.subject.uid, emailKey: emailKey(ctx.subject.email),
+      kind: "UID", schemaVersion: 1, uid: ctx.subject.uid, emailKey: emailKey(ctx.subject.email), authEmail: ctx.subject.email,
       revision, updatedAt: FieldValue.serverTimestamp(),
     });
   }
@@ -107,6 +107,12 @@ export class CommercialAccessService {
       if (!user.email || user.disabled) throw new CommercialAccessError("IDENTITY_UNAVAILABLE", 403);
       target = { uid: user.uid, email: normalizedEmail(user.email), emailVerified: user.emailVerified };
     }
+    let previousSubject: Subject | undefined;
+    if (command.previousEmail && normalizedEmail(command.previousEmail) !== target.email) {
+      const email = normalizedEmail(command.previousEmail);
+      const oldMail = (await this.db.collection(accessIndex).doc(emailKey(email)).get()).data();
+      previousSubject = { uid: oldMail?.boundUid ?? null, email, emailVerified: false };
+    }
     return this.db.runTransaction(async tx => {
       const receipt = (await tx.get(auditRef)).data();
       if (receipt) {
@@ -116,6 +122,10 @@ export class CommercialAccessService {
       const ctx = await this.context(tx, target, command.action === "PREPARE");
       if (ctx.revision !== command.expectedRevision) throw new CommercialAccessError("STALE_REVISION");
       if (["ASSIGN", "REVOKE"].includes(command.action)) await this.requireOwner(tx, actor, command.businessId!);
+      const previous = previousSubject ? await this.context(tx, previousSubject) : undefined;
+      if (previous && previous.revision !== command.previousRevision) throw new CommercialAccessError("STALE_REVISION");
+      const previousRow = previous?.rows.find(r => r.id === `${command.businessId}_${previous.subject.email}`);
+      if (previous && (!previousRow || previousRow.bindingState === "REVOKED")) throw new CommercialAccessError("ASSIGNMENT_NOT_FOUND", 404);
       let rows = [...ctx.rows];
       let mutation: (() => void) | undefined;
       let bindingUid = ctx.mail?.boundUid ?? null;
@@ -190,6 +200,12 @@ export class CommercialAccessService {
       }
       const revision = ctx.revision + 1;
       if (!Number.isSafeInteger(revision)) throw new CommercialAccessError("INDEX_INCONSISTENT", 503);
+      // Cambio de correo: retirar fila anterior y crear nueva en la misma transaccion.
+      if (previous && previousRow) {
+        const oldRows = previous.rows.map(r => r.id === previousRow.id ? { ...r, assignedStoreIds: [], bindingState: "REVOKED" as const, boundUid: null } : r);
+        tx.update(this.db.doc(`store_managers/${previousRow.id}`), { assignedStoreIds: [], bindingState: "REVOKED", boundUid: null, updatedAt: FieldValue.serverTimestamp() });
+        this.writeIndex(tx, previous, oldRows, previous.revision + 1);
+      }
       mutation?.();
       ctx.mail = { ...ctx.mail, boundUid: bindingUid };
       this.writeIndex(tx, ctx, rows, revision);
@@ -205,14 +221,28 @@ export class CommercialAccessService {
     });
   }
 
-  async assignmentRevision(actor: CommercialIdentity, businessId: string, email: string) {
+  async assignmentRevision(actor: CommercialIdentity, businessId: string, email?: string) {
     if (!validId(businessId)) throw new CommercialAccessError("INVALID_REQUEST", 400);
-    const target = await this.subject(normalizedEmail(email));
+    let target: Subject;
+    if (email === undefined) {
+      if (!actor.admin) throw new CommercialAccessError("FORBIDDEN", 403);
+      const user = await this.auth.getUser(businessId);
+      if (!user.email || user.disabled) throw new CommercialAccessError("IDENTITY_UNAVAILABLE", 403);
+      target = { uid: user.uid, email: normalizedEmail(user.email), emailVerified: user.emailVerified };
+    } else {
+      const normalized = normalizedEmail(email);
+      const mail = (await this.db.collection(accessIndex).doc(emailKey(normalized)).get()).data();
+      target = mail?.boundUid ? { uid: mail.boundUid, email: normalized, emailVerified: false } : await this.subject(normalized);
+    }
     return this.db.runTransaction(async tx => {
-      await this.requireOwner(tx, actor, businessId);
+      if (email !== undefined) await this.requireOwner(tx, actor, businessId);
       const ctx = await this.context(tx, target);
       return { revision: ctx.revision };
     }, { readOnly: true });
+  }
+
+  async ownRevision(actor: CommercialIdentity) {
+    return this.db.runTransaction(async tx => ({ revision: (await this.context(tx, actor)).revision }), { readOnly: true });
   }
 
   async facts(actor: CommercialIdentity) {

@@ -282,17 +282,25 @@ service cloud.firestore {
         ).data.status == 'APPROVED';
     }
 
+    function verifiedManagerBinding(data) {
+      let uidPath = /databases/$(database)/documents/commercial_access_index/$("uid_" + request.auth.uid);
+      let identity = get(uidPath).data;
+      return signedIn()
+        && request.auth.token.get('email_verified', false) == true
+        && data.get('bindingState', '') == 'VERIFIED'
+        && data.get('boundUid', '') == request.auth.uid
+        && data.email == request.auth.token.get('email', '').lower()
+        && identity.kind == 'UID'
+        && identity.authEmail == data.email
+        && get(/databases/$(database)/documents/commercial_access_index/$(identity.emailKey)).data.boundUid == request.auth.uid;
+    }
+
     function managerOf(id, businessId) {
       let email = request.auth.token.get('email', '').lower();
-      let assignmentId = businessId + '_' + email;
-
-      return signedIn()
-        && exists(
-          /databases/$(database)/documents/store_managers/$(assignmentId)
-        )
-        && id in get(
-          /databases/$(database)/documents/store_managers/$(assignmentId)
-        ).data.assignedStoreIds;
+      let path = /databases/$(database)/documents/store_managers/$(businessId + '_' + email);
+      return signedIn() && exists(path)
+        && verifiedManagerBinding(get(path).data)
+        && id in get(path).data.assignedStoreIds;
     }
 
     function operational(id, businessId) {
@@ -307,14 +315,10 @@ service cloud.firestore {
     }
 
     function managesBusiness(businessId) {
-      let assignmentId = businessId
-        + '_'
-        + request.auth.token.get('email', '').lower();
-
-      return signedIn()
-        && exists(
-          /databases/$(database)/documents/store_managers/$(assignmentId)
-        );
+      let email = request.auth.token.get('email', '').lower();
+      let path = /databases/$(database)/documents/store_managers/$(businessId + '_' + email);
+      return signedIn() && exists(path) && verifiedManagerBinding(get(path).data)
+        && get(path).data.assignedStoreIds.size() > 0;
     }
 
     function configuresStore(storeId, businessId) {
@@ -397,7 +401,7 @@ service cloud.firestore {
 
       return (
         oldStatus == 'PENDING_REVIEW'
-        && nextStatus in ['APPROVED', 'OBSERVED', 'REJECTED']
+        && nextStatus in ['OBSERVED', 'REJECTED']
       )
         || (
           oldStatus == 'APPROVED'
@@ -440,63 +444,9 @@ service cloud.firestore {
 
       allow list: if admin();
 
-      allow create: if signedIn()
-        && id == request.auth.uid
-        && request.resource.data.ownerUid == request.auth.uid
-        && request.resource.data.status == 'PENDING_REVIEW'
-        && businessData(request.resource.data)
-        && request.resource.data.keys().hasOnly([
-          'ownerUid',
-          'businessName',
-          'ruc',
-          'legalAddress',
-          'phone',
-          'email',
-          'category',
-          'status',
-          'observations',
-          'suspensionReason',
-          'reviewedBy',
-          'reviewedAt',
-          'updatedAt',
-          'createdAt'
-        ])
-        && request.resource.data.observations == null
-        && request.resource.data.suspensionReason == null
-        && request.resource.data.reviewedBy == null
-        && request.resource.data.reviewedAt == null
-        && request.resource.data.createdAt == request.time
-        && request.resource.data.updatedAt == request.time;
-
+      // REGISTER/RESUBMIT/APPROVE se ejecutan exclusivamente mediante Admin SDK de foodApi.
+      allow create: if false;
       allow update: if (
-        signedIn()
-        && id == request.auth.uid
-        && resource.data.ownerUid == request.auth.uid
-        && resource.data.status == 'OBSERVED'
-        && request.resource.data.status == 'PENDING_REVIEW'
-        && businessData(request.resource.data)
-        && request.resource.data.updatedAt == request.time
-        && request.resource.data.observations == null
-        && request.resource.data.suspensionReason == null
-        && request.resource.data.reviewedBy == null
-        && request.resource.data.reviewedAt == null
-        && request.resource.data.diff(resource.data)
-          .affectedKeys()
-          .hasOnly([
-            'businessName',
-            'ruc',
-            'legalAddress',
-            'phone',
-            'email',
-            'category',
-            'status',
-            'observations',
-            'suspensionReason',
-            'reviewedBy',
-            'reviewedAt',
-            'updatedAt'
-          ])
-      ) || (
         admin()
         && businessDecision()
         && auditedBusiness(id)
@@ -614,27 +564,14 @@ service cloud.firestore {
     }
 
     match /store_managers/{id} {
-      allow read: if signedIn();
+      allow read: if signedIn() && (
+        admin() || approvedOwner(resource.data.businessId) || verifiedManagerBinding(resource.data)
+      );
+      allow create, update, delete: if false;
+    }
 
-      allow create: if approvedOwner(
-        request.resource.data.businessId
-      )
-        && id
-          == request.resource.data.businessId
-          + '_'
-          + request.resource.data.email
-        && request.resource.data.email
-          == request.resource.data.email.lower();
-
-      allow update: if approvedOwner(resource.data.businessId)
-        && request.resource.data.businessId
-          == resource.data.businessId
-        && id
-          == request.resource.data.businessId
-          + '_'
-          + request.resource.data.email;
-
-      allow delete: if approvedOwner(resource.data.businessId);
+    match /commercial_access_index/{id} {
+      allow read, write: if false;
     }
 
     match /categories/{id} {

@@ -103,6 +103,7 @@ class OperationTestStores : StoreRepository {
     override suspend fun createStore(store: BusinessStore): ApiResult<BusinessStore> = error("unused")
     override suspend fun updateStore(store: BusinessStore): ApiResult<BusinessStore> = error("unused")
     override fun getManagersByBusiness(businessId: String): Flow<ApiResult<List<StoreManager>>> = error("unused")
+    override suspend fun revokeManager(businessId: String, email: String): ApiResult<Unit> = error("unused")
     override suspend fun assignManager(manager: StoreManager): ApiResult<StoreManager> = error("unused")
     override suspend fun setAdministrativeStatus(storeId: String, status: StoreStatus, reason: String?): ApiResult<Unit> {
         administrativeStatusCalls++

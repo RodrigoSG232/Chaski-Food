@@ -213,3 +213,27 @@ test("recuperar exito previo no requiere que el destinatario siga en Auth", asyn
   assert.deepEqual(await request(admin, body), first);
   assert.equal((await db.doc(`business_requests/${target.uid}`).get()).get("status"), "APPROVED");
 });
+
+test("revision propia y de aprobacion no requieren correo comercial ni hechos resueltos", async () => {
+  const candidate = await account(); const revision = await prepare(candidate.email);
+  const own = await fetch(`${base}/revision`, { headers: { Authorization: `Bearer ${candidate.token}` } });
+  assert.equal(own.status, 200); assert.deepEqual(await own.json(), { revision });
+  const response = await fetch(`${base}/assignment-revision`, { method: "POST", headers: { Authorization: `Bearer ${admin.token}`, "Content-Type": "application/json" }, body: JSON.stringify({ businessId: candidate.uid }) });
+  assert.equal(response.status, 200); assert.deepEqual(await response.json(), { revision });
+});
+test("actualizar correo asignacion es atomico y conserva fila anterior", async () => {
+  const o = await owner(); const old = await account(); const next = await account();
+  let oldRevision = await prepare(old.email); oldRevision = (await assign(o, old, oldRevision)).body.revision;
+  const revision = await prepare(next.email);
+  const r = await op(o, "ASSIGN", revision, { businessId: o.uid, email: next.email, previousEmail: old.email, previousRevision: oldRevision, storeIds: [`${o.uid}-store`], fullName: "Actualizado", phone: "0" });
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.equal((await db.doc(`store_managers/${o.uid}_${old.email}`).get()).get("bindingState"), "REVOKED");
+  assert.equal((await db.doc(`store_managers/${o.uid}_${next.email}`).get()).get("boundUid"), next.uid);
+});
+test("cambio correo rechazado no revoca asignacion anterior", async () => {
+  const o = await owner(); const old = await account(); const next = await owner();
+  let oldRevision = await prepare(old.email); oldRevision = (await assign(o, old, oldRevision)).body.revision;
+  const r = await op(o, "ASSIGN", 1, { businessId: o.uid, email: next.email, previousEmail: old.email, previousRevision: oldRevision, storeIds: [`${o.uid}-store`], fullName: "Prueba", phone: "0" });
+  assert.equal(r.body.error, "AUTHORIZATION_CONFLICT");
+  assert.equal((await db.doc(`store_managers/${o.uid}_${old.email}`).get()).get("bindingState"), "VERIFIED");
+});

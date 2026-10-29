@@ -35,8 +35,11 @@ export const foodApi = onRequest({ region: "southamerica-west1", timeoutSeconds:
         }
         if (request.path === "/api/v1/access/assignment-revision" && request.method === "POST") {
           const body = request.body;
-          if (!body || typeof body !== "object" || Array.isArray(body) || Object.keys(body).sort().join(",") !== "businessId,email") throw new CommercialAccessError("INVALID_REQUEST", 400);
+          if (!body || typeof body !== "object" || Array.isArray(body) || !["businessId", "businessId,email"].includes(Object.keys(body).sort().join(","))) throw new CommercialAccessError("INVALID_REQUEST", 400);
           response.status(200).json(await service.assignmentRevision(actor, body.businessId, body.email)); return;
+        }
+        if (request.path === "/api/v1/access/revision" && request.method === "GET") {
+          response.status(200).json(await service.ownRevision(actor)); return;
         }
         if (request.path === "/api/v1/access/facts" && request.method === "GET") {
           response.status(200).json(await service.facts(actor)); return;
