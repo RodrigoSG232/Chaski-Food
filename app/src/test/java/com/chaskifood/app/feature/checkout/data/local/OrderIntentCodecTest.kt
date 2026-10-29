@@ -37,4 +37,13 @@ class OrderIntentCodecTest {
         assertEquals(OrderFingerprints.canonicalRequest(intent), payload)
         assertNull(intent.accepted.buyerPhone)
     }
+
+    @Test fun approvedNationalStorePhoneAndEmptyLabelSurviveLocalPersistence() {
+        val payload = payloads().first().replace("\"storePhone\":null", "\"storePhone\":\"987654321\"")
+            .replace("\"label\":\"Destino público\"", "\"label\":\"\"")
+        val decoded = OrderIntentCodec.decode(payload)
+        assertEquals("987654321", decoded.accepted.storePhone)
+        assertEquals("", decoded.accepted.delivery.label)
+        assertEquals(payload, OrderIntentCodec.encode(decoded))
+    }
 }

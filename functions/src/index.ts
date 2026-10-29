@@ -1,3 +1,6 @@
+import { OrderService } from "./orders/orderService";
+import { OrderHttpError, parseOrderSubmission } from "./orders/orderRequest";
+import { intentId as validateIntentId } from "./orders/orderModels";
 import { CommercialAccessService } from "./access/commercialAccessService";
 import { CommercialAccessError, parseCommercialCommand } from "./access/commercialAccessPolicy";
 import { verifyCommercialIdentity } from "./auth/verifyBuyerToken";
@@ -24,6 +27,34 @@ export const foodApi = onRequest({ region: "southamerica-west1", timeoutSeconds:
     response.set("Cache-Control", "no-store");
     try {
       const runtime = resolveRuntimeEnvironment(process.env);
+      const orderPath = /^\/api\/v1\/orders\/?$/.test(request.path);
+      const attemptPath = /^\/api\/v1\/order-attempts\/([^/]+)\/?$/.exec(request.path);
+      if (orderPath || attemptPath) {
+        // HU34 coordination is LOCAL only. Cloud activation must be authorized/coordinated separately.
+        if (runtime.mode !== "LOCAL") { response.status(404).json({error:"NOT_FOUND"}); return; }
+        const method = orderPath ? "POST" : "GET";
+        if (request.method !== method) { response.status(405).set("Allow",method).json({error:{code:"METHOD_NOT_ALLOWED",retryable:false}}); return; }
+        try {
+          const app=getRuntimeApp(runtime),auth=getAuth(app);
+          const uid=await verifyBuyerToken(auth,request.get("authorization"));
+          const service=new OrderService(getFirestore(app),auth);
+          let result;
+          if(orderPath) result=await service.confirm(parseOrderSubmission(request.body,uid));
+          else {
+            let id:string;
+            try { id=validateIntentId(decodeURIComponent(attemptPath![1])); }
+            catch { throw new OrderHttpError("INVALID_REQUEST",400); }
+            result=await service.recover(uid,id);
+          }
+          response.status(result.status).json(result.body);
+        } catch(error) {
+          if(error instanceof AuthenticationRequired) response.status(401).json({contractVersion:1,error:{code:"AUTHENTICATION_REQUIRED",retryable:false}});
+          else if(error instanceof OrderHttpError) response.status(error.status).json({contractVersion:1,error:{code:error.code,retryable:error.retryable},
+            ...(error.retryable?{outcome:"UNKNOWN",reason:"SERVER_UNAVAILABLE"}:{})});
+          else response.status(503).json({contractVersion:1,outcome:"UNKNOWN",reason:"SERVER_UNAVAILABLE",error:{code:"TEMPORARILY_UNAVAILABLE",retryable:true}});
+        }
+        return;
+      }
       if (request.path.startsWith("/api/v1/access/")) {
         // Fase aislada: estas operaciones no se activan en Cloud aunque se despliegue el paquete.
         if (runtime.mode !== "LOCAL") { response.status(404).json({ error: "NOT_FOUND" }); return; }

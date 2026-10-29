@@ -147,4 +147,16 @@ class OrderConfirmationTest {
             OrderReceipt("order", id, p, MAX_ORDER_EPOCH_MILLIS + 1)
         }
     }
+
+    @Test fun nationalStoreContactAndEmptyAddressLabelPreserveOriginalValues() {
+        val raw = vector("base")["purchase"].asJsonObject.deepCopy()
+        raw.addProperty("storePhone", "987654321")
+        raw["delivery"].asJsonObject.addProperty("label", "")
+        val accepted = parse(raw)
+        assertEquals("987654321", accepted.storePhone)
+        assertEquals("", accepted.delivery.label)
+        assertNull(accepted.buyerPhone)
+        raw.addProperty("buyerPhone", "987654321")
+        assertTrue(runCatching { parse(raw) }.isFailure)
+    }
 }

@@ -221,6 +221,47 @@ export class CommercialAccessService {
     });
   }
 
+  /** Composable read-only authorization inside the caller's transaction, never a nested transaction. */
+  async canStartPurchase(tx: Transaction, actor: CommercialIdentity): Promise<boolean> {
+    const ctx = await this.context(tx, actor);
+    if (ownsCommercialBusiness(ctx.business?.status) || confirmedAssignments(ctx.rows, actor.uid).length) return false;
+    if (ctx.rows.some(r => !["REVOKED", "VERIFIED"].includes(r.bindingState))) {
+      throw new CommercialAccessError("RECONCILIATION_REQUIRED", 503);
+    }
+    return true; // CLIENT from verified facts; admin claims never bypass these checks.
+  }
+
+  async hasReceivingManager(tx: Transaction, businessId: string, storeId: string): Promise<boolean> {
+    const docs = await tx.get(this.db.collection("store_managers").where("businessId", "==", businessId));
+    let uncertain = false;
+    for (const doc of docs.docs) {
+      const row = assignmentFrom(doc.id, doc.data());
+      if (!row.assignedStoreIds.includes(storeId) || row.bindingState === "REVOKED") continue;
+      if (!["PENDING", "VERIFIED"].includes(row.bindingState) || (row.bindingState === "PENDING" && row.boundUid)) {
+        uncertain = true; continue;
+      }
+      try {
+        // PENDING need not have an Auth account. Existing UID indexes resolve known identities without Auth I/O.
+        const known = await tx.get(this.db.collection(accessIndex).where("kind", "==", "UID").where("authEmail", "==", row.email));
+        if (known.size > 1) throw new CommercialAccessError("INDEX_INCONSISTENT", 503);
+        const knownUid = known.docs[0]?.data().uid as string | undefined;
+        const uid = row.boundUid ?? knownUid ?? null;
+        const ctx = await this.context(tx, { uid, email: row.email, emailVerified: row.bindingState === "VERIFIED" });
+        assertExclusive(ctx.business?.status, ctx.rows, uid ?? "");
+        if (ownsCommercialBusiness(ctx.business?.status)) continue;
+        if (row.bindingState === "VERIFIED" && (ctx.mail?.boundUid !== uid || (knownUid && knownUid !== uid))) {
+          throw new CommercialAccessError("INDEX_INCONSISTENT", 503);
+        }
+        return true;
+      } catch (error) {
+        if (!(error instanceof CommercialAccessError)) throw error;
+        uncertain = true;
+      }
+    }
+    if (uncertain) throw new CommercialAccessError("RECONCILIATION_REQUIRED", 503);
+    return false;
+  }
+
   async assignmentRevision(actor: CommercialIdentity, businessId: string, email?: string) {
     if (!validId(businessId)) throw new CommercialAccessError("INVALID_REQUEST", 400);
     let target: Subject;

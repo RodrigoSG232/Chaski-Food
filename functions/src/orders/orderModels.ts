@@ -102,9 +102,9 @@ export function parseAcceptedPurchase(value: unknown): AcceptedPurchase {
   check(orderMinor(a.subtotalMinor) === amounts.subtotalMinor && orderMinor(a.totalMinor) === amounts.totalMinor);
   const d = record(v.delivery, ["addressId", "label", "destination"]);
   return Object.freeze({ ownerUid: orderId(v.ownerUid), businessId: orderId(v.businessId), storeId: orderId(v.storeId),
-    businessName: orderText(v.businessName), storeName: orderText(v.storeName), storePhone: phone(v.storePhone),
+    businessName: orderText(v.businessName), storeName: orderText(v.storeName), storePhone: v.storePhone === null ? null : orderText(v.storePhone),
     buyerName: orderText(v.buyerName), buyerPhone: phone(v.buyerPhone), pickup: location(v.pickup),
-    delivery: Object.freeze({ addressId: orderId(d.addressId), label: orderText(d.label), destination: location(d.destination) }),
+    delivery: Object.freeze({ addressId: orderId(d.addressId), label: orderText(d.label, true), destination: location(d.destination) }),
     items: Object.freeze(items), amounts, currency: v.currency, paymentMethod: v.paymentMethod,
     deliveryQuote: Object.freeze({ quoteId: orderId(q.quoteId), distanceMeters: q.distanceMeters, tariffVersion: orderText(q.tariffVersion),
       quotedAtEpochMillis: quotedAt, expiresAtEpochMillis: expiresAt }) });

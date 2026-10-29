@@ -66,7 +66,7 @@ data class OrderLocationSnapshot(
 }
 
 data class OrderDeliverySnapshot(val addressId: String, val label: String, val destination: OrderLocationSnapshot) {
-    init { orderId(addressId); orderText(label) }
+    init { orderId(addressId); orderText(label, optional = true) }
 }
 
 /** Listas defensivas como Cart: el estado aceptado no cambia por referencias externas. */
