@@ -19,6 +19,7 @@ internal data class DeliveryQuoteResponse(
     val expiresAt: String,
     val storeLocation: QuoteLocationResponse,
     val deliveryLocation: QuoteLocationResponse,
+    val quoteId: String,
 )
 
 @Serializable

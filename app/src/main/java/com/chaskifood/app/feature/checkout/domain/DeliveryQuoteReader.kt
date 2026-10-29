@@ -13,6 +13,8 @@ data class DeliveryQuote(
     val expiresAtEpochMillis: Long,
     val storeLocation: AddressCoordinates,
     val deliveryLocation: AddressCoordinates,
+    /** Nullable solo para lectores de prueba/contratos HU15; el adaptador HTTP exige una referencia válida. */
+    val quoteId: String? = null,
 ) {
     init {
         require(distanceMeters.isFinite() && distanceMeters >= 0.0)
@@ -20,6 +22,7 @@ data class DeliveryQuote(
         require(tariffVersion.isNotBlank())
         require(quotedAtEpochMillis > 0 && expiresAtEpochMillis > quotedAtEpochMillis)
         require(storeLocation.isValid && deliveryLocation.isValid)
+        require(quoteId == null || quoteId.matches(Regex("[A-Za-z0-9_-]{1,128}")))
     }
 }
 
@@ -29,6 +32,7 @@ enum class DeliveryQuoteFailure {
     OUTSIDE_COVERAGE, INVALID_LOCATION, NO_ROUTE, ROUTING_UNAVAILABLE,
     ROUTING_QUOTA_EXCEEDED, ROUTING_CONFIGURATION, ROUTING_INVALID_RESPONSE,
     INVALID_REQUEST, DATA_INCONSISTENT, SERVER_UNAVAILABLE,
+    QUOTE_NOT_FOUND, QUOTE_EXPIRED, QUOTE_INCOMPATIBLE, QUOTE_VERSION_INVALID,
     MALFORMED_RESPONSE, CONNECTIVITY, TIMEOUT, HTTP_ERROR, CONFIGURATION,
 }
 

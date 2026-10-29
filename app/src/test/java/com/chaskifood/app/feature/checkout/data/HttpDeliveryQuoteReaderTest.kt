@@ -35,7 +35,7 @@ class HttpDeliveryQuoteReaderTest {
     private val json = Json { ignoreUnknownKeys = true }
     private fun valid() = DeliveryQuoteResponse(1_918.8, 380, "PEN", "lima-driving-car-v1",
         "2026-10-26T12:00:00.000Z", "2026-10-26T12:05:00.000Z",
-        QuoteLocationResponse(-12.04596, -77.03054), QuoteLocationResponse(-12.0515, -77.0345))
+        QuoteLocationResponse(-12.04596, -77.03054), QuoteLocationResponse(-12.0515, -77.0345), "quote-fixture")
 
     private fun api(block: suspend (DeliveryQuoteRequest, String) -> Response<DeliveryQuoteResponse>) =
         object : DeliveryQuoteApi {
@@ -54,6 +54,7 @@ class HttpDeliveryQuoteReaderTest {
         }).quote()
         assertTrue(result is DeliveryQuoteResult.Quoted)
         val quote = (result as DeliveryQuoteResult.Quoted).quote
+        assertEquals("quote-fixture", quote.quoteId)
         assertEquals(380L, quote.deliveryFeeMinor)
         assertEquals(1_918.8, quote.distanceMeters, 0.0)
         assertEquals("lima-driving-car-v1", quote.tariffVersion)
@@ -64,7 +65,8 @@ class HttpDeliveryQuoteReaderTest {
 
     @Test fun `respuesta monetaria o temporal incorrecta no produce cotizacion`() = runTest {
         val invalid = listOf(
-            valid().copy(deliveryFeeMinor = -1), valid().copy(distanceMeters = Double.NaN),
+            valid().copy(quoteId = ""), valid().copy(quoteId = "other/quote"),
+            valid().copy(deliveryFeeMinor = 9_007_199_254_740_992L), valid().copy(deliveryFeeMinor = -1), valid().copy(distanceMeters = Double.NaN),
             valid().copy(distanceMeters = -1.0), valid().copy(currency = "USD"),
             valid().copy(tariffVersion = " "), valid().copy(quotedAt = "not-a-date"),
             valid().copy(expiresAt = "2026-10-26T12:00:00.000Z"),
@@ -90,6 +92,11 @@ class HttpDeliveryQuoteReaderTest {
             "ROUTING_INVALID_RESPONSE" to DeliveryQuoteFailure.ROUTING_INVALID_RESPONSE,
             "QUOTE_UNAVAILABLE" to DeliveryQuoteFailure.SERVER_UNAVAILABLE,
             "DATA_INCONSISTENT" to DeliveryQuoteFailure.DATA_INCONSISTENT,
+            "QUOTE_NOT_FOUND" to DeliveryQuoteFailure.QUOTE_NOT_FOUND,
+            "QUOTE_EXPIRED" to DeliveryQuoteFailure.QUOTE_EXPIRED,
+            "QUOTE_INCOMPATIBLE" to DeliveryQuoteFailure.QUOTE_INCOMPATIBLE,
+            "QUOTE_VERSION_INVALID" to DeliveryQuoteFailure.QUOTE_VERSION_INVALID,
+            "QUOTE_INVALID" to DeliveryQuoteFailure.DATA_INCONSISTENT,
         )
         for ((code, expected) in codes) {
             val response = Response.error<DeliveryQuoteResponse>(503, "{\"error\":\"$code\"}".toResponseBody())
@@ -146,7 +153,7 @@ class HttpDeliveryQuoteReaderTest {
                     var read = 0
                     while (read < length) read += input.read(body, read, length - read)
                     assertEquals("{\"storeId\":\"store\",\"addressId\":\"address\"}", String(body))
-                    val payload = """{"distanceMeters":1918.8,"deliveryFeeMinor":380,"currency":"PEN","tariffVersion":"lima-driving-car-v1","quotedAt":"2026-10-26T12:00:00.000Z","expiresAt":"2026-10-26T12:05:00.000Z","storeLocation":{"latitude":-12.04596,"longitude":-77.03054},"deliveryLocation":{"latitude":-12.0515,"longitude":-77.0345}}"""
+                    val payload = """{"quoteId":"quote-fixture","distanceMeters":1918.8,"deliveryFeeMinor":380,"currency":"PEN","tariffVersion":"lima-driving-car-v1","quotedAt":"2026-10-26T12:00:00.000Z","expiresAt":"2026-10-26T12:05:00.000Z","storeLocation":{"latitude":-12.04596,"longitude":-77.03054},"deliveryLocation":{"latitude":-12.0515,"longitude":-77.0345}}"""
                     socket.getOutputStream().write(("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n" +
                         "Content-Length: ${payload.toByteArray().size}\r\nConnection: close\r\n\r\n$payload").toByteArray())
                 }
@@ -158,6 +165,22 @@ class HttpDeliveryQuoteReaderTest {
             worker.join(3000)
             assertFalse(worker.isAlive)
         }
+    }
+
+    @Test fun `relogin del mismo UID conserva referencia sin reutilizar generacion anterior`() = runTest {
+        val generations = mutableListOf<Long>()
+        val tokens = object : BuyerTokenSource {
+            override suspend fun token(uid: String, generation: Long): String {
+                assertEquals("uid", uid); generations += generation; return "fixture-token-$generation"
+            }
+            override fun isCurrent(uid: String, generation: Long) = true
+        }
+        val client = HttpDeliveryQuoteReader(api { _, _ -> Response.success(valid()) }, tokens, json)
+        val first = client.quote("store", "address", "uid", 1) as DeliveryQuoteResult.Quoted
+        val second = client.quote("store", "address", "uid", 3) as DeliveryQuoteResult.Quoted
+        assertEquals(listOf(1L, 3L), generations)
+        assertEquals("quote-fixture", first.quote.quoteId)
+        assertEquals(first.quote, second.quote)
     }
 
     @Test fun `JSON incompleto y conexion fallida no producen tarifa`() = kotlinx.coroutines.runBlocking {

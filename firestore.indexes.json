@@ -1,0 +1,23 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "delivery_quotes",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "logisticsHash",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "tariffVersion",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "quotedAt",
+          "order": "DESCENDING"
+        }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

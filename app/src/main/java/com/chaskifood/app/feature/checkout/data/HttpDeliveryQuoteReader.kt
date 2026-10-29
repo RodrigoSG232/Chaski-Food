@@ -89,6 +89,11 @@ internal class HttpDeliveryQuoteReader @Inject constructor(
             "ROUTING_INVALID_RESPONSE" -> DeliveryQuoteFailure.ROUTING_INVALID_RESPONSE
             "DATA_INCONSISTENT" -> DeliveryQuoteFailure.DATA_INCONSISTENT
             "QUOTE_UNAVAILABLE" -> DeliveryQuoteFailure.SERVER_UNAVAILABLE
+            "QUOTE_NOT_FOUND" -> DeliveryQuoteFailure.QUOTE_NOT_FOUND
+            "QUOTE_EXPIRED" -> DeliveryQuoteFailure.QUOTE_EXPIRED
+            "QUOTE_INCOMPATIBLE" -> DeliveryQuoteFailure.QUOTE_INCOMPATIBLE
+            "QUOTE_VERSION_INVALID" -> DeliveryQuoteFailure.QUOTE_VERSION_INVALID
+            "QUOTE_INVALID" -> DeliveryQuoteFailure.DATA_INCONSISTENT
             "INVALID_REQUEST" -> DeliveryQuoteFailure.INVALID_REQUEST
             else -> DeliveryQuoteFailure.HTTP_ERROR
         }
@@ -96,11 +101,12 @@ internal class HttpDeliveryQuoteReader @Inject constructor(
     }
 
     private fun DeliveryQuoteResponse.toDomain(): DeliveryQuote {
-        require(currency == "PEN")
+        require(currency == "PEN" && VALID_ID.matches(quoteId))
+        require(deliveryFeeMinor in 0..com.chaskifood.app.feature.orders.domain.MAX_ORDER_MINOR)
         return DeliveryQuote(distanceMeters, deliveryFeeMinor, CartCurrency.PEN, tariffVersion,
             parseUtc(quotedAt), parseUtc(expiresAt),
             AddressCoordinates(storeLocation.latitude, storeLocation.longitude),
-            AddressCoordinates(deliveryLocation.latitude, deliveryLocation.longitude))
+            AddressCoordinates(deliveryLocation.latitude, deliveryLocation.longitude), quoteId)
     }
 
     private fun parseUtc(value: String): Long {

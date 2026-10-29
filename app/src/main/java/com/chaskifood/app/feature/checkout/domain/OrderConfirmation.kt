@@ -8,6 +8,7 @@ import java.util.UUID
 data class AcceptedDeliveryQuote(val quoteId: String, val quote: DeliveryQuote) {
     init {
         orderId(quoteId)
+        require(quote.quoteId == null || quote.quoteId == quoteId)
         require(quote.quotedAtEpochMillis in 1..MAX_ORDER_EPOCH_MILLIS)
         require(quote.expiresAtEpochMillis in 1..MAX_ORDER_EPOCH_MILLIS)
         orderText(quote.tariffVersion)

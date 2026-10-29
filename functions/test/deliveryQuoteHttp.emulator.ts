@@ -28,6 +28,8 @@ async function account() {
 }
 
 async function seed() {
+  const old = await db.collection("delivery_quotes").where("customerUid", "==", uid).get();
+  for (const doc of old.docs) await doc.ref.delete();
   await db.doc("business_requests/quote-business").set({ status: "APPROVED", privateNote: "DO_NOT_RETURN" });
   await db.doc("stores/quote-store").set({ businessId: "quote-business", status: "ACTIVE",
     latitude: -12.04596, longitude: -77.03054, deliveryRadiusKm: 5 });
@@ -48,6 +50,7 @@ after(async () => { await db.terminate(); await deleteApp(app); });
 test("local y dirección propios devuelven una cotización temporal simulada", async () => {
   await seed();
   const beforeOrders = (await db.collection("orders").get()).size;
+  const beforeFoodOrders = (await db.collection("food_orders").get()).size;
   const beforeStore = (await db.doc("stores/quote-store").get()).data();
   const beforeAddress = (await db.doc(`users/${uid}/addresses/quote-address`).get()).data();
   const started = performance.now();
@@ -55,22 +58,28 @@ test("local y dirección propios devuelven una cotización temporal simulada", a
   const elapsed = performance.now() - started;
   assert.equal(response.status, 200);
   assert.equal(response.headers.get("x-route-source"), "SIMULATED");
-  assert.equal(response.headers.get("x-quote-firestore-reads"), "3");
+  assert.equal(response.headers.get("x-quote-firestore-reads"), "8");
   assert.match(response.headers.get("server-timing") ?? "", /quote;dur=.+, route;dur=.+/);
   assert.equal(response.headers.get("cache-control"), "no-store");
   assert.equal(body.distanceMeters, 1_250.5);
   assert.equal(body.deliveryFeeMinor, 300);
   assert.equal(body.currency, "PEN");
+  assert.match(String(body.quoteId), /^[A-Za-z0-9_-]+$/);
+  assert.equal(response.headers.get("x-quote-reused"), "false");
+  const persisted = (await db.doc(`delivery_quotes/${body.quoteId}`).get()).data()!;
+  assert.equal(persisted.customerUid, uid);
+  assert.equal(persisted.deliveryFeeMinor, body.deliveryFeeMinor);
   assert.equal(body.tariffVersion, "lima-driving-car-v1");
   assert.deepEqual(body.storeLocation, { latitude: -12.04596, longitude: -77.03054 });
   assert.deepEqual(body.deliveryLocation, { latitude: -12.0515, longitude: -77.0345 });
   assert.equal(Date.parse(String(body.expiresAt)) - Date.parse(String(body.quotedAt)), 300_000);
   assert.deepEqual(Object.keys(body).sort(), ["currency", "deliveryFeeMinor", "deliveryLocation", "distanceMeters",
-    "expiresAt", "quotedAt", "storeLocation", "tariffVersion"]);
+    "expiresAt", "quoteId", "quotedAt", "storeLocation", "tariffVersion"]);
   assert.equal((await db.collection("orders").get()).size, beforeOrders);
+  assert.equal((await db.collection("food_orders").get()).size, beforeFoodOrders);
   assert.deepEqual((await db.doc("stores/quote-store").get()).data(), beforeStore);
   assert.deepEqual((await db.doc(`users/${uid}/addresses/quote-address`).get()).data(), beforeAddress);
-  console.info(`SIMULATED quote HTTP elapsedMs=${elapsed.toFixed(1)} reads=3 ` +
+  console.info(`SIMULATED quote HTTP elapsedMs=${elapsed.toFixed(1)} reads=8 ` +
     `serverTiming=${response.headers.get("server-timing")} routeSource=SIMULATED`);
 });
 
@@ -85,7 +94,7 @@ test("el servicio envía solo coordenadas de Firestore al lector y calcula el im
   assert.equal(result.quote.deliveryFeeMinor, 371);
   assert.deepEqual(result.quote.storeLocation, { latitude: -12.04596, longitude: -77.03054 });
   assert.deepEqual(result.quote.deliveryLocation, { latitude: -12.0515, longitude: -77.0345 });
-  assert.equal(result.firestoreReads, 3);
+  assert.equal(result.firestoreReads, 8);
 });
 
 test("no se puede usar una dirección de otro UID", async () => {
@@ -147,4 +156,25 @@ test("errores del proveedor no se convierten en reparto gratuito", async () => {
     await assert.rejects(createDeliveryQuote(db, reader, uid, "quote-store", "quote-address"),
       (error: unknown) => error instanceof QuoteError && error.code === code);
   }
+});
+
+test("HTTP recupera la misma referencia tras un nuevo login y deniega acceso Firestore cliente", async () => {
+  await seed(); const first = await quote(); assert.equal(first.response.status, 200);
+  const login = await fetch("http://127.0.0.1:9099/identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=demo-key", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email: "quote-buyer@example.invalid", password: "emulator-password", returnSecureToken: true }),
+  });
+  assert.equal(login.status, 200);
+  const reloginToken = (await login.json() as { idToken: string }).idToken;
+  const second = await quote(reloginToken);
+  assert.equal(second.response.status, 200); assert.equal(second.body.quoteId, first.body.quoteId);
+  assert.equal(second.body.deliveryFeeMinor, first.body.deliveryFeeMinor);
+  assert.equal(second.response.headers.get("x-quote-reused"), "true");
+  assert.equal(second.response.headers.get("x-quote-firestore-reads"), "4");
+  const docUrl = `http://127.0.0.1:8089/v1/projects/${projectId}/databases/(default)/documents/delivery_quotes/${first.body.quoteId}`;
+  assert.equal((await fetch(docUrl, { headers: { Authorization: `Bearer ${reloginToken}` } })).status, 403);
+  assert.equal((await fetch(docUrl, { method: "PATCH", headers: { Authorization: `Bearer ${reloginToken}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ fields: { deliveryFeeMinor: { integerValue: "0" } } }) })).status, 403);
+  assert.equal((await quote(token, { storeId: "quote-store", addressId: "quote-address", quoteId: first.body.quoteId })).body.quoteId,
+    first.body.quoteId);
 });

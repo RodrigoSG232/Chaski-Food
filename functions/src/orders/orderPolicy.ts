@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { validCoordinates } from "../delivery/routeReader";
 import { AcceptedPurchase, OrderCoordinates, OrderIntent, OrderLocation, OrderReceipt, RecordedOrderAttempt,
   MAX_ORDER_EPOCH_MILLIS, OrderAttemptResult, TerminalOrderResult, intentId, orderId, orderMinor, parseAcceptedPurchase, parseOrderIntent } from "./orderModels";
 
@@ -24,10 +25,21 @@ function sha256(value: string): string { return createHash("sha256").update(valu
 export function canonicalConsent(value: AcceptedPurchase): string {
   return canonical({ version: "hu16-consent-v1", accepted: purchase(parseAcceptedPurchase(value)) });
 }
+/** Shared with the quote store: geometry identity does not contain products, text or session generation. */
+export function canonicalLogisticsContext(ownerUid: string, storeId: string, addressId: string,
+  origin: OrderCoordinates, destination: OrderCoordinates): string {
+  orderId(ownerUid); orderId(storeId); orderId(addressId);
+  if (!validCoordinates(origin) || !validCoordinates(destination)) throw new Error("INVALID_ORDER_CONTRACT");
+  return canonical({ version: "hu16-logistics-v1", ownerUid, storeId, addressId,
+    origin: coordinates(origin), destination: coordinates(destination) });
+}
+export function logisticsContextHash(ownerUid: string, storeId: string, addressId: string,
+  origin: OrderCoordinates, destination: OrderCoordinates): string {
+  return sha256(canonicalLogisticsContext(ownerUid, storeId, addressId, origin, destination));
+}
 export function canonicalLogistics(value: AcceptedPurchase): string {
   const v = parseAcceptedPurchase(value);
-  return canonical({ version: "hu16-logistics-v1", ownerUid: v.ownerUid, storeId: v.storeId,
-    addressId: v.delivery.addressId, origin: coordinates(v.pickup.location), destination: coordinates(v.delivery.destination.location) });
+  return canonicalLogisticsContext(v.ownerUid, v.storeId, v.delivery.addressId, v.pickup.location, v.delivery.destination.location);
 }
 export function canonicalRequest(value: OrderIntent): string {
   const v = parseOrderIntent(value);

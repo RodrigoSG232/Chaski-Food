@@ -48,17 +48,21 @@ export const foodApi = onRequest({ region: "southamerica-west1", timeoutSeconds:
       }
       if (isQuoteRequest) {
         if (request.method !== "POST") { response.status(405).set("Allow", "POST").json({ error: "METHOD_NOT_ALLOWED" }); return; }
-        const { storeId, addressId } = parseDeliveryQuoteRequest(request.body);
+        const { storeId, addressId, quoteId } = parseDeliveryQuoteRequest(request.body);
         const app = getRuntimeApp(runtime);
         const uid = await verifyBuyerToken(getAuth(app), request.get("authorization"));
         const controller = new AbortController();
         response.once("close", () => { if (!response.writableEnded) controller.abort(); });
-        const { reader, source } = routeReader(runtime);
-        const { quote, firestoreReads, routeMs } = await createDeliveryQuote(getFirestore(app), reader,
-          uid, storeId, addressId, undefined, controller.signal);
+        const source = routeSourceForRuntime(runtime, process.env.CHASKI_ROUTE_FIXTURE);
+        const reader: RouteReader = { async distanceMeters(origin, destination, signal) {
+          return routeReader(runtime).reader.distanceMeters(origin, destination, signal);
+        } };
+        const { quote, firestoreReads, routeMs, reused } = await createDeliveryQuote(getFirestore(app), reader,
+          uid, storeId, addressId, undefined, controller.signal, quoteId);
         response.set("Server-Timing", `quote;dur=${(performance.now() - started).toFixed(2)}, route;dur=${routeMs.toFixed(2)}`);
         response.set("X-Quote-Firestore-Reads", String(firestoreReads));
         response.set("X-Route-Source", source);
+        response.set("X-Quote-Reused", String(reused));
         response.status(200).json(quote);
         return;
       }
