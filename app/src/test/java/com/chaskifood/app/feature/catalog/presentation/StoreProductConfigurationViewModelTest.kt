@@ -252,6 +252,18 @@ class StoreProductConfigurationViewModelTest {
         vm.saveConfiguration("product-1", 10.0, StoreProductAvailability.AVAILABLE); runCurrent()
         assertTrue(vm.operations.value.isEmpty())
     }
+    @Test fun `ruta de oferta seleccionada no consulta ni permite cambiar a otro local`() = runTest {
+        stores.owned.value=ApiResult.Success(listOf(BusinessStore(id="store-1",businessId="business-1"),BusinessStore(id="store-2",businessId="business-1")))
+        catalog.products("business-1").value=ApiResult.Success(emptyList())
+        val vm=StoreProductConfigurationViewModel(auth,businesses,stores,catalog,configurations,
+            com.chaskifood.app.core.access.domain.OperationTestAuthorization,
+            androidx.lifecycle.SavedStateHandle(mapOf("storeId" to "store-2"))).also {viewModels.put("selected",it)}
+        runCurrent()
+        val state=vm.uiState.value as StoreProductConfigurationUiState.Success
+        assertEquals("store-2",state.selectedStoreId);assertEquals(listOf("store-2"),state.stores.map {it.id})
+        vm.selectStore("store-1");runCurrent();assertEquals("store-2",(vm.uiState.value as StoreProductConfigurationUiState.Success).selectedStoreId)
+    }
+
     private fun model(permissions: com.chaskifood.app.core.access.domain.StoreAuthorization = com.chaskifood.app.core.access.domain.OperationTestAuthorization) = StoreProductConfigurationViewModel(
         auth,
         businesses,

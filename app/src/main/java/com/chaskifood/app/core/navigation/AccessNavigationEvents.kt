@@ -77,7 +77,7 @@ internal fun AccessNavigationEvents(access: AccessNavigationViewModel, nav: NavH
             val revoked = AccessNavigationPolicy.requiresReset(previousAccess, resolved, route)
             previousAccess = resolved
             if (route !in AccessNavigationPolicy.publicRoutes && route != ChaskiDestinations.MAIN &&
-                (revoked || !access.allows(route, resubmit = entry?.arguments?.getBoolean("resubmit") == true))) {
+                (revoked || !access.allows(route, storeId = if (route.substringBefore('?') in setOf(ChaskiDestinations.STORE_OPERATIONS, ChaskiDestinations.STORE_PRODUCT_CONFIGURATION)) entry?.arguments?.getString("storeId") else null, resubmit = entry?.arguments?.getBoolean("resubmit") == true))) {
                 if (!nav.popBackStack(ChaskiDestinations.MAIN, false)) {
                     nav.navigate(ChaskiDestinations.MAIN) { popUpTo(0) { inclusive = true } }
                 }

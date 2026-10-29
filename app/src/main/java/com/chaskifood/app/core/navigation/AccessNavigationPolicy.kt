@@ -44,7 +44,7 @@ object AccessNavigationPolicy {
                 if (resubmit) has(AccessCapability.RESUBMIT_BUSINESS) else has(AccessCapability.REQUEST_BUSINESS)
             route == ChaskiDestinations.MANAGE_STORES -> has(AccessCapability.MANAGE_OWN_STORES)
             route == ChaskiDestinations.MANAGE_CATALOG -> has(AccessCapability.MANAGE_BUSINESS)
-            route == ChaskiDestinations.STORE_OPERATIONS || route == ChaskiDestinations.STORE_PRODUCT_CONFIGURATION ->
+            route?.substringBefore('?') == ChaskiDestinations.STORE_OPERATIONS || route?.substringBefore('?') == ChaskiDestinations.STORE_PRODUCT_CONFIGURATION ->
                 has(AccessCapability.OPERATE_HOURS_AND_OFFERS)
             else -> false
         }
@@ -57,7 +57,7 @@ object AccessNavigationPolicy {
     fun requiresReset(previous: AccessResolution.Resolved?, current: AccessResolution.Resolved, route: String): Boolean {
         if (previous == null) return false
         if (previous.identity != current.identity) return true
-        return route in setOf(ChaskiDestinations.STORE_OPERATIONS, ChaskiDestinations.STORE_PRODUCT_CONFIGURATION) &&
+        return route.substringBefore('?') in setOf(ChaskiDestinations.STORE_OPERATIONS, ChaskiDestinations.STORE_PRODUCT_CONFIGURATION) &&
             previous.capabilities.grants.any { it.scope is AccessScope.Store && it !in current.capabilities.grants }
     }    fun matchesSharedFrame(current: String, destination: String?, main: String?, uid: String?, ownerUid: String?): Boolean =
         uid != null && uid == ownerUid && current == destination && current == main}

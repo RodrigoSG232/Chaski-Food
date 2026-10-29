@@ -78,8 +78,8 @@ internal fun AccessDestinationGuard(access: AccessNavigationViewModel, navContro
     val state = access.current()
     val route = entry.destination.route
     val businessId = entry.arguments?.getString("businessId")
-    val storeId = if (route == ChaskiDestinations.STORE_OPERATIONS ||
-        route == ChaskiDestinations.STORE_PRODUCT_CONFIGURATION) entry.arguments?.getString("storeId") else null
+    val storeId = if (route?.substringBefore('?') == ChaskiDestinations.STORE_OPERATIONS ||
+        route?.substringBefore('?') == ChaskiDestinations.STORE_PRODUCT_CONFIGURATION) entry.arguments?.getString("storeId") else null
     val allowed = observed.origin == state.origin && AccessNavigationPolicy.allows(state.resolution,
         route, businessId, storeId, entry.arguments?.getBoolean("resubmit") == true)
     val holder = rememberSaveableStateHolder()
@@ -138,14 +138,9 @@ internal fun AccessDestinationGuard(access: AccessNavigationViewModel, navContro
 
 @Composable
 internal fun RestrictedAccess(state: AccessContextState, onRetry: () -> Unit) {
-    if (state.phase == AccessContextPhase.LOADING) LoadingState()
-    else ErrorState(when {
-        state.phase == AccessContextPhase.CONFLICT -> "Conflicto de autorizaciones. Requiere revisión autorizada; reintentar solo actualiza la consulta."
-        state.problem == AccessCheckProblem.RECONCILIATION_REQUIRED -> "La identidad requiere reconciliación autorizada."
-        state.problem == AccessCheckProblem.EXPIRED -> "Los permisos vencieron. Vuelve a comprobarlos."
-        state.phase == AccessContextPhase.SIGNED_OUT -> "Inicia sesión para continuar."
-        state.phase == AccessContextPhase.UNAVAILABLE -> "Contexto de permisos no disponible."
-        state.phase == AccessContextPhase.RESOLVED -> "No tienes autorización para este destino."
-        else -> "No se pudieron comprobar los permisos. No se concede acceso."
-    }, onRetry)
+    val connectivity = androidx.compose.ui.platform.LocalContext.current.getSystemService(android.net.ConnectivityManager::class.java)
+    // Un fallo HTTP no demuestra desconexión: solo usar OFFLINE cuando Android confirma que no hay red activa.
+    val panel = if (state.phase == AccessContextPhase.ERROR && connectivity.activeNetwork == null)
+        AuthorizationPanel.OFFLINE else authorizationPanel(state)
+    AuthorizationPanelContent(panel, onRetry)
 }

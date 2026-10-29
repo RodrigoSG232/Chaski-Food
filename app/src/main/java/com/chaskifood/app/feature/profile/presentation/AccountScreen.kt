@@ -41,6 +41,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -55,6 +56,11 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.compose.ui.tooling.preview.Preview
+import com.chaskifood.app.core.navigation.LocalNavigationAccess
+import com.chaskifood.app.core.access.domain.*
+import com.chaskifood.app.feature.auth.domain.AuthUser
+import com.chaskifood.app.ui.theme.ChaskiTheme
 import com.chaskifood.app.R
 import com.chaskifood.app.ui.theme.ChaskiAdminAccent
 import com.chaskifood.app.ui.theme.ChaskiBackground
@@ -84,8 +90,32 @@ fun AccountScreen(
     viewModel: ProfileViewModel = hiltViewModel(),
 ) {
     val authorize = LocalProtectedAction.current
-    val currentUser by viewModel.currentUser.collectAsState()
+    val currentUser by viewModel.currentUser.collectAsStateWithLifecycle()
 
+    val access = LocalNavigationAccess.current
+    val observed = access?.states?.collectAsStateWithLifecycle()?.value
+    val resolved = access?.current()?.takeIf { it.origin == observed?.origin }?.resolution as? AccessResolution.Resolved
+    AccountContent(currentUser, if (access == null) currentUser?.isAdmin == true else resolved?.identity?.isAdmin == true,
+        resolved?.experience ?: CommercialExperience.CLIENT,
+        onOpenProfileInfo, onOpenSecurity, onOpenPaymentMethods, onOpenLocations, onOpenSocialAccounts, onOpenReferral,
+        onOpenBusiness, onOpenStoreOperations, onOpenManageCatalog, onOpenStoreProductConfiguration,
+        onOpenAdminReview, onOpenAdminSupervision, onOpenAdminAuditLog,
+        { authorize { viewModel.signOut(onSignedOut = onSignOut) } }, modifier)
+}
+
+@Composable
+internal fun AccountContent(
+    currentUser: AuthUser? = null,
+    verifiedAdmin: Boolean = false,
+    experience: CommercialExperience = CommercialExperience.CLIENT,
+    onOpenProfileInfo: () -> Unit = {}, onOpenSecurity: () -> Unit = {},
+    onOpenPaymentMethods: () -> Unit = {}, onOpenLocations: () -> Unit = {},
+    onOpenSocialAccounts: () -> Unit = {}, onOpenReferral: () -> Unit = {},
+    onOpenBusiness: () -> Unit = {}, onOpenStoreOperations: () -> Unit = {},
+    onOpenManageCatalog: () -> Unit = {}, onOpenStoreProductConfiguration: () -> Unit = {},
+    onOpenAdminReview: () -> Unit = {}, onOpenAdminSupervision: () -> Unit = {}, onOpenAdminAuditLog: () -> Unit = {},
+    onSignOut: () -> Unit = {}, modifier: Modifier = Modifier,
+) {
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -123,6 +153,7 @@ fun AccountScreen(
             onClick = onOpenProfileInfo,
         )
 
+        if (experience == CommercialExperience.CLIENT) {
         AccountMenuItem(
             icon = Icons.Filled.Store,
             title = stringResource(R.string.business_register_title),
@@ -151,7 +182,13 @@ fun AccountScreen(
             onClick = onOpenStoreOperations,
         )
 
-        if (currentUser?.isAdmin == true) {
+        } else {
+            SectionHeader(if (experience == CommercialExperience.OWNER) "MI NEGOCIO" else "MIS LOCALES")
+            Text("Gestiona tus funciones comerciales desde la primera pestaña. Aquí conservas tus opciones personales.",
+                style = MaterialTheme.typography.bodyMedium, color = ChaskiTextMuted)
+        }
+        if (verifiedAdmin) {
+            SectionHeader("ADMINISTRACIÓN CHASKI")
             AccountMenuItem(
                 icon = Icons.Filled.AdminPanelSettings,
                 title = stringResource(R.string.admin_hu06_title),
@@ -274,7 +311,7 @@ fun AccountScreen(
             subtitle = stringResource(R.string.sign_out_subtitle),
             titleColor = ChaskiError,
             onClick = {
-                authorize { viewModel.signOut(onSignedOut = onSignOut) }
+                onSignOut()
             },
         )
 
@@ -343,4 +380,11 @@ private fun AccountMenuItem(
         )
         }
     }
+}
+
+@Preview(showBackground = true, widthDp = 360, heightDp = 800)
+@Composable private fun AccountClientPreview() { ChaskiTheme { AccountContent() } }
+@Preview(showBackground = true, widthDp = 320, heightDp = 800, fontScale = 1.3f)
+@Composable private fun AccountCommercialAdminPreview() {
+    ChaskiTheme { AccountContent(verifiedAdmin = true, experience = CommercialExperience.OWNER) }
 }

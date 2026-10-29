@@ -141,4 +141,12 @@ class StoreOperationsViewModelTest {
         permitted = emptySet(); changes.value++; runCurrent()
         assertFalse(vm.uiState.value is StoreOperationsUiState.Success)
         vm.updateStatus("b", OperationalStatus.CLOSED); runCurrent(); assertEquals(0, repo.calls)
+    }    @Test fun `ruta seleccionada limita lista y escrituras al local indicado`() = runTest {
+        val vm = StoreOperationsViewModel(repo, auth, businesses,
+            com.chaskifood.app.core.access.domain.OperationTestAuthorization,
+            androidx.lifecycle.SavedStateHandle(mapOf("storeId" to "b"))).also { store.put("selected",it) }
+        runCurrent()
+        assertEquals(listOf("b"),(vm.uiState.value as StoreOperationsUiState.Success).stores.map {it.id})
+        vm.updateStatus("a",OperationalStatus.CLOSED);runCurrent();assertEquals(0,repo.calls)
+        vm.updateStatus("b",OperationalStatus.CLOSED);runCurrent();assertEquals(1,repo.calls)
     }}

@@ -159,9 +159,9 @@ class AccessNavigationTest {
     @Test fun errorNoMuestraInformacionPrivadaYReintentoRecupera() {
         failed = true; screen()
         compose.onNodeWithText("MAIN privado").assertDoesNotExist()
-        compose.onNodeWithText("Reintentar").assertIsDisplayed()
+        compose.onNodeWithText("Volver a comprobar").assertIsDisplayed()
         compose.runOnIdle { failed = false }
-        compose.onNodeWithText("Reintentar").performClick()
+        compose.onNodeWithText("Volver a comprobar").performClick()
         compose.onNodeWithText("MAIN privado").assertIsDisplayed()
     }
     @Test fun rutaAdministrativaSinClaimNoComponeContenido() {

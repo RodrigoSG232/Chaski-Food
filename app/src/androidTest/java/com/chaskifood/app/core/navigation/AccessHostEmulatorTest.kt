@@ -4,6 +4,8 @@ import androidx.activity.compose.setContent
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.rememberNavController
@@ -93,7 +95,10 @@ class AccessHostEmulatorTest {
                 }
             }
             compose.waitForIdle()
-            compose.runOnIdle { nav.navigate(ChaskiDestinations.STORE_OPERATIONS) }
+            compose.waitUntil(25_000) { compose.onAllNodesWithText("Negocio ficticio").fetchSemanticsNodes().isNotEmpty() }
+            compose.onNodeWithText("Negocio ficticio").assertIsDisplayed()
+            compose.onNodeWithText("Buscar").assertDoesNotExist()
+            compose.onNodeWithText("Horarios de locales").performScrollTo().performClick()
             compose.onNodeWithText("Panel Operativo de Locales").assertIsDisplayed()
             compose.runOnIdle { nav.navigate(ChaskiDestinations.STORE_PRODUCT_CONFIGURATION) }
             compose.waitForIdle()

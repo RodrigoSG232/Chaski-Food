@@ -107,4 +107,11 @@ class AccessNavigationPolicyTest {
         assertFalse(AccessNavigationPolicy.matchesSharedFrame("run:3", "run:3", "run:1", "a", "a"))
         assertFalse(AccessNavigationPolicy.matchesSharedFrame("run:3", "run:3", "run:3", "b", "a"))
         assertFalse(AccessNavigationPolicy.matchesSharedFrame("run:3", "run:3", "run:3", "a", null))
+    }    @Test fun `rutas con selector mantienen autorizacion exacta del local`() {
+        val access = resolved(stores = listOf("one", "two"), manager = true)
+        for (base in listOf(ChaskiDestinations.STORE_OPERATIONS, ChaskiDestinations.STORE_PRODUCT_CONFIGURATION)) {
+            assertTrue(AccessNavigationPolicy.allows(access, "$base?storeId={storeId}", "business", "two"))
+            assertFalse(AccessNavigationPolicy.allows(access, "$base?storeId={storeId}", "business", "foreign"))
+            assertFalse(AccessNavigationPolicy.allows(access, "$base?storeId={storeId}", "foreign", "two"))
+        }
     }}

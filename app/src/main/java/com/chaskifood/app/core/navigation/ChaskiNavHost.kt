@@ -318,6 +318,13 @@ fun ChaskiNavHost(
                     onOpenSocialAccounts = {
                         navController.navigate(ChaskiDestinations.SOCIAL_ACCOUNTS)
                     },
+                    onOpenManageStores = { navController.navigate(ChaskiDestinations.MANAGE_STORES) },
+                    onOpenSelectedHours = { _, store ->
+                        navController.navigate(ChaskiDestinations.STORE_OPERATIONS + (store?.let { "?storeId=${Uri.encode(it)}" } ?: ""))
+                    },
+                    onOpenSelectedOffers = { _, store ->
+                        navController.navigate(ChaskiDestinations.STORE_PRODUCT_CONFIGURATION + (store?.let { "?storeId=${Uri.encode(it)}" } ?: ""))
+                    },
                     onOpenBusiness = {
                         navController.navigate(ChaskiDestinations.BUSINESS_STATUS)
                     },
@@ -393,7 +400,8 @@ fun ChaskiNavHost(
                     onBack = { navController.popBackStack() },
                 )
             }
-            protectedComposable(access, navController, ChaskiDestinations.STORE_OPERATIONS) {
+            protectedComposable(access, navController, ChaskiDestinations.STORE_OPERATIONS + "?storeId={storeId}",
+                arguments = listOf(navArgument("storeId") { type = NavType.StringType; nullable = true; defaultValue = null })) {
                 StoreOperationsScreen(
                     onBack = { navController.popBackStack() },
                 )
@@ -403,7 +411,8 @@ fun ChaskiNavHost(
                     onBack = { navController.popBackStack() },
                 )
             }
-            protectedComposable(access, navController, ChaskiDestinations.STORE_PRODUCT_CONFIGURATION) {
+            protectedComposable(access, navController, ChaskiDestinations.STORE_PRODUCT_CONFIGURATION + "?storeId={storeId}",
+                arguments = listOf(navArgument("storeId") { type = NavType.StringType; nullable = true; defaultValue = null })) {
                 StoreProductConfigurationScreen(
                     onBack = { navController.popBackStack() },
                 )
@@ -427,7 +436,7 @@ fun ChaskiNavHost(
                 Scaffold(
                     containerColor = Color.White,
                     bottomBar = {
-                        ChaskiFlowBottomBar(
+                        AccessFlowBottomBar(
                             selected = FlowTab.Account,
                             onTabClick = onTabSelected,
                         )
@@ -449,7 +458,7 @@ fun ChaskiNavHost(
                 androidx.compose.material3.Scaffold(
                     containerColor = com.chaskifood.app.ui.theme.ChaskiBackground,
                     bottomBar = {
-                        com.chaskifood.app.ui.components.ChaskiFlowBottomBar(
+                        AccessFlowBottomBar(
                             selected = com.chaskifood.app.ui.components.FlowTab.Home,
                             onTabClick = onTabSelected,
                         )
@@ -664,7 +673,7 @@ fun ChaskiNavHost(
                 androidx.compose.material3.Scaffold(
                     containerColor = androidx.compose.ui.graphics.Color.White,
                     bottomBar = {
-                        com.chaskifood.app.ui.components.ChaskiFlowBottomBar(
+                        AccessFlowBottomBar(
                             selected = com.chaskifood.app.ui.components.FlowTab.Account,
                             onTabClick = onTabSelected,
                         )
@@ -680,7 +689,7 @@ fun ChaskiNavHost(
                 androidx.compose.material3.Scaffold(
                     containerColor = com.chaskifood.app.ui.theme.ChaskiBackground,
                     bottomBar = {
-                        com.chaskifood.app.ui.components.ChaskiFlowBottomBar(
+                        AccessFlowBottomBar(
                             selected = com.chaskifood.app.ui.components.FlowTab.Account,
                             onTabClick = onTabSelected,
                         )
@@ -696,7 +705,7 @@ fun ChaskiNavHost(
                 androidx.compose.material3.Scaffold(
                     containerColor = com.chaskifood.app.ui.theme.ChaskiBackground,
                     bottomBar = {
-                        com.chaskifood.app.ui.components.ChaskiFlowBottomBar(
+                        AccessFlowBottomBar(
                             selected = com.chaskifood.app.ui.components.FlowTab.Account,
                             onTabClick = onTabSelected,
                         )
@@ -712,7 +721,7 @@ fun ChaskiNavHost(
                 androidx.compose.material3.Scaffold(
                     containerColor = androidx.compose.ui.graphics.Color.White,
                     bottomBar = {
-                        com.chaskifood.app.ui.components.ChaskiFlowBottomBar(
+                        AccessFlowBottomBar(
                             selected = com.chaskifood.app.ui.components.FlowTab.Home,
                             onTabClick = onTabSelected,
                         )
@@ -731,7 +740,7 @@ fun ChaskiNavHost(
                 androidx.compose.material3.Scaffold(
                     containerColor = androidx.compose.ui.graphics.Color.White,
                     bottomBar = {
-                        com.chaskifood.app.ui.components.ChaskiFlowBottomBar(
+                        AccessFlowBottomBar(
                             selected = com.chaskifood.app.ui.components.FlowTab.Home,
                             onTabClick = onTabSelected,
                         )
@@ -773,3 +782,20 @@ private val demoDestinations = setOf(
     ChaskiDestinations.ORDER_PLACED, ChaskiDestinations.ORDER_TRACKING, ChaskiDestinations.ORDER_PROGRESS,
     ChaskiDestinations.ORDER_DELIVERED, ChaskiDestinations.ORDER_RATING,
 )
+
+/** Mantiene las opciones de cliente intactas y la navegación comercial también en destinos personales. */
+@Composable
+private fun AccessFlowBottomBar(selected: FlowTab, onTabClick: (FlowTab) -> Unit) {
+    val access = LocalNavigationAccess.current
+    val observed = access?.states?.collectAsStateWithLifecycle()?.value
+    val resolved = access?.current()?.takeIf { it.origin == observed?.origin }?.resolution as? com.chaskifood.app.core.access.domain.AccessResolution.Resolved
+    if (resolved != null && resolved.experience != com.chaskifood.app.core.access.domain.CommercialExperience.CLIENT) {
+        val owner = resolved.experience == com.chaskifood.app.core.access.domain.CommercialExperience.OWNER
+        val count = resolved.capabilities.grants.filter { it.capability == com.chaskifood.app.core.access.domain.AccessCapability.READ_STORE_ORDERS }
+            .map { it.scope }.distinct().size
+        com.chaskifood.app.feature.main.presentation.CommercialBottomNavContent(
+            if (owner) "Mi negocio" else if (count > 1) "Mis locales" else "Mi local", selected == FlowTab.Account) {
+            onTabClick(if (it == ChaskiTab.ACCOUNT) FlowTab.Account else FlowTab.Home)
+        }
+    } else ChaskiFlowBottomBar(selected, onTabClick)
+}

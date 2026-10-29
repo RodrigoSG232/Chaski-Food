@@ -2,6 +2,7 @@ package com.chaskifood.app.feature.business.presentation
 
 import com.chaskifood.app.core.access.domain.StoreAuthorization
 
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.chaskifood.app.core.common.ApiResult
@@ -46,6 +47,7 @@ class StoreOperationsViewModel @Inject constructor(
     private val authRepository: AuthRepository,
     private val businessRepository: BusinessRepository,
     private val authorization: StoreAuthorization,
+    savedStateHandle: SavedStateHandle = SavedStateHandle(),
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<StoreOperationsUiState>(StoreOperationsUiState.Loading)
@@ -55,7 +57,8 @@ class StoreOperationsViewModel @Inject constructor(
     val operations = _operations.asStateFlow()
 
     private var observation: Job? = null
-    private fun allowed(store: BusinessStore): Boolean = authorization.allows(store.businessId, store.id)
+    private val requestedStoreId: String? = savedStateHandle["storeId"]
+    private fun allowed(store: BusinessStore): Boolean = (requestedStoreId == null || store.id == requestedStoreId) && authorization.allows(store.businessId, store.id)
     private var permissionObservation: Job? = null
     init {
         if (authorization.enforced) {
