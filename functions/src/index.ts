@@ -1,3 +1,6 @@
+import { CommercialAccessService } from "./access/commercialAccessService";
+import { CommercialAccessError, parseCommercialCommand } from "./access/commercialAccessPolicy";
+import { verifyCommercialIdentity } from "./auth/verifyBuyerToken";
 import { getAuth } from "firebase-admin/auth";
 import { getFirestore } from "firebase-admin/firestore";
 import { onRequest } from "firebase-functions/v2/https";
@@ -21,6 +24,25 @@ export const foodApi = onRequest({ region: "southamerica-west1", timeoutSeconds:
     response.set("Cache-Control", "no-store");
     try {
       const runtime = resolveRuntimeEnvironment(process.env);
+      if (request.path.startsWith("/api/v1/access/")) {
+        // Fase aislada: estas operaciones no se activan en Cloud aunque se despliegue el paquete.
+        if (runtime.mode !== "LOCAL") { response.status(404).json({ error: "NOT_FOUND" }); return; }
+        const app = getRuntimeApp(runtime);
+        const actor = await verifyCommercialIdentity(getAuth(app), request.get("authorization"));
+        const service = new CommercialAccessService(getFirestore(app), getAuth(app));
+        if (request.path === "/api/v1/access/operations" && request.method === "POST") {
+          response.status(200).json(await service.execute(actor, parseCommercialCommand(request.body))); return;
+        }
+        if (request.path === "/api/v1/access/assignment-revision" && request.method === "POST") {
+          const body = request.body;
+          if (!body || typeof body !== "object" || Array.isArray(body) || Object.keys(body).sort().join(",") !== "businessId,email") throw new CommercialAccessError("INVALID_REQUEST", 400);
+          response.status(200).json(await service.assignmentRevision(actor, body.businessId, body.email)); return;
+        }
+        if (request.path === "/api/v1/access/facts" && request.method === "GET") {
+          response.status(200).json(await service.facts(actor)); return;
+        }
+        response.status(404).json({ error: "NOT_FOUND" }); return;
+      }
       if (isQuoteRequest) {
         if (request.method !== "POST") { response.status(405).set("Allow", "POST").json({ error: "METHOD_NOT_ALLOWED" }); return; }
         const { storeId, addressId } = parseDeliveryQuoteRequest(request.body);
@@ -51,6 +73,7 @@ export const foodApi = onRequest({ region: "southamerica-west1", timeoutSeconds:
       response.status(200).json({ ...result, checkedAt: new Date().toISOString() });
     } catch (error) {
       if (error instanceof AuthenticationRequired) response.status(401).json({ error: "AUTHENTICATION_REQUIRED" });
+      else if (error instanceof CommercialAccessError) response.status(error.status).json({ error: error.code });
       else if (error instanceof QuoteError) response.status(error.status).json({ error: error.code });
       else if (error instanceof InconsistentData) response.status(503).json({ error: "DATA_INCONSISTENT" });
       else if (error instanceof URIError) response.status(400).json({ error: "INVALID_STORE_ID" });
