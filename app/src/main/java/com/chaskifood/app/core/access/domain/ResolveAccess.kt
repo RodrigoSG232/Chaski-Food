@@ -12,6 +12,9 @@ class ResolveAccess {
             AccessFacts.Loading -> return AccessResolution.Loading(session)
             AccessFacts.Failed -> return error(AccessProblem.FACTS_UNAVAILABLE)
             AccessFacts.Unverifiable -> return error(AccessProblem.FACTS_UNVERIFIABLE)
+            is AccessFacts.ConfirmedConflict -> return if (facts.session != session) error(AccessProblem.STALE_SESSION)
+                else AccessResolution.Conflict(session, AccessCapabilities(listOf(
+                    AccessGrant(AccessCapability.READ_PERSONAL_PURCHASES, AccessScope.Account(session.uid)))))
             is AccessFacts.Checked -> Unit
         }
         if (facts.session != session) return error(AccessProblem.STALE_SESSION)

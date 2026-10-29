@@ -237,3 +237,31 @@ test("cambio correo rechazado no revoca asignacion anterior", async () => {
   assert.equal(r.body.error, "AUTHORIZATION_CONFLICT");
   assert.equal((await db.doc(`store_managers/${o.uid}_${old.email}`).get()).get("bindingState"), "VERIFIED");
 });
+
+
+test("facts propietario aprobado incluye varios locales propios y excluye ajenos", async () => {
+  const o = await owner(); const other = await owner();
+  const r = await request(o); assert.equal(r.status, 200);
+  assert.deepEqual(r.body.stores.map((s: any) => s.storeId).sort(), [`${o.uid}-second`, `${o.uid}-store`].sort());
+  assert(r.body.stores.every((s: any) => s.businessId === o.uid && s.businessStatus === "APPROVED"));
+  assert(r.body.stores.every((s: any) => Object.keys(s).sort().join(",") === "businessId,businessStatus,operationalStatus,status,storeId"));
+  assert.equal(r.body.stores.some((s: any) => s.businessId === other.uid), false);
+  assert.deepEqual(r.body.assignments, []);
+});
+test("facts propietario suspendido conserva propiedad sin listado de locales", async () => {
+  const o = await owner(); await db.doc(`business_requests/${o.uid}`).update({ status: "SUSPENDED", suspensionReason: "Prueba" });
+  const r = await request(o); assert.equal(r.status, 200);
+  assert.equal(r.body.ownership.status, "SUSPENDED"); assert.equal(r.body.ownership.suspensionReason, "Prueba");
+  assert.deepEqual(r.body.stores, []); assert.deepEqual(r.body.assignments, []);
+});
+
+test("facts conflicto confirmado no devuelve autorizaciones parciales", async () => {
+  const o = await owner(); const manager = await account(); const rev = await prepare(manager.email);
+  assert.equal((await assign(o, manager, rev)).status, 200);
+  await db.doc(`business_requests/${manager.uid}`).set({ ownerUid: manager.uid, status: "APPROVED" });
+  const r = await request(manager); assert.equal(r.status, 409); assert.deepEqual(r.body, { error: "AUTHORIZATION_CONFLICT" });
+});
+test("facts propietario con estado de local inconsistente falla cerrado", async () => {
+  const o = await owner(); await db.doc(`stores/${o.uid}-store`).update({ status: "UNKNOWN" });
+  const r = await request(o); assert.equal(r.status, 503); assert.deepEqual(r.body, { error: "DATA_INCONSISTENT" });
+});

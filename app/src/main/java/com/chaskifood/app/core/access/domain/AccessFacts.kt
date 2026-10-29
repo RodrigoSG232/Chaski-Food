@@ -7,6 +7,8 @@ sealed interface AccessFacts {
     data object Loading : AccessFacts
     data object Unverifiable : AccessFacts
     data object Failed : AccessFacts
+    /** Respuesta autoritativa de conflicto, sin fabricar propiedad ni asignaciones. */
+    data class ConfirmedConflict(val session: AccessSession) : AccessFacts
     class Checked(
         val session: AccessSession,
         val ownership: AccessOwnership?,

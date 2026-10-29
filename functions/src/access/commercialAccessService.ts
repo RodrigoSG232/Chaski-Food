@@ -258,6 +258,18 @@ export class CommercialAccessService {
       const assignments = confirmedAssignments(ctx.rows, actor.uid);
       if (assignments.length && (!actor.emailVerified || ctx.mail?.boundUid !== actor.uid)) throw new CommercialAccessError("EMAIL_VERIFICATION_REQUIRED", 403);
       const stores = [];
+      // Propiedad aprobada: la consulta y sus estados pertenecen a la misma instantanea.
+      // Suspendido conserva identidad, pero no recibe listado de locales.
+      if (ctx.business?.status === "APPROVED") {
+        const owned = await tx.get(this.db.collection("stores").where("businessId", "==", actor.uid));
+        for (const doc of owned.docs) {
+          const store = doc.data();
+          if (!["ACTIVE", "INACTIVE", "SUSPENDED"].includes(store.status) ||
+              !["OPEN", "CLOSED", "PAUSED"].includes(store.operationalStatus)) throw new CommercialAccessError("DATA_INCONSISTENT", 503);
+          stores.push({ storeId: doc.id, businessId: actor.uid, status: store.status,
+            operationalStatus: store.operationalStatus, businessStatus: "APPROVED" });
+        }
+      }
       for (const row of assignments) for (const id of row.assignedStoreIds) {
         const store = (await tx.get(this.db.doc(`stores/${id}`))).data();
         const business = (await tx.get(this.db.doc(`business_requests/${row.businessId}`))).data();
