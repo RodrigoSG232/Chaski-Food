@@ -10,7 +10,7 @@ import { initializeRuntimeApp, resolveRuntimeEnvironment, routeSourceForRuntime,
 const heigitKey = defineSecret("HEIGIT_API_KEY");
 export const foodApi = onRequest({ region: "southamerica-west1", timeoutSeconds: 15, minInstances: 0, maxInstances: 1,
   concurrency: 10, invoker: "public", secrets: [heigitKey] }, createFoodApiHandler({
-    runtime: () => resolveRuntimeEnvironment(process.env),
+    runtime: () => resolveRuntimeEnvironment(process.env, "foodApi"),
     app: runtime => {
       const app = getApps().find(candidate => candidate.name === "[DEFAULT]") ?? initializeRuntimeApp(runtime);
       if (app.options.projectId !== runtime.projectId) throw new RuntimeConfigurationError();
@@ -30,5 +30,4 @@ function routeReader(runtime: ReturnType<typeof resolveRuntimeEnvironment>): { r
   return { reader: new OpenRouteServiceReader(key), source: "HEIGIT" };
 }
 
-// FCM activation remains a separate B2 increment; no Cloud notifier changes here.
 export { newOrderNotifier } from "./notifications/newOrderNotifier";

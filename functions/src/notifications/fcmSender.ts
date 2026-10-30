@@ -1,5 +1,6 @@
 import { getMessaging, Message } from "firebase-admin/messaging";
 import { App } from "firebase-admin/app";
+import { RuntimeConfigurationError, RuntimeEnvironment } from "../runtimeEnvironment";
 export type NewOrderNotice=Readonly<{type:"NEW_ORDER";eventId:string;orderId:string;storeId:string;businessId:string;recipientUid:string}>;
 export type SendResult="ACCEPTED"|"INVALID_TOKEN"|"PERMANENT_FAILURE";
 export interface NoticeSender {send(token:string,data:NewOrderNotice):Promise<SendResult>}
@@ -21,4 +22,14 @@ export class FirebaseNoticeSender implements NoticeSender {
       throw new Error("NOTIFICATION_TRANSPORT_UNAVAILABLE");
     }
   }
+}
+/** CLOUD always uses Messaging and refuses fixtures; LOCAL only simulates, and only when the fixture is enabled.
+ * null means the notifier is intentionally inactive for this runtime. */
+export function noticeSenderForRuntime(runtime:RuntimeEnvironment,fixture:string|undefined,app:App):NoticeSender|null {
+  if(runtime.mode==="CLOUD"){
+    if(fixture!==undefined)throw new RuntimeConfigurationError();
+    return new FirebaseNoticeSender(app);
+  }
+  if(fixture!==undefined && fixture!=="enabled")throw new RuntimeConfigurationError();
+  return fixture==="enabled"?new SimulatedNoticeSender():null;
 }

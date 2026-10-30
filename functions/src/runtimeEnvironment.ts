@@ -1,6 +1,9 @@
 import { initializeApp } from "firebase-admin/app";
 
 export type RuntimeEnvironment = { mode: "LOCAL" | "CLOUD"; projectId: string };
+/** Closed list of deployable entry points; each caller declares its own target. */
+export type FunctionTarget = "foodApi" | "newOrderNotifier";
+const functionTargets: readonly string[] = ["foodApi", "newOrderNotifier"];
 export class RuntimeConfigurationError extends Error {
   constructor() { super("RUNTIME_CONFIGURATION_INVALID"); }
 }
@@ -10,7 +13,8 @@ const localFirestore = "127.0.0.1:8089";
 const localAuth = "127.0.0.1:9099";
 
 /** Require several independent platform signals before Admin SDK can access any data. */
-export function resolveRuntimeEnvironment(env: NodeJS.ProcessEnv): RuntimeEnvironment {
+export function resolveRuntimeEnvironment(env: NodeJS.ProcessEnv, target: FunctionTarget): RuntimeEnvironment {
+  if (!functionTargets.includes(target)) throw new RuntimeConfigurationError();
   const projectId = env.GCLOUD_PROJECT || env.GOOGLE_CLOUD_PROJECT;
   if (env.GCLOUD_PROJECT && env.GOOGLE_CLOUD_PROJECT && env.GCLOUD_PROJECT !== env.GOOGLE_CLOUD_PROJECT) {
     throw new RuntimeConfigurationError();
@@ -26,7 +30,7 @@ export function resolveRuntimeEnvironment(env: NodeJS.ProcessEnv): RuntimeEnviro
   if (env.FUNCTIONS_EMULATOR || !env.K_SERVICE || projectId !== "chaski-food-9adba" ||
       env.FIRESTORE_EMULATOR_HOST || env.FIREBASE_AUTH_EMULATOR_HOST || env.FIREBASE_DATABASE_EMULATOR_HOST ||
       env.FIREBASE_STORAGE_EMULATOR_HOST || env.FUNCTIONS_EMULATOR_HOST || env.CHASKI_ROUTE_FIXTURE || env.CHASKI_NOTIFICATIONS_FIXTURE ||
-      env.FUNCTION_TARGET !== "foodApi") {
+      env.FUNCTION_TARGET !== target) {
     throw new RuntimeConfigurationError();
   }
   return { mode: "CLOUD", projectId };

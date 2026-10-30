@@ -37,17 +37,26 @@ export function createFoodApiHandler(dependencies: FoodApiDependencies): FoodHtt
       const attemptPath = /^\/api\/v1\/order-attempts\/([^/]+)\/?$/.exec(request.path);
       const devicePath = /^\/api\/v1\/devices\/([^/]+)\/?$/.exec(request.path);
       if(devicePath) {
-        if(runtime.mode!=="LOCAL"){response.status(404).json({error:"NOT_FOUND"});return;}
         if(!["PUT","DELETE"].includes(request.method)){response.status(405).set("Allow","PUT, DELETE").end();return;}
         try {
-          const app=dependencies.app(runtime),uid=await verifyBuyerToken(getAuth(app),request.get("authorization"));
-          const registry=new DeviceRegistry(getFirestore(app)),id=decodeURIComponent(devicePath[1]);
+          const app=dependencies.app(runtime),auth=getAuth(app),db=getFirestore(app);
+          // Only a current store manager may store a token; unbinding stays open to any authenticated UID.
+          const actor=request.method==="PUT"?await verifyCommercialIdentity(auth,request.get("authorization")):null;
+          const uid=actor?.uid??await verifyBuyerToken(auth,request.get("authorization"));
+          const registry=new DeviceRegistry(db),id=decodeURIComponent(devicePath[1]);
           if(Object.keys(request.query).some(k=>request.method!=="DELETE"||k!=="bindingVersion"))throw new OrderHttpError("INVALID_REQUEST",400);
-          if(request.method==="PUT")await registry.put(uid,id,request.body);else await registry.remove(uid,id,Number(request.query.bindingVersion));
+          if(actor){
+            await db.runTransaction(tx=>new CommercialAccessService(db,auth).requireAnyStoreOrderReader(tx,actor),{readOnly:true});
+            await registry.put(uid,id,request.body);
+          }else await registry.remove(uid,id,Number(request.query.bindingVersion));
           response.status(204).end();
         }catch(error){
           if(error instanceof AuthenticationRequired)response.status(401).json({error:"AUTHENTICATION_REQUIRED"});
           else if(error instanceof OrderHttpError)response.status(error.status).json({error:error.code});
+          else if(error instanceof CommercialAccessError){
+            const denied=["FORBIDDEN","EMAIL_VERIFICATION_REQUIRED","AUTHORIZATION_CONFLICT"].includes(error.code);
+            response.status(denied?403:503).json({error:denied?"DEVICE_NOT_ELIGIBLE":"DEVICE_REGISTRY_UNAVAILABLE"});
+          }
           else if(error instanceof URIError)response.status(400).json({error:"INVALID_REQUEST"});
           else response.status(503).json({error:"DEVICE_REGISTRY_UNAVAILABLE"});
         }

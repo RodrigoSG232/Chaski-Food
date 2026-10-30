@@ -23,6 +23,20 @@ test("actual Functions v2 creation trigger requests retry redelivery rather than
   assert.equal(endpoint.eventTrigger.retry,true);assert.equal(endpoint.timeoutSeconds,120);
 });
 
+test("notifier with a foreign or incomplete runtime acknowledges without initializing Admin or Messaging",async()=>{
+  const {newOrderNotifier}=await import("../src/notifications/newOrderNotifier");
+  const keys=["FUNCTIONS_EMULATOR","K_SERVICE","FUNCTION_TARGET","GCLOUD_PROJECT","GOOGLE_CLOUD_PROJECT","CHASKI_NOTIFICATIONS_FIXTURE"];
+  const saved=Object.fromEntries(keys.map(k=>[k,process.env[k]]));
+  try {
+    for(const env of [{},{K_SERVICE:"foodapi",FUNCTION_TARGET:"foodApi",GCLOUD_PROJECT:"chaski-food-9adba"},
+      {K_SERVICE:"newordernotifier",FUNCTION_TARGET:"newOrderNotifier",GCLOUD_PROJECT:"chaski-food-9adba",CHASKI_NOTIFICATIONS_FIXTURE:"enabled"}]){
+      for(const k of keys)delete process.env[k];Object.assign(process.env,env);
+      await newOrderNotifier.run({params:{eventId:`new_order_${"a".repeat(64)}`}} as any);
+    }
+    const {getApps}=await import("firebase-admin/app");assert.equal(getApps().length,0);
+  }finally {for(const k of keys){if(saved[k]===undefined)delete process.env[k];else process.env[k]=saved[k];}}
+});
+
 test("FCM adapter classifies invalid/permanent/transient failures without leaking raw errors",async()=>{
   const notice={type:"NEW_ORDER" as const,eventId:"event",orderId:"order",storeId:"store",businessId:"business",recipientUid:"manager"};
   for(const [code,expected] of [["messaging/registration-token-not-registered","INVALID_TOKEN"],["messaging/invalid-registration-token","INVALID_TOKEN"],

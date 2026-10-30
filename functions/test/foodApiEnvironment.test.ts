@@ -8,7 +8,7 @@ async function probe(path: string, method: string, configured: boolean) {
   const handler = createFoodApiHandler({
     runtime: () => resolveRuntimeEnvironment(configured ? {
       K_SERVICE: "foodapi", FUNCTION_TARGET: "foodApi", GCLOUD_PROJECT: "chaski-food-9adba",
-    } : { GCLOUD_PROJECT: "chaski-food-9adba" }),
+    } : { GCLOUD_PROJECT: "chaski-food-9adba" }, "foodApi"),
     app: () => { sdkCalls++; throw new Error("SDK_MUST_NOT_BE_CALLED"); },
     routeReader: () => { throw new Error("ROUTING_MUST_NOT_BE_CALLED"); },
   });
@@ -21,13 +21,11 @@ async function probe(path: string, method: string, configured: boolean) {
   return result;
 }
 
-test("B1 keeps CLOUD device registration closed until B2, without accessing SDK or FCM",async()=>{
-  for (const method of ["PUT","DELETE"]) {
-    const result = await probe("/api/v1/devices/fixture-device",method,true);
-    assert.equal(result.status,404);assert.deepEqual(result.body,{error:"NOT_FOUND"});
-  }
+test("CLOUD device registry rejects other methods before accessing SDK or FCM",async()=>{
+  for (const method of ["GET","POST","PATCH"]) assert.equal((await probe("/api/v1/devices/fixture-device",method,true)).status,405);
 });
 test("unconfigured runtime never reaches auth, data or routing services",async()=>{
   for(const path of ["/api/v1/access/facts","/api/v1/orders","/api/v1/order-attempts/fixture","/api/v1/stores/fixture/orders"])
     assert.equal((await probe(path,"GET",false)).status,503);
+  for (const method of ["PUT","DELETE"]) assert.equal((await probe("/api/v1/devices/fixture-device",method,false)).status,503);
 });
