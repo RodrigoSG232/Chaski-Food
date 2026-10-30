@@ -192,6 +192,36 @@ service cloud.firestore {
       );
     }
 
+    // Publicado en chaski-food-9adba y requerido por FirebaseUserProfileStore; conservado literal en la fusión HU34.
+    match /users/{uid} {
+      allow read: if isOwner(uid);
+
+      allow create: if isOwner(uid)
+        && request.resource.data.keys().hasAll([
+          'uid', 'email', 'displayName', 'createdAt', 'updatedAt'
+        ])
+        && request.resource.data.keys().hasOnly([
+          'uid', 'email', 'displayName', 'createdAt', 'updatedAt'
+        ])
+        && request.resource.data.uid == uid
+        && request.resource.data.email is string
+        && request.resource.data.email == request.auth.token.get('email', '')
+        && request.resource.data.displayName is string
+        && request.resource.data.displayName.size() <= 200
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time;
+
+      allow update: if isOwner(uid)
+        && resource.data.uid == uid
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['displayName', 'updatedAt'])
+        && request.resource.data.displayName is string
+        && request.resource.data.displayName.size() <= 200
+        && request.resource.data.updatedAt == request.time;
+
+      allow delete: if false;
+    }
+
     match /users/{uid}/addresses/{addressId} {
       allow read: if isOwner(uid);
 
@@ -656,6 +686,32 @@ service cloud.firestore {
             ).data.lastAuditId == id
           )
         );
+    }
+
+    // Publicado en chaski-food-9adba (origen 4ce5618, revertido en el repo en 39b1a13); conservado literal hasta
+    // confirmar su necesidad con el equipo. Solo usa signedIn/admin/ownerUid, sin helpers modificados por HU34.
+    function noticeStore(id) { return /databases/$(database)/documents/stores/$(id); }
+    function noticeBusiness(id) { return /databases/$(database)/documents/business_requests/$(id); }
+    function noticeAudit(id) { return /databases/$(database)/documents/audit_logs/$(id); }
+
+    match /store_notices/{id} {
+      allow read: if signedIn() && resource.data.ownerUid == request.auth.uid;
+      allow create: if admin()
+        && request.resource.data.keys().hasOnly(['ownerUid', 'storeId', 'businessId', 'title', 'message', 'read', 'createdAt', 'auditId'])
+        && request.resource.data.auditId == id && request.resource.data.read == false
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.ownerUid == get(noticeBusiness(request.resource.data.businessId)).data.ownerUid
+        && request.resource.data.businessId == get(noticeStore(request.resource.data.storeId)).data.businessId
+        && request.resource.data.title is string && request.resource.data.title.size() > 0 && request.resource.data.title.size() <= 1000
+        && request.resource.data.message is string && request.resource.data.message.size() <= 10000
+        && !exists(noticeAudit(id))
+        && getAfter(noticeAudit(id)).data.timestamp == request.time
+        && getAfter(noticeAudit(id)).data.adminUid == request.auth.uid
+        && getAfter(noticeAudit(id)).data.targetStoreId == request.resource.data.storeId;
+      allow update: if signedIn() && resource.data.ownerUid == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read'])
+        && request.resource.data.read == true;
+      allow delete: if false;
     }
 
     match /{document=**} {
