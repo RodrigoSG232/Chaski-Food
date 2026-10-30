@@ -128,6 +128,59 @@ class SharedAccessContextTest {
         pending.complete(AccessFactsResult(AccessFacts.Checked(AccessSession("a", 1), null, emptyList(), emptyList(), AccessExclusivity.VERIFIED), 10)); runCurrent()
         assertEquals(current, f.context.states.value)
     }
+    @Test fun `revalidar con lease vigente no muestra carga y aplica la respuesta nueva`() = runTest {
+        val f = Fixture(this); runCurrent(); f.driver.login(); runCurrent()
+        val phases = mutableListOf<AccessContextPhase>()
+        backgroundScope.launch { f.context.states.collect { phases += it.phase } }; runCurrent()
+        f.reader.read = { checked(it, 6) }; advanceTimeBy(300); runCurrent()
+        assertTrue(f.context.revalidate()); assertTrue(f.context.currentState().resolution is AccessResolution.Resolved); runCurrent()
+        assertEquals(2, f.reader.calls); assertEquals(6L, f.context.states.value.serverRevision)
+        assertEquals(listOf(AccessContextPhase.RESOLVED), phases.distinct())
+        advanceTimeBy(1_100); runCurrent() // la lease nueva nace en 300 ms: sigue vigente tras 1000 ms
+        assertTrue(f.context.currentState().resolution is AccessResolution.Resolved)
+    }
+    @Test fun `revalidar aplica de inmediato una revocacion`() = runTest {
+        val f = Fixture(this); runCurrent(); f.driver.login(); runCurrent()
+        f.reader.read = { AccessFactsResult(AccessFacts.Unverifiable, problem = AccessCheckProblem.RECONCILIATION_REQUIRED) }
+        assertTrue(f.context.revalidate()); runCurrent()
+        assertEquals(AccessCheckProblem.RECONCILIATION_REQUIRED, f.context.states.value.problem)
+        assertFalse(f.context.currentState().resolution is AccessResolution.Resolved)
+    }
+    @Test fun `revalidar con fallo de red no extiende la lease`() = runTest {
+        val f = Fixture(this); runCurrent(); f.driver.login(); runCurrent()
+        f.reader.read = { AccessFactsResult(AccessFacts.Failed, problem = AccessCheckProblem.UNAVAILABLE) }
+        advanceTimeBy(500); runCurrent(); assertTrue(f.context.revalidate()); runCurrent()
+        assertTrue(f.context.currentState().resolution is AccessResolution.Resolved)
+        advanceTimeBy(500); runCurrent()
+        assertEquals(AccessCheckProblem.EXPIRED, f.context.states.value.problem)
+        advanceTimeBy(10_000); runCurrent(); assertEquals(2, f.reader.calls)
+    }
+    @Test fun `sin lease vigente revalidar no consulta y pide refresco bloqueante`() = runTest {
+        val f = Fixture(this); runCurrent(); f.driver.login(); runCurrent()
+        f.reader.read = { AccessFactsResult(AccessFacts.Failed, problem = AccessCheckProblem.UNAVAILABLE) }
+        advanceTimeBy(1_001); runCurrent(); val calls = f.reader.calls
+        assertFalse(f.context.revalidate()); runCurrent(); assertEquals(calls, f.reader.calls)
+        f.context.invalidate(); assertFalse(f.context.revalidate())
+    }
+    @Test fun `revalidaciones seguidas reemplazan la consulta y descartan la antigua`() = runTest {
+        val f = Fixture(this); runCurrent(); f.driver.login(); runCurrent()
+        val old = CompletableDeferred<AccessFactsResult>()
+        f.reader.read = { withContext(NonCancellable) { old.await() } }
+        assertTrue(f.context.revalidate()); runCurrent()
+        f.reader.read = { checked(it, 9) }
+        assertTrue(f.context.revalidate()); runCurrent(); assertEquals(9L, f.context.states.value.serverRevision)
+        old.complete(AccessFactsResult(AccessFacts.Unverifiable, problem = AccessCheckProblem.RECONCILIATION_REQUIRED)); runCurrent()
+        assertEquals(9L, f.context.states.value.serverRevision); assertTrue(f.context.currentState().resolution is AccessResolution.Resolved)
+    }
+    @Test fun `cambio de usuario durante revalidacion descarta la respuesta anterior`() = runTest {
+        val f = Fixture(this); runCurrent(); f.driver.login(); runCurrent()
+        val pending = CompletableDeferred<AccessFactsResult>()
+        f.reader.read = { state -> if ((state.identity as AccessIdentity.Authenticated).session.uid == "a") withContext(NonCancellable) { pending.await() } else checked(state, 9) }
+        assertTrue(f.context.revalidate()); runCurrent()
+        f.driver.login("b", "login-b"); runCurrent(); val current = f.context.states.value
+        pending.complete(AccessFactsResult(AccessFacts.Checked(AccessSession("a", 1), null, emptyList(), emptyList(), AccessExclusivity.VERIFIED), 10)); runCurrent()
+        assertEquals(current, f.context.states.value); assertEquals("b", current.origin.session?.uid)
+    }
     @Test fun `logout y segundo plano cancelan la renovacion`() = runTest {
         val f = Fixture(this); runCurrent(); f.driver.login(); runCurrent()
         f.driver.events.emit(IdentityObservation.SignedOut); runCurrent(); advanceTimeBy(5_000); runCurrent()

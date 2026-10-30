@@ -43,6 +43,11 @@ class AccessNavigationViewModel @Inject constructor(
             if (completed == null) context.invalidate(AccessCheckProblem.UNAVAILABLE)
         }
     }
+    /** Revalidacion al navegar: silenciosa con lease vigente; si no la hay, refresco bloqueante normal. */
+    fun revalidate() {
+        if (!enabled || refreshJob?.isActive == true) return
+        if (!context.revalidate()) refresh(force = false)
+    }
     fun current() = context.currentState()
     fun sessionStamp(origin: AccessProvenance) = instanceId + ":" + origin.generation
     fun allows(route: String?, businessId: String? = null, storeId: String? = null, resubmit: Boolean = false): Boolean =

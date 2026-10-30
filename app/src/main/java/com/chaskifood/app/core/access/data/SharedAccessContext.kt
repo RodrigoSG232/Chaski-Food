@@ -55,26 +55,29 @@ class SharedAccessContext(private val identity: SharedAccessIdentitySource, priv
         if (!enabled) { restricted(state, AccessCheckProblem.ENVIRONMENT_UNAVAILABLE); return@synchronized }
         restricted(state, if (state.availability == IdentityAvailability.FAILED) AccessCheckProblem.UNAVAILABLE else null)
         if (state.availability != IdentityAvailability.READY || state.identity !is AccessIdentity.Authenticated) return@synchronized
-        work = scope.launch {
-            if (!publish(state, request, read(state, READ_TIMEOUT_MILLIS))) return@launch
-            // Un solo trabajo por ticket: logout, cambio de cuenta, segundo plano o refresh cancelan la renovacion.
-            // Sin lease vigente (error, conflicto o revocacion publicados) no hay nada que renovar ni que caducar.
-            while (true) {
-                if (synchronized(gate) { ticket != request || validUntil == null }) return@launch
-                delay(renewAfterMillis)
-                val remaining = synchronized(gate) { validUntil?.minus(monotonicMillis()) } ?: return@launch
-                val leaseLeft = remaining.coerceAtMost(validityMillis - renewAfterMillis)
-                if (leaseLeft <= 0) break
-                val renewed = read(state, minOf(leaseLeft, READ_TIMEOUT_MILLIS))
-                if (renewed.facts is AccessFacts.Failed) {
-                    // Fallo de red: se conserva la lease vigente hasta su caducidad, sin reintentos automaticos.
-                    delay((synchronized(gate) { validUntil?.minus(monotonicMillis()) } ?: 0L).coerceIn(0L, leaseLeft))
-                    break
-                }
-                if (!publish(state, request, renewed)) return@launch
+        work = check(state, request, silent = false)
+    }
+    /** Con [silent] la primera consulta es una renovacion inmediata: no retira la lease vigente mientras espera. */
+    private fun check(state: AccessIdentityState, request: Long, silent: Boolean): Job = scope.launch {
+        if (!silent && !publish(state, request, read(state, READ_TIMEOUT_MILLIS))) return@launch
+        var renewNow = silent
+        // Un solo trabajo por ticket: logout, cambio de cuenta, segundo plano o refresh cancelan la renovacion.
+        // Sin lease vigente (error, conflicto o revocacion publicados) no hay nada que renovar ni que caducar.
+        while (true) {
+            if (synchronized(gate) { ticket != request || validUntil == null }) return@launch
+            if (!renewNow) delay(renewAfterMillis)
+            renewNow = false
+            val leaseLeft = synchronized(gate) { validUntil?.minus(monotonicMillis()) } ?: return@launch
+            if (leaseLeft <= 0) break
+            val renewed = read(state, minOf(leaseLeft, READ_TIMEOUT_MILLIS))
+            if (renewed.facts is AccessFacts.Failed) {
+                // Fallo de red: se conserva la lease vigente hasta su caducidad, sin reintentos automaticos.
+                delay((synchronized(gate) { validUntil?.minus(monotonicMillis()) } ?: 0L).coerceAtLeast(0L))
+                break
             }
-            synchronized(gate) { if (ticket == request) restricted(state, AccessCheckProblem.EXPIRED) }
+            if (!publish(state, request, renewed)) return@launch
         }
+        synchronized(gate) { if (ticket == request) restricted(state, AccessCheckProblem.EXPIRED) }
     }
     private suspend fun read(state: AccessIdentityState, timeoutMillis: Long): AccessFactsResult =
         try { withTimeoutOrNull(timeoutMillis) { facts.read(state) } ?: AccessFactsResult(AccessFacts.Failed, problem = AccessCheckProblem.UNAVAILABLE) }
@@ -109,6 +112,17 @@ class SharedAccessContext(private val identity: SharedAccessIdentitySource, priv
         synchronized(gate) { work?.cancel(); ++ticket; restricted(identity.states.value,
             if (enabled) null else AccessCheckProblem.ENVIRONMENT_UNAVAILABLE) }
         if (enabled) identity.refresh()
+    }
+    /** Para la navegacion: con una lease vigente de la sesion actual consulta sin retirarla (la consulta en curso
+     * se reemplaza, nunca hay dos) y devuelve true. Sin lease vigente devuelve false: el llamador debe usar [refresh].
+     */
+    fun revalidate(): Boolean = synchronized(gate) {
+        val state = identity.states.value
+        val leased = enabled && mutable.value.phase == AccessContextPhase.RESOLVED && mutable.value.origin == state.origin &&
+            state.availability == IdentityAvailability.READY && state.identity is AccessIdentity.Authenticated &&
+            validUntil?.let { monotonicMillis() < it } == true
+        if (leased) { work?.cancel(); work = check(state, ++ticket, silent = true) }
+        leased
     }
     /** También se comprueba al ejecutar acciones: un dispositivo suspendido no prolonga la lease. */
     fun currentState(): AccessContextState = synchronized(gate) {

@@ -91,7 +91,9 @@ internal fun AccessNavigationEvents(access: AccessNavigationViewModel, nav: NavH
         ChaskiDestinations.ADMIN_BUSINESS_REVIEW, ChaskiDestinations.ADMIN_BUSINESS_SUPERVISION) }
     LaunchedEffect(entry?.id) {
         val route = entry?.destination?.route
-        if (previousRoute?.substringBefore('?') in commercial && previousRoute != route) access.refresh()
+        // Al salir de una pantalla que pudo cambiar permisos (REGISTER, APPROVE, ASSIGN...) se consultan hechos
+        // nuevos sin retirar una lease vigente; el resultado se aplica en cuanto llega.
+        if (previousRoute?.substringBefore('?') in commercial && previousRoute != route) access.revalidate()
         previousRoute = route
     }
 }
