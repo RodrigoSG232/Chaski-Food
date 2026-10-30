@@ -159,21 +159,23 @@ class FirebaseAuthRepository @Inject constructor(
         phoneNumber: String,
         forceResend: Boolean,
     ): ApiResult<String> = suspendCancellableCoroutine { continuation ->
-        val requestedUser = firebaseAuth.currentUser
+        // D2-H2: the phone only links to the signed-in email account. Without a session no SMS is requested,
+        // so automatic verification can never create a phone-only account either.
+        val requestedUser = firebaseAuth.currentUser ?: run {
+            continuation.resume(ApiResult.Failure(PHONE_SIGN_IN_REQUIRED))
+            return@suspendCancellableCoroutine
+        }
         val options = PhoneAuthOptions.newBuilder(firebaseAuth)
             .setPhoneNumber(phoneNumber)
             .setTimeout(60L, TimeUnit.SECONDS)
             .setActivity(activity)
             .setCallbacks(object : PhoneAuthProvider.OnVerificationStateChangedCallbacks() {
                 override fun onVerificationCompleted(credential: PhoneAuthCredential) {
-                    if (firebaseAuth.currentUser?.uid != requestedUser?.uid) return
-                    val task = if (requestedUser == null) firebaseAuth.signInWithCredential(credential)
-                        else requestedUser.linkWithCredential(credential)
-                    task.addOnCompleteListener { completed ->
+                    if (firebaseAuth.currentUser?.uid != requestedUser.uid) return
+                    requestedUser.linkWithCredential(credential).addOnCompleteListener { completed ->
                         if (completed.isSuccessful) {
                             if (firebaseAuth.currentUser?.uid != completed.result?.user?.uid) return@addOnCompleteListener
                             val verifiedUser = completed.result?.user ?: return@addOnCompleteListener
-                            if (requestedUser == null) signOutMarker.clearAfterSignIn()
                             verifiedUser.getIdToken(true).addOnCompleteListener {
                                 profileStore.ensureTask(verifiedUser).addOnCompleteListener { saved ->
                                     if (continuation.isActive) {
@@ -207,10 +209,10 @@ class FirebaseAuthRepository @Inject constructor(
                     verificationId: String,
                     token: PhoneAuthProvider.ForceResendingToken,
                 ) {
-                    if (firebaseAuth.currentUser?.uid == requestedUser?.uid) {
+                    if (firebaseAuth.currentUser?.uid == requestedUser.uid) {
                         resendToken = token
                         resendPhone = phoneNumber
-                        resendUserId = requestedUser?.uid
+                        resendUserId = requestedUser.uid
                     }
                     if (continuation.isActive) {
                         continuation.resume(ApiResult.Success(verificationId))
@@ -218,7 +220,7 @@ class FirebaseAuthRepository @Inject constructor(
                 }
             })
             .apply {
-                if (forceResend && resendPhone == phoneNumber && resendUserId == requestedUser?.uid) {
+                if (forceResend && resendPhone == phoneNumber && resendUserId == requestedUser.uid) {
                     resendToken?.let { setForceResendingToken(it) }
                 }
             }
@@ -232,15 +234,11 @@ class FirebaseAuthRepository @Inject constructor(
         code: String,
     ): ApiResult<Unit> {
         return try {
+            // D2-H2: never sign in with the phone credential; without a session there is nothing to link to.
+            val currentUser = firebaseAuth.currentUser ?: return ApiResult.Failure(PHONE_SIGN_IN_REQUIRED)
             val credential = PhoneAuthProvider.getCredential(verificationId, code)
-            val currentUser = firebaseAuth.currentUser
-            if (currentUser != null) {
-                currentUser.linkWithCredential(credential).await()
-            } else {
-                firebaseAuth.signInWithCredential(credential).await()
-                signOutMarker.clearAfterSignIn()
-            }
-            firebaseAuth.currentUser?.let { user ->
+            currentUser.linkWithCredential(credential).await()
+            firebaseAuth.currentUser?.takeIf { it.uid == currentUser.uid }?.let { user ->
                 profileStore.ensure(user)
                 val token = user.getIdToken(false).await().token ?: error("No se pudo renovar la sesión.")
                 sessionDataStore.setSession(user.uid, token)
@@ -312,5 +310,9 @@ class FirebaseAuthRepository @Inject constructor(
         catch (_: Exception) { false }
         return AuthUser(uid = uid, email = email, displayName = displayName,
             phoneNumber = phoneNumber, isAdmin = isAdmin)
+    }
+
+    internal companion object {
+        const val PHONE_SIGN_IN_REQUIRED = "Inicia sesión primero para verificar tu teléfono."
     }
 }
