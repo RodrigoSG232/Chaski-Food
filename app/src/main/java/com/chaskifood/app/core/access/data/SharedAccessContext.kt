@@ -10,12 +10,15 @@ data class AccessContextState(val origin: AccessProvenance, val resolution: Acce
     val serverRevision: Long? = null, val problem: AccessCheckProblem? = null,
     val phase: AccessContextPhase = AccessContextPhase.LOADING)
 
-/** Sin consumidores visuales en 3A.4. Refresh explicito al retomar/reconectar/cambiar permisos.
- * La lease solo invalida; no hace polling ni convierte una cache en autorizacion permanente.
+/** Refresh explicito al retomar/reconectar/cambiar permisos. Una lease vigente se renueva una vez
+ * a los 5/6 de su validez (50 s de 60) sin interrumpir la UI; la renovacion nunca extiende la lease anterior:
+ * si falla por red, la lease caduca a su hora y no se reintenta hasta un refresh explicito.
  */
 class SharedAccessContext(private val identity: SharedAccessIdentitySource, private val facts: AccessFactsReader,
     private val scope: CoroutineScope, private val enabled: Boolean, private val validityMillis: Long = 60_000L, private val monotonicMillis: () -> Long = { System.nanoTime() / 1_000_000L }) {
     init { require(validityMillis > 0) }
+    private val renewAfterMillis = validityMillis * 5 / 6
+    private companion object { const val READ_TIMEOUT_MILLIS = 12_000L }
     private val gate = Any()
     private val evaluate = EvaluateAccessEvent()
     private val mutable = MutableStateFlow(AccessContextState(identity.states.value.origin, AccessResolution.SignedOut,
@@ -53,10 +56,33 @@ class SharedAccessContext(private val identity: SharedAccessIdentitySource, priv
         restricted(state, if (state.availability == IdentityAvailability.FAILED) AccessCheckProblem.UNAVAILABLE else null)
         if (state.availability != IdentityAvailability.READY || state.identity !is AccessIdentity.Authenticated) return@synchronized
         work = scope.launch {
-            val result = try { withTimeoutOrNull(12_000) { facts.read(state) } ?: AccessFactsResult(AccessFacts.Failed, problem = AccessCheckProblem.UNAVAILABLE) }
-                catch (cancelled: CancellationException) { throw cancelled }
-                catch (_: Exception) { AccessFactsResult(AccessFacts.Failed, problem = AccessCheckProblem.UNAVAILABLE) }
-            val accepted = synchronized(gate) {
+            if (!publish(state, request, read(state, READ_TIMEOUT_MILLIS))) return@launch
+            // Un solo trabajo por ticket: logout, cambio de cuenta, segundo plano o refresh cancelan la renovacion.
+            // Sin lease vigente (error, conflicto o revocacion publicados) no hay nada que renovar ni que caducar.
+            while (true) {
+                if (synchronized(gate) { ticket != request || validUntil == null }) return@launch
+                delay(renewAfterMillis)
+                val remaining = synchronized(gate) { validUntil?.minus(monotonicMillis()) } ?: return@launch
+                val leaseLeft = remaining.coerceAtMost(validityMillis - renewAfterMillis)
+                if (leaseLeft <= 0) break
+                val renewed = read(state, minOf(leaseLeft, READ_TIMEOUT_MILLIS))
+                if (renewed.facts is AccessFacts.Failed) {
+                    // Fallo de red: se conserva la lease vigente hasta su caducidad, sin reintentos automaticos.
+                    delay((synchronized(gate) { validUntil?.minus(monotonicMillis()) } ?: 0L).coerceIn(0L, leaseLeft))
+                    break
+                }
+                if (!publish(state, request, renewed)) return@launch
+            }
+            synchronized(gate) { if (ticket == request) restricted(state, AccessCheckProblem.EXPIRED) }
+        }
+    }
+    private suspend fun read(state: AccessIdentityState, timeoutMillis: Long): AccessFactsResult =
+        try { withTimeoutOrNull(timeoutMillis) { facts.read(state) } ?: AccessFactsResult(AccessFacts.Failed, problem = AccessCheckProblem.UNAVAILABLE) }
+        catch (cancelled: CancellationException) { throw cancelled }
+        catch (_: Exception) { AccessFactsResult(AccessFacts.Failed, problem = AccessCheckProblem.UNAVAILABLE) }
+    /** Publica solo si el ticket y la credencial siguen siendo los de la consulta; devuelve false si se descarto. */
+    private fun publish(state: AccessIdentityState, request: Long, result: AccessFactsResult): Boolean =
+            synchronized(gate) {
                 if (ticket != request) false else identity.publishIfCurrent(state) {
                     val session = (state.identity as AccessIdentity.Authenticated).session
                     val staleRevision = result.revision != null && revisionSession == session && latestRevision != null && result.revision < latestRevision!!
@@ -75,13 +101,6 @@ class SharedAccessContext(private val identity: SharedAccessIdentitySource, priv
                     }
                 }
             }
-            if (accepted && result.facts is AccessFacts.Checked) {
-                // delay usa reloj monotono de corrutinas, nunca fecha de pared ni datos persistidos.
-                delay(validityMillis)
-                synchronized(gate) { if (ticket == request) restricted(state, AccessCheckProblem.EXPIRED) }
-            }
-        }
-    }
     /** Invalida antes del refresh suspendido; otra respuesta no puede restaurar permisos viejos. */
     fun invalidate(problem: AccessCheckProblem? = null) = synchronized(gate) {
         work?.cancel(); ++ticket; restricted(identity.states.value, if (enabled) problem else AccessCheckProblem.ENVIRONMENT_UNAVAILABLE)
