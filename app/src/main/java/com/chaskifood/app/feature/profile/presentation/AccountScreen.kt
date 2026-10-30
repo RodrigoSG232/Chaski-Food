@@ -92,6 +92,7 @@ fun AccountScreen(
 ) {
     val authorize = LocalProtectedAction.current
     val currentUser by viewModel.currentUser.collectAsStateWithLifecycle()
+    val context = androidx.compose.ui.platform.LocalContext.current
 
     val access = LocalNavigationAccess.current
     val observed = access?.states?.collectAsStateWithLifecycle()?.value
@@ -101,7 +102,8 @@ fun AccountScreen(
         onOpenProfileInfo, onOpenSecurity, onOpenPaymentMethods, onOpenLocations, onOpenSocialAccounts, onOpenReferral,
         onOpenBusiness, onOpenStoreOperations, onOpenManageCatalog, onOpenStoreProductConfiguration,
         onOpenAdminReview, onOpenAdminSupervision, onOpenAdminAuditLog,
-        { authorize { viewModel.signOut(onSignedOut = onSignOut) } }, modifier, onRecoverPurchase)
+        { authorize { viewModel.signOut { protected -> ProfileViewModel.warnIfUnprotected(context, protected); onSignOut() } } },
+        modifier, onRecoverPurchase)
 }
 
 @Composable

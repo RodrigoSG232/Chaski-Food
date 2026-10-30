@@ -58,8 +58,8 @@ class NotificationColdStartEmulatorTest {
         // Same order as FirebaseAuthRepository.signOut with the real marker storage, and no wait afterwards:
         // am instrument kills the process immediately, the case where the SDK alone restored the previous user.
         val auth = FirebaseAuth.getInstance()
-        com.chaskifood.app.feature.auth.data.SignOutMarkerStore(
-            com.chaskifood.app.feature.auth.data.PreferencesSignOutMarkerStorage(context)).markSigningOut(requireNotNull(auth.currentUser).uid)
+        assertTrue("Marker confirmed on disk before signOut", com.chaskifood.app.feature.auth.data.SignOutMarkerStore(
+            com.chaskifood.app.feature.auth.data.PreferencesSignOutMarkerStorage(context)).markSigningOut(requireNotNull(auth.currentUser).uid))
         coordinator().beforeSignOut(); auth.signOut()
         assertNull(auth.currentUser)
     }

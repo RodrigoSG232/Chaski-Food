@@ -60,6 +60,7 @@ fun ProfileSettingsScreen(
     val authorize = LocalProtectedAction.current
     val currentUser by viewModel.currentUser.collectAsState()
     val uiState by viewModel.uiState.collectAsState()
+    val context = androidx.compose.ui.platform.LocalContext.current
 
     var name by rememberSaveable { mutableStateOf("") }
     var draftUserId by rememberSaveable { mutableStateOf<String?>(null) }
@@ -167,7 +168,8 @@ fun ProfileSettingsScreen(
                     .clip(RoundedCornerShape(8.dp))
                     .background(Color(0xFFD32F2F))
                     .clickable {
-                        viewModel.signOut {
+                        viewModel.signOut { protected ->
+                            ProfileViewModel.warnIfUnprotected(context, protected)
                             onSignOut()
                         }
                     }

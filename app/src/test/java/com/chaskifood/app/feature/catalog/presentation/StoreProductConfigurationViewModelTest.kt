@@ -305,7 +305,7 @@ private class ConfigurationTestAuth : AuthRepository {
     override suspend fun verifyPhoneCode(verificationId: String, code: String): ApiResult<Unit> = error("unused")
     override suspend fun sendPasswordResetEmail(email: String): ApiResult<Unit> = error("unused")
     override suspend fun updateProfile(displayName: String): ApiResult<Unit> = error("unused")
-    override suspend fun signOut() { currentUserFlow.value = null }
+    override suspend fun signOut(): Boolean { currentUserFlow.value = null; return true }
 }
 
 private class ConfigurationTestBusinesses : BusinessRepository {

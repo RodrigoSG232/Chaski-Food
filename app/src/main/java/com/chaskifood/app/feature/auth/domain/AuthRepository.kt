@@ -15,5 +15,6 @@ interface AuthRepository {
     suspend fun verifyPhoneCode(verificationId: String, code: String): ApiResult<Unit>
     suspend fun sendPasswordResetEmail(email: String): ApiResult<Unit>
     suspend fun updateProfile(displayName: String): ApiResult<Unit>
-    suspend fun signOut()
+    /** Always closes the session. Returns false when the interrupted-sign-out protection could not be persisted. */
+    suspend fun signOut(): Boolean
 }

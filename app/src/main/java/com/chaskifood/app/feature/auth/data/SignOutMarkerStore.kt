@@ -25,8 +25,13 @@ internal class PreferencesSignOutMarkerStorage @Inject constructor(@ApplicationC
  * session, never grant one, and it is cleared only after an explicit sign-in succeeds. */
 @Singleton
 class SignOutMarkerStore @Inject internal constructor(private val storage: SignOutMarkerStorage) {
-    /** Best effort: a failed write never blocks the sign-out itself. */
-    fun markSigningOut(uid: String) { storage.write(uid) }
+    /** Bounded synchronous retries; true only when the marker is confirmed on disk. A false result never blocks the
+     * sign-out: the session still closes in memory, but if the process then dies before Firebase Auth persists its own
+     * sign-out, nothing can close the restored session at the next start. Callers must surface that residual risk. */
+    fun markSigningOut(uid: String): Boolean =
+        (1..MARK_ATTEMPTS).any { (try { storage.write(uid) } catch (_: Exception) { false }) && storage.read() == uid }
+
+    internal companion object { const val MARK_ATTEMPTS = 3 }
 
     /** Only after a successful sign-in: a failed attempt keeps the marker, so a previous user the SDK restores is
      * still closed at startup. A failed clear can only sign the new session out at next start (fail closed). */

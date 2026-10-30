@@ -62,10 +62,18 @@ class ProfileViewModel @Inject constructor(
         }
     }
 
-    fun signOut(onSignedOut: () -> Unit) {
+    /** [onSignedOut] receives false when the sign-out could not be protected against an immediate process death. */
+    fun signOut(onSignedOut: (protected: Boolean) -> Unit) {
         viewModelScope.launch {
-            authRepository.signOut()
-            onSignedOut()
+            onSignedOut(authRepository.signOut())
         }
+    }
+
+    companion object {
+        /** Application-context toast so the warning survives the navigation that follows the sign-out. */
+        fun warnIfUnprotected(context: android.content.Context, protected: Boolean) {
+            if (!protected) android.widget.Toast.makeText(context.applicationContext, SIGN_OUT_UNPROTECTED, android.widget.Toast.LENGTH_LONG).show()
+        }
+        const val SIGN_OUT_UNPROTECTED = "Cerraste sesión, pero no se pudo confirmar en este dispositivo. Si al volver a abrir la app sigues dentro, cierra sesión otra vez."
     }
 }

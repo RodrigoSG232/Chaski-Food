@@ -311,12 +311,14 @@ class FirebaseAuthRepository @Inject constructor(
         }
     }
 
-    override suspend fun signOut() {
+    override suspend fun signOut(): Boolean {
         // Durable before anything else: if the process dies before the SDK persists signOut, startup completes it.
-        firebaseAuth.currentUser?.uid?.let(signOutMarker::markSigningOut)
+        // A failed marker never blocks the sign-out; it is reported so the UI can warn about the residual risk.
+        val protected = firebaseAuth.currentUser?.uid?.let(signOutMarker::markSigningOut) ?: true
         notifications.beforeSignOut()
         firebaseAuth.signOut()
         sessionDataStore.clearSession()
+        return protected
     }
 
     private suspend fun FirebaseUser.toAuthUser(): AuthUser {

@@ -163,9 +163,26 @@ class AuthSubmissionTest {
             assertEquals(1, confirmations)
         } finally { model.viewModelScope.cancel(); runCurrent(); Dispatchers.resetMain() }
     }
+
+    @Test fun `cierre de sesion no protegido se informa a la UI sin bloquear la salida`() = runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        try {
+            for (protected in listOf(true, false)) {
+                val auth = SubmissionAuth().apply { signOutProtected = protected }
+                val model = com.chaskifood.app.feature.profile.presentation.ProfileViewModel(auth)
+                var reported: Boolean? = null
+                model.signOut { reported = it }
+                runCurrent()
+                assertEquals(1, auth.signOutCalls); assertEquals(protected, reported)
+                model.viewModelScope.cancel()
+            }
+        } finally { runCurrent(); Dispatchers.resetMain() }
+    }
 }
 
 private class SubmissionAuth : AuthRepository {
+    var signOutProtected = true
+    var signOutCalls = 0
     override val currentUserFlow = MutableStateFlow<AuthUser?>(null)
     val loginGate = CompletableDeferred<Unit>()
     val phoneGate = CompletableDeferred<Unit>()
@@ -190,5 +207,5 @@ private class SubmissionAuth : AuthRepository {
     override suspend fun sendPhoneVerificationCode(activity: Activity, phoneNumber: String): ApiResult<String> = error("unused")
     override suspend fun sendPasswordResetEmail(email: String): ApiResult<Unit> = error("unused")
     override suspend fun updateProfile(displayName: String): ApiResult<Unit> = error("unused")
-    override suspend fun signOut() = Unit
+    override suspend fun signOut(): Boolean { signOutCalls++; return signOutProtected }
 }

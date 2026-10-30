@@ -34,6 +34,47 @@ class SignOutMarkerStoreTest {
         marker.clearAfterSignIn(); assertEquals("No write when already clear", writes, storage.writes)
     }
 
+    /** Fails the first [failures] writes, then behaves normally. */
+    private class Flaky(private var failures: Int, private val throws: Boolean = false) : SignOutMarkerStorage {
+        var value: String? = null; var writes = 0
+        override fun read() = value
+        override fun write(uid: String?): Boolean {
+            writes++
+            if (failures > 0) { failures--; if (throws) throw java.io.IOException("disk"); return false }
+            value = uid; return true
+        }
+    }
+
+    @Test fun successfulMarkIsConfirmedOnFirstAttempt() {
+        val storage = Flaky(0)
+        assertTrue(SignOutMarkerStore(storage).markSigningOut("manager"))
+        assertEquals(1, storage.writes); assertEquals("manager", storage.value)
+    }
+
+    @Test fun recoverableFailureIsRetriedWithinTheBound() {
+        val storage = Flaky(2)
+        assertTrue(SignOutMarkerStore(storage).markSigningOut("manager"))
+        assertEquals(3, storage.writes); assertTrue(SignOutMarkerStore(storage).mustCompleteSignOut("manager"))
+        val throwing = Flaky(1, throws = true)
+        assertTrue("A throwing storage is treated as a failed attempt", SignOutMarkerStore(throwing).markSigningOut("manager"))
+    }
+
+    @Test fun persistentFailureIsReportedAfterExactlyTheBoundedAttempts() {
+        val storage = Flaky(Int.MAX_VALUE)
+        assertFalse(SignOutMarkerStore(storage).markSigningOut("manager"))
+        assertEquals(SignOutMarkerStore.MARK_ATTEMPTS, storage.writes)
+        assertFalse("Nothing protects an interrupted sign-out in this case", SignOutMarkerStore(storage).mustCompleteSignOut("manager"))
+        val lying = object : SignOutMarkerStorage { override fun read(): String? = null; override fun write(uid: String?) = true }
+        assertFalse("A write that cannot be read back is not trusted", SignOutMarkerStore(lying).markSigningOut("manager"))
+    }
+
+    @Test fun interruptedSignOutWithAPersistedMarkerIsCompletedAtStartup() {
+        val storage = Storage(); SignOutMarkerStore(storage).markSigningOut("manager")
+        // New process: a fresh store over the same persisted storage sees the restored user.
+        val restarted = SignOutMarkerStore(storage)
+        assertTrue(restarted.mustCompleteSignOut("manager")); assertFalse(restarted.mustCompleteSignOut("other"))
+    }
+
     @Test fun storageFailuresOnlyEverFailClosed() {
         // A failed clear keeps the marker: at worst the same UID is signed out at next start.
         val stale = Storage("manager", writable = false); val marker = SignOutMarkerStore(stale)
