@@ -31,7 +31,72 @@ class AccessNavigationViewModelTest {
         val context = SharedAccessContext(identity, object : AccessFactsReader {
             override suspend fun read(identity: AccessIdentityState): AccessFactsResult { reads++; return this@Fixture.read.invoke(identity) }
         }, test.backgroundScope, true)
-        val model = AccessNavigationViewModel(context, identity).also { store.put("access", it) }
+        val bound = mutableListOf<String>()
+        var bind: suspend (String) -> Unit = {}
+        var signOuts = 0
+        val model = AccessNavigationViewModel(context, identity, { uid -> bound += uid; bind(uid) },
+            { signOuts++; true }).also { store.put("access", it) }
+        fun reconciliation() = AccessFactsResult(AccessFacts.Unverifiable, problem = AccessCheckProblem.RECONCILIATION_REQUIRED)
+        suspend fun login(uid: String, key: String = "login-$uid", verification: EmailVerification = EmailVerification.VERIFIED) =
+            events.emit(IdentityObservation.Authenticated(key, uid, "$uid@example.test", verification, credentialRevision = ++revision))
+    }
+    private fun bindingTest(body: suspend TestScope.(Fixture) -> Unit) = runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        val f = Fixture(this)
+        try { runCurrent(); body(f) } finally { f.store.clear(); Dispatchers.resetMain() }
+    }
+    @Test fun `invitacion pendiente se vincula una vez y concede acceso tras hechos nuevos`() = bindingTest { f ->
+        f.read = { f.reconciliation() }
+        f.bind = { f.read = { f.client(it) } }
+        f.driver.refresh(); runCurrent()
+        assertEquals(listOf("a"), f.bound)
+        assertEquals(AccessContextPhase.RESOLVED, f.model.states.value.phase)
+    }
+    @Test fun `conflicto real no reintenta automaticamente ni entra en bucle`() = bindingTest { f ->
+        f.read = { f.reconciliation() }
+        f.bind = { error("BINDING_OWNED_BY_ANOTHER_UID") }
+        f.driver.refresh(); runCurrent()
+        f.model.refresh(); runCurrent(); f.model.refresh(); runCurrent(); advanceTimeBy(120_000); runCurrent()
+        assertEquals(listOf("a"), f.bound)
+        assertEquals(AccessCheckProblem.RECONCILIATION_REQUIRED, f.model.states.value.problem)
+    }
+    @Test fun `fallo temporal permite reintento explicito controlado`() = bindingTest { f ->
+        f.read = { f.reconciliation() }
+        f.bind = { error("SERVICE_UNAVAILABLE") }
+        f.driver.refresh(); runCurrent(); assertEquals(1, f.bound.size)
+        f.bind = { f.read = { f.client(it) } }
+        f.model.retry(); runCurrent()
+        assertEquals(2, f.bound.size); assertEquals(AccessContextPhase.RESOLVED, f.model.states.value.phase)
+    }
+    @Test fun `correo sin verificar no intenta y verificarlo habilita un intento nuevo`() = bindingTest { f ->
+        f.read = { f.reconciliation() }
+        f.bind = { f.read = { f.client(it) } }
+        f.login("a", "login", EmailVerification.UNVERIFIED); runCurrent()
+        assertTrue(f.bound.isEmpty())
+        f.login("a", "login", EmailVerification.VERIFIED); runCurrent()
+        assertEquals(listOf("a"), f.bound); assertEquals(AccessContextPhase.RESOLVED, f.model.states.value.phase)
+    }
+    @Test fun `cambio de cuenta cancela la vinculacion anterior y no la aplica a la nueva`() = bindingTest { f ->
+        f.read = { f.reconciliation() }
+        var cancelled = false
+        f.bind = { uid -> if (uid == "a") try { awaitCancellation() } finally { cancelled = true } }
+        f.login("a"); runCurrent(); assertEquals(listOf("a"), f.bound)
+        f.read = { f.client(it) }
+        f.login("b"); runCurrent()
+        assertTrue(cancelled)
+        assertEquals("b", f.model.states.value.origin.session?.uid); assertEquals(AccessContextPhase.RESOLVED, f.model.states.value.phase)
+        assertEquals(listOf("a"), f.bound)
+    }
+    @Test fun `cerrar sesion desde el panel usa el cierre central y descarta la vinculacion`() = bindingTest { f ->
+        f.read = { f.reconciliation() }
+        var cancelled = false
+        f.bind = { try { awaitCancellation() } finally { cancelled = true } }
+        f.driver.refresh(); runCurrent()
+        var protected: Boolean? = null
+        f.model.signOut { protected = it }; runCurrent()
+        assertTrue(cancelled); assertEquals(1, f.signOuts); assertEquals(true, protected)
+        assertTrue(AuthorizationPanel.RECONCILIATION.offersSignOut()); assertTrue(AuthorizationPanel.CONFLICT.offersSignOut())
+        assertFalse(AuthorizationPanel.VERIFYING.offersSignOut()); assertFalse(AuthorizationPanel.ACCOUNT_CHANGED.offersSignOut())
     }
     @Test fun `refrescos equivalentes simultaneos comparten consulta`() = runTest {
         Dispatchers.setMain(StandardTestDispatcher(testScheduler))

@@ -17,7 +17,7 @@ import com.chaskifood.app.ui.theme.ChaskiTheme
 enum class AuthorizationPanel { VERIFYING, TEMPORARY_ERROR, OFFLINE, CONFLICT, RECONCILIATION, REVOKED, ACCOUNT_CHANGED, UNAVAILABLE }
 
 @Composable
-internal fun AuthorizationPanelContent(panel: AuthorizationPanel, onRetry: () -> Unit = {}) {
+internal fun AuthorizationPanelContent(panel: AuthorizationPanel, onRetry: () -> Unit = {}, onSignOut: (() -> Unit)? = null) {
     val title = when (panel) {
         AuthorizationPanel.VERIFYING -> "Verificando permisos"
         AuthorizationPanel.TEMPORARY_ERROR -> "No pudimos comprobar tus permisos"
@@ -33,7 +33,7 @@ internal fun AuthorizationPanelContent(panel: AuthorizationPanel, onRetry: () ->
         AuthorizationPanel.TEMPORARY_ERROR -> "Ocurrió un error temporal. No se concede acceso sin comprobar los permisos."
         AuthorizationPanel.OFFLINE -> "No hay una conexión disponible. Reconecta y vuelve a comprobar."
         AuthorizationPanel.CONFLICT -> "Se requiere revisión autorizada. Volver a consultar no garantiza resolver el conflicto."
-        AuthorizationPanel.RECONCILIATION -> "Tu identidad requiere una revisión autorizada. No se vinculará automáticamente."
+        AuthorizationPanel.RECONCILIATION -> "Tu acceso comercial requiere vinculación o revisión autorizada. Si te asignaron un local, verifica tu correo y vuelve a comprobar."
         AuthorizationPanel.REVOKED -> "No tienes autorización vigente para este destino. No se conservan acciones del acceso anterior."
         AuthorizationPanel.ACCOUNT_CHANGED -> "El contenido de la cuenta anterior ya no está disponible."
         AuthorizationPanel.UNAVAILABLE -> "No podemos comprobar el contexto de acceso. Las acciones comerciales permanecen deshabilitadas."
@@ -47,8 +47,12 @@ internal fun AuthorizationPanelContent(panel: AuthorizationPanel, onRetry: () ->
         if (panel !in setOf(AuthorizationPanel.VERIFYING, AuthorizationPanel.ACCOUNT_CHANGED)) {
             OutlinedButton(onClick = onRetry) { Text("Volver a comprobar") }
         }
+        if (onSignOut != null && panel.offersSignOut()) TextButton(onClick = onSignOut) { Text("Cerrar sesión") }
     }
 }
+
+/** Ningún panel restrictivo deja la cuenta atrapada: siempre puede cerrarse la sesión para cambiar de cuenta. */
+internal fun AuthorizationPanel.offersSignOut() = this != AuthorizationPanel.VERIFYING && this != AuthorizationPanel.ACCOUNT_CHANGED
 
 internal fun authorizationPanel(state: AccessContextState): AuthorizationPanel = when {
     state.phase == AccessContextPhase.LOADING -> AuthorizationPanel.VERIFYING

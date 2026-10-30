@@ -92,12 +92,12 @@ internal fun AccessDestinationGuard(access: AccessNavigationViewModel, navContro
         if (route != ChaskiDestinations.CHECKOUT_RECOVERY &&
             AccessNavigationPolicy.allows(state.resolution, ChaskiDestinations.CHECKOUT_RECOVERY)) {
             Column(Modifier.fillMaxSize()) {
-                Box(Modifier.weight(1f)) { RestrictedAccess(state, { access.refresh() }) }
+                Box(Modifier.weight(1f)) { RestrictedAccess(state, access) }
                 com.chaskifood.app.ui.components.ChaskiButton("Recuperar compra pendiente", onClick = {
                     navController.navigate(ChaskiDestinations.CHECKOUT_RECOVERY) { launchSingleTop = true }
                 })
             }
-        } else RestrictedAccess(state, { access.refresh() })
+        } else RestrictedAccess(state, access)
         return
     }
     val sessionStamp = access.sessionStamp(state.origin)
@@ -148,10 +148,14 @@ internal fun AccessDestinationGuard(access: AccessNavigationViewModel, navContro
 }
 
 @Composable
-internal fun RestrictedAccess(state: AccessContextState, onRetry: () -> Unit) {
-    val connectivity = androidx.compose.ui.platform.LocalContext.current.getSystemService(android.net.ConnectivityManager::class.java)
+internal fun RestrictedAccess(state: AccessContextState, access: AccessNavigationViewModel) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val connectivity = context.getSystemService(android.net.ConnectivityManager::class.java)
     // Un fallo HTTP no demuestra desconexión: solo usar OFFLINE cuando Android confirma que no hay red activa.
     val panel = if (state.phase == AccessContextPhase.ERROR && connectivity.activeNetwork == null)
         AuthorizationPanel.OFFLINE else authorizationPanel(state)
-    AuthorizationPanelContent(panel, onRetry)
+    // La navegación a inicio de sesión la hace AccessNavigationEvents al observar SIGNED_OUT.
+    AuthorizationPanelContent(panel, onRetry = { access.retry() }, onSignOut = state.origin.session?.let {
+        { access.signOut { protected -> com.chaskifood.app.feature.profile.presentation.ProfileViewModel.warnIfUnprotected(context, protected) } }
+    })
 }

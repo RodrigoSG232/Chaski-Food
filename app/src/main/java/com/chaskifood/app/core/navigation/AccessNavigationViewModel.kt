@@ -6,6 +6,7 @@ import com.chaskifood.app.core.access.data.*
 import com.chaskifood.app.core.access.domain.*
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -14,6 +15,8 @@ import kotlinx.coroutines.launch
 class AccessNavigationViewModel @Inject constructor(
     private val context: SharedAccessContext,
     private val identity: SharedAccessIdentitySource,
+    private val binder: PendingAssignmentBinder = PendingAssignmentBinder { error("BINDING_UNAVAILABLE") },
+    private val sessionSignOut: SessionSignOut = SessionSignOut { false },
 ) : ViewModel() {
     val instanceId = java.util.UUID.randomUUID().toString()
     fun invalidate() {
@@ -29,6 +32,49 @@ class AccessNavigationViewModel @Inject constructor(
             phase = if (current.availability == IdentityAvailability.FAILED) AccessContextPhase.ERROR else AccessContextPhase.LOADING)
     }.stateIn(viewModelScope, SharingStarted.Eagerly, context.currentState())
     private var refreshJob: Job? = null
+    private var bindingJob: Job? = null
+    private var bindingFor: AccessIdentity.Authenticated? = null
+    /** Identidad (UID, sesion, correo y verificacion) que ya tuvo su intento automatico; un refresco no la cambia. */
+    private var autoBindingFor: AccessIdentity.Authenticated? = null
+
+    init {
+        // Una invitacion PENDING hace que los hechos respondan RECONCILIATION_REQUIRED hasta vincularla. Se intenta
+        // una sola vez por identidad con correo verificado; verificar el correo cambia la identidad y habilita otro.
+        viewModelScope.launch {
+            context.states.collect { state ->
+                val current = identity.states.value.identity as? AccessIdentity.Authenticated
+                if (bindingJob?.isActive == true && bindingFor != current) bindingJob?.cancel()
+                if (current != null && needsBinding(state) && current.verification == EmailVerification.VERIFIED &&
+                    autoBindingFor != current) {
+                    autoBindingFor = current
+                    bind(current)
+                }
+            }
+        }
+    }
+    private fun needsBinding(state: AccessContextState) =
+        state.phase == AccessContextPhase.ERROR && state.problem == AccessCheckProblem.RECONCILIATION_REQUIRED
+    /** El backend decide si la vinculacion procede; despues se consultan hechos nuevos solo para la misma identidad. */
+    private fun bind(expected: AccessIdentity.Authenticated) {
+        if (bindingJob?.isActive == true) return
+        bindingFor = expected
+        bindingJob = viewModelScope.launch {
+            try { binder.bind(expected.session.uid) }
+            catch (cancelled: CancellationException) { throw cancelled }
+            catch (_: Exception) { /* Conflicto, correo sin verificar o red: el panel restrictivo se mantiene. */ }
+            if (identity.states.value.identity == expected) refresh()
+        }
+    }
+    /** "Volver a comprobar": ante reconciliacion reintenta la vinculacion una vez por pulsacion; si no, refresca. */
+    fun retry() {
+        val current = identity.states.value.identity as? AccessIdentity.Authenticated
+        if (current != null && needsBinding(context.currentState())) bind(current) else refresh()
+    }
+    /** Cierre de sesion centralizado; descarta antes cualquier vinculacion o refresco en curso de esta cuenta. */
+    fun signOut(onSignedOut: (protected: Boolean) -> Unit) {
+        bindingJob?.cancel(); refreshJob?.cancel()
+        viewModelScope.launch { onSignedOut(sessionSignOut.signOut()) }
+    }
     fun refresh(force: Boolean = true) {
         if (!enabled) return
         if (refreshJob?.isActive == true) {
