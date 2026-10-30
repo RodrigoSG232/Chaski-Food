@@ -53,6 +53,17 @@ class PhoneLinkEmulatorTest {
         val code = (0 until codes.length()).map { codes.getJSONObject(it) }.last { it.getString("sessionInfo") == session }.getString("code")
         return session to code
     }
+    /** Real repository request (records the requesting UID); the code is read back from the Emulator. */
+    private fun requestedThroughRepository(phone: String): Pair<String, String> =
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            var activity: MainActivity? = null
+            scenario.onActivity { activity = it }
+            val sent = runBlocking { repository.sendPhoneVerificationCode(activity!!, phone) }
+            assertTrue(sent.toString(), sent is ApiResult.Success)
+            val verificationId = (sent as ApiResult.Success).data
+            val codes = http("GET", "/emulator/v1/projects/$project/verificationCodes").getJSONArray("verificationCodes")
+            verificationId to (0 until codes.length()).map { codes.getJSONObject(it) }.last { it.getString("phoneNumber") == phone }.getString("code")
+        }
     private fun accountsWithPhone(phone: String): Int =
         http("POST", "/identitytoolkit.googleapis.com/v1/projects/$project/accounts:lookup", JSONObject().put("phoneNumber",
             org.json.JSONArray().put(phone))).optJSONArray("users")?.length() ?: 0
@@ -62,7 +73,7 @@ class PhoneLinkEmulatorTest {
         val options = FirebaseOptions.Builder().setProjectId(project).setApplicationId("1:123456789:android:phonelink")
             .setApiKey("demo-api-key").build()
         app = FirebaseApp.initializeApp(context, options, prefix)!!
-        auth = FirebaseAuth.getInstance(app).apply { useEmulator(host, 9099) }
+        auth = FirebaseAuth.getInstance(app).apply { useEmulator(host, 9099); firebaseAuthSettings.setAppVerificationDisabledForTesting(true) }
         val db = FirebaseFirestore.getInstance(app).apply {
             useEmulator(host, 8089); firestoreSettings = FirebaseFirestoreSettings.Builder().setPersistenceEnabled(false).build()
         }
@@ -77,7 +88,7 @@ class PhoneLinkEmulatorTest {
         val created = repository.signUpWithEmail(email, "emulator-password", "Cliente ficticio")
         assertTrue(created.toString(), created is ApiResult.Success)
         val uid = auth.currentUser!!.uid
-        val phone = phone(); val (verificationId, code) = verification(phone)
+        val phone = phone(); val (verificationId, code) = requestedThroughRepository(phone)
         val linked = repository.verifyPhoneCode(verificationId, code)
         assertTrue(linked.toString(), linked is ApiResult.Success)
         val user = auth.currentUser!!; user.reload().await()
@@ -90,11 +101,33 @@ class PhoneLinkEmulatorTest {
         val email = "$prefix-wrong@example.test"
         assertTrue(repository.signUpWithEmail(email, "emulator-password", "Cliente ficticio") is ApiResult.Success)
         val uid = auth.currentUser!!.uid
-        val phone = phone(); val (verificationId, code) = verification(phone)
+        val phone = phone(); val (verificationId, code) = requestedThroughRepository(phone)
         val wrong = (code.toInt() + 1).mod(1_000_000).toString().padStart(6, '0')
         assertTrue(repository.verifyPhoneCode(verificationId, wrong) is ApiResult.Failure)
         val user = auth.currentUser!!; user.reload().await()
         assertEquals(uid, user.uid); assertNull(user.phoneNumber); assertEquals(0, accountsWithPhone(phone))
+        // A wrong attempt keeps the same request usable by its own UID.
+        assertTrue(repository.verifyPhoneCode(verificationId, code) is ApiResult.Success)
+    }
+
+    @Test fun codeRequestedByOneUidCannotBeLinkedAfterLogoutAndReloginAsAnother() = runBlocking {
+        val aEmail = "$prefix-a@example.test"; val bEmail = "$prefix-b@example.test"
+        assertTrue(repository.signUpWithEmail(bEmail, "emulator-password", "B") is ApiResult.Success)
+        auth.signOut()
+        assertTrue(repository.signUpWithEmail(aEmail, "emulator-password", "A") is ApiResult.Success)
+        val phone = phone(); val (verificationId, code) = requestedThroughRepository(phone)
+        auth.signOut(); auth.signInWithEmailAndPassword(bEmail, "emulator-password").await()
+        val late = repository.verifyPhoneCode(verificationId, code)
+        assertEquals(FirebaseAuthRepository.PHONE_SESSION_CHANGED, (late as ApiResult.Failure).message)
+        auth.currentUser!!.reload().await(); assertNull(auth.currentUser!!.phoneNumber); assertEquals(0, accountsWithPhone(phone))
+    }
+
+    @Test fun unknownOrRestoredVerificationIdRequiresANewCode() = runBlocking {
+        assertTrue(repository.signUpWithEmail("$prefix-restored@example.test", "emulator-password", "R") is ApiResult.Success)
+        val phone = phone(); val (verificationId, code) = verification(phone) // not requested by this process (e.g. after process death)
+        val result = repository.verifyPhoneCode(verificationId, code)
+        assertEquals(FirebaseAuthRepository.PHONE_SESSION_CHANGED, (result as ApiResult.Failure).message)
+        assertEquals(0, accountsWithPhone(phone))
     }
 
     @Test fun manualCodeWithoutSessionNeverCreatesAPhoneOnlyAccount() = runBlocking {

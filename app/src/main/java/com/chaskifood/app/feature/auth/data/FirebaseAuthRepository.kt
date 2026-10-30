@@ -44,6 +44,8 @@ class FirebaseAuthRepository @Inject constructor(
     private var resendToken: PhoneAuthProvider.ForceResendingToken? = null
     private var resendPhone: String? = null
     private var resendUserId: String? = null
+    // verificationId -> UID that requested it. In memory only: after process death a new code is required (fail closed).
+    private val verificationOwners = java.util.concurrent.ConcurrentHashMap<String, String>()
 
     override val currentUserFlow: Flow<AuthUser?> = callbackFlow<FirebaseUser?> {
         val listener = FirebaseAuth.IdTokenListener { auth -> trySend(auth.currentUser) }
@@ -171,10 +173,16 @@ class FirebaseAuthRepository @Inject constructor(
             .setActivity(activity)
             .setCallbacks(object : PhoneAuthProvider.OnVerificationStateChangedCallbacks() {
                 override fun onVerificationCompleted(credential: PhoneAuthCredential) {
-                    if (firebaseAuth.currentUser?.uid != requestedUser.uid) return
+                    if (firebaseAuth.currentUser?.uid != requestedUser.uid) {
+                        if (continuation.isActive) continuation.resume(ApiResult.Failure(PHONE_SESSION_CHANGED))
+                        return
+                    }
                     requestedUser.linkWithCredential(credential).addOnCompleteListener { completed ->
                         if (completed.isSuccessful) {
-                            if (firebaseAuth.currentUser?.uid != completed.result?.user?.uid) return@addOnCompleteListener
+                            if (firebaseAuth.currentUser?.uid != completed.result?.user?.uid) {
+                                if (continuation.isActive) continuation.resume(ApiResult.Failure(PHONE_SESSION_CHANGED))
+                                return@addOnCompleteListener
+                            }
                             val verifiedUser = completed.result?.user ?: return@addOnCompleteListener
                             verifiedUser.getIdToken(true).addOnCompleteListener {
                                 profileStore.ensureTask(verifiedUser).addOnCompleteListener { saved ->
@@ -209,11 +217,14 @@ class FirebaseAuthRepository @Inject constructor(
                     verificationId: String,
                     token: PhoneAuthProvider.ForceResendingToken,
                 ) {
-                    if (firebaseAuth.currentUser?.uid == requestedUser.uid) {
-                        resendToken = token
-                        resendPhone = phoneNumber
-                        resendUserId = requestedUser.uid
+                    if (firebaseAuth.currentUser?.uid != requestedUser.uid) {
+                        if (continuation.isActive) continuation.resume(ApiResult.Failure(PHONE_SESSION_CHANGED))
+                        return
                     }
+                    resendToken = token
+                    resendPhone = phoneNumber
+                    resendUserId = requestedUser.uid
+                    verificationOwners[verificationId] = requestedUser.uid
                     if (continuation.isActive) {
                         continuation.resume(ApiResult.Success(verificationId))
                     }
@@ -236,9 +247,13 @@ class FirebaseAuthRepository @Inject constructor(
         return try {
             // D2-H2: never sign in with the phone credential; without a session there is nothing to link to.
             val currentUser = firebaseAuth.currentUser ?: return ApiResult.Failure(PHONE_SIGN_IN_REQUIRED)
+            // The code may only link to the UID that requested it, never to a later session (logout/relogin).
+            if (verificationOwners[verificationId] != currentUser.uid) return ApiResult.Failure(PHONE_SESSION_CHANGED)
             val credential = PhoneAuthProvider.getCredential(verificationId, code)
             currentUser.linkWithCredential(credential).await()
-            firebaseAuth.currentUser?.takeIf { it.uid == currentUser.uid }?.let { user ->
+            verificationOwners.remove(verificationId)
+            if (firebaseAuth.currentUser?.uid != currentUser.uid) return ApiResult.Failure(PHONE_SESSION_CHANGED)
+            firebaseAuth.currentUser?.let { user ->
                 profileStore.ensure(user)
                 val token = user.getIdToken(false).await().token ?: error("No se pudo renovar la sesión.")
                 sessionDataStore.setSession(user.uid, token)
@@ -314,5 +329,6 @@ class FirebaseAuthRepository @Inject constructor(
 
     internal companion object {
         const val PHONE_SIGN_IN_REQUIRED = "Inicia sesión primero para verificar tu teléfono."
+        const val PHONE_SESSION_CHANGED = "La sesión cambió durante la verificación. Solicita un nuevo código SMS."
     }
 }
