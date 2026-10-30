@@ -81,3 +81,12 @@ pnpm exec firebase deploy --config ../firebase.json --only functions:food-local 
 ```
 
 Ese comando es una referencia para una futura operación autorizada; no uses `--force` y revisa cualquier propuesta de eliminación del CLI. `checkoutApi` pertenece a otro codebase y no debe modificarse.
+
+
+## Verificación local del paquete Functions antes de publicar
+
+Con Node 22 y pnpm 11.25.0, `pnpm --dir functions run build` limpia únicamente el directorio generado `functions/lib/` y recompila TypeScript. `pnpm --dir functions run verify:package` enumera los archivos con el mismo mecanismo del Firebase CLI fijado, exige el entrypoint y los manifiestos, y rechaza archivos inesperados. No consulta Cloud, no lee valores secretos y no genera un archivo de subida.
+
+Los hooks `predeploy` de `food-local` ejecutan ambas comprobaciones en ese orden y detienen la operación si fallan. Las exclusiones explícitas de `firebase.json` protegen configuraciones privadas, secretos locales, dependencias, logs y pruebas; `.gitignore` por sí solo no protege el paquete. Se conserva `scripts/build.cjs` para que una compilación del paquete en Cloud Build siga funcionando. No se modifican los permisos de scripts de pnpm ni el lockfile.
+
+Estas comprobaciones no autorizan un despliegue. HU34/HU16 todavía requieren habilitación coordinada del backend, Android CONECTADO y FCM real. `checkoutApi` permanece intacta; su retirada definitiva se hará únicamente después de verificar el reemplazo por `foodApi` y la ausencia de consumidores dependientes, con autorización específica.

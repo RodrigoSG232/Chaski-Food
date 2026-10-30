@@ -51,7 +51,7 @@ class AvailableStoresContentTest {
         }
 
         compose.onNodeWithText("Local Miraflores").assertIsDisplayed().performClick()
-        compose.onNodeWithText("Criolla · 1,2 km").assertIsDisplayed()
+        compose.onNodeWithText("Criolla · 1.2 km").assertIsDisplayed()
         compose.onNodeWithText("Av. Larco 123").assertIsDisplayed()
         compose.runOnIdle { assertEquals("store-1", selectedId) }
     }

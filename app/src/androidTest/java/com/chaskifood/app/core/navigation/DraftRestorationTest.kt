@@ -6,6 +6,8 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.performTextInputSelection
+import androidx.compose.ui.text.TextRange
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
@@ -40,8 +42,11 @@ class DraftRestorationTest {
                 }
             }
         }
+        compose.onNodeWithText("Nombre del Local *").performTextInputSelection(TextRange("Local".length))
         compose.onNodeWithText("Nombre del Local *").performTextInput(" borrador")
         compose.onNodeWithText("Dirección *").performTextInput("Av. Lima 123")
+        compose.onNodeWithText("Nombre del Local *").assertTextContains("Local borrador")
+        compose.onNodeWithText("Dirección *").assertTextContains("Av. Lima 123")
         compose.runOnIdle { showDialog(false) } // Simulate loading/error hiding the dialog.
         restoration.emulateSavedInstanceStateRestore()
         compose.runOnIdle { showDialog(true) }
@@ -58,8 +63,11 @@ class DraftRestorationTest {
                     onDismiss = {}, onSave = {}, saving = false, saveError = null)
             }
         }
-        compose.onNodeWithText("Nombre del Producto *").performScrollTo().performTextInput(" al horno")
+        compose.onNodeWithText("Nombre del Producto *").performScrollTo().performTextInputSelection(TextRange("Pollo".length))
+        compose.onNodeWithText("Nombre del Producto *").performTextInput(" al horno")
         compose.onNodeWithText("Descripción").performScrollTo().performTextInput("Con papas")
+        compose.onNodeWithText("Nombre del Producto *").assertTextContains("Pollo al horno")
+        compose.onNodeWithText("Descripción").assertTextContains("Con papas")
         restoration.emulateSavedInstanceStateRestore()
         compose.onNodeWithText("Nombre del Producto *").assertTextContains("Pollo al horno")
         compose.onNodeWithText("Descripción").assertTextContains("Con papas")
