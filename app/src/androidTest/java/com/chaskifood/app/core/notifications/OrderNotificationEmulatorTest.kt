@@ -73,15 +73,22 @@ class OrderNotificationEmulatorTest {
                 val decoded=kotlinx.serialization.json.Json.parseToJsonElement(raw) as kotlinx.serialization.json.JsonObject
                 decoded.mapValues{(_,value)->(value as kotlinx.serialization.json.JsonPrimitive).content}.also {assertEquals(expected,it)}
             }
-            val coordinator=NotificationCoordinator(android,sessions,tokens,shared,scope,retrofit)
+            val noFcm=object:PushTokenSource{
+                override suspend fun token():String=error("LOCAL_NEVER_REQUESTS_FCM_TOKEN")
+                override suspend fun delete()=error("LOCAL_NEVER_DELETES_FCM_TOKEN")
+            }
+            val coordinator=NotificationCoordinator(android,sessions,tokens,shared,scope,retrofit,noFcm)
             coordinator.start()
             if(Build.VERSION.SDK_INT>=33)assertEquals(PackageManager.PERMISSION_DENIED,
                 androidx.core.content.ContextCompat.checkSelfPermission(android,Manifest.permission.POST_NOTIFICATIONS))
-            coordinator.receive(data);delay(700)
+            // Reception is synchronous and local: no network wait inside onMessageReceived.
+            if(Build.VERSION.SDK_INT>=33)assertFalse(coordinator.receive(data))
             assertTrue(manager.activeNotifications.none {it.tag==data["eventId"]})
-            permission(true);coordinator.receive(data)
+            permission(true)
+            assertFalse(coordinator.receive(data+("recipientUid" to "foreign-uid")))
+            assertTrue(coordinator.receive(data))
             withTimeout(15000){while(manager.activeNotifications.none {it.tag==data["eventId"]})delay(100)}
-            coordinator.receive(data);delay(700)
+            assertFalse(coordinator.receive(data));delay(700)
             assertEquals(1,manager.activeNotifications.count {it.tag==data["eventId"]})
             val notification=manager.activeNotifications.single {it.tag==data["eventId"]}.notification
             assertEquals("Consulta la bandeja del establecimiento.",notification.extras.getCharSequence("android.text").toString())
