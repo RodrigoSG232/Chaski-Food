@@ -71,7 +71,7 @@ class FirebaseBusinessRepository @Inject constructor(
     }
 
     override fun getAllBusinessRequests(): Flow<ApiResult<List<BusinessRequest>>> = callbackFlow {
-        try { access.requireAdmin() } catch (cancelled: CancellationException) { throw cancelled }
+        try { access.requireAdmin(forceRefresh = false) } catch (cancelled: CancellationException) { throw cancelled }
         catch (_: Exception) { trySend(ApiResult.Failure("No tienes permisos administrativos.")); close(); return@callbackFlow }
         val listener = collectionRef.addSnapshotListener { snapshot, error ->
             if (error != null) {
@@ -278,7 +278,7 @@ class FirebaseBusinessRepository @Inject constructor(
     catch (error: Exception) { ApiResult.Failure(error.message ?: "No se pudo completar la operación.", error) }
 
     override fun getAuditLogs(): Flow<ApiResult<List<AuditLog>>> = callbackFlow {
-        try { access.requireAdmin() } catch (cancelled: CancellationException) { throw cancelled }
+        try { access.requireAdmin(forceRefresh = false) } catch (cancelled: CancellationException) { throw cancelled }
         catch (_: Exception) { trySend(ApiResult.Failure("No tienes permisos administrativos.")); close(); return@callbackFlow }
         val listener = auditLogsRef.addSnapshotListener { snapshot, error ->
             if (error != null) {
