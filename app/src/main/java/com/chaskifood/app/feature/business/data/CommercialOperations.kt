@@ -34,7 +34,7 @@ class CommercialFailure(val code: String, val uncertain: Boolean = false) : Exce
     "AUTHORIZATION_CONFLICT", "MANAGER_CANNOT_REGISTER" -> "La cuenta tiene permisos comerciales incompatibles con esta operación."
     "STALE_REVISION" -> "Los permisos cambiaron. Actualiza los datos y vuelve a intentarlo."
     "PREPARATION_REQUIRED", "RECONCILIATION_REQUIRED", "INDEX_INCONSISTENT", "BINDING_OWNED_BY_ANOTHER_UID" -> "La cuenta o asignación requiere preparación o reconciliación autorizada."
-    "LOCAL_ONLY" -> "El coordinador comercial está disponible únicamente en el laboratorio LOCAL. No se realizaron escrituras directas."
+    "ENVIRONMENT_UNAVAILABLE" -> "La configuración del coordinador comercial no está disponible. No se realizaron escrituras directas."
     "PENDING_OPERATION" -> "Hay una operación anterior sin confirmar. Reintenta sus mismos datos antes de iniciar otra."
     "EMAIL_VERIFICATION_REQUIRED" -> "Verifica tu correo para acceder a los locales asignados."
     "FORBIDDEN" -> "No tienes permisos para realizar esta operación."

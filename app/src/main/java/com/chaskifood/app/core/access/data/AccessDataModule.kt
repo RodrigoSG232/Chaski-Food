@@ -1,6 +1,7 @@
 package com.chaskifood.app.core.access.data
 
 import com.chaskifood.app.BuildConfig
+import com.chaskifood.app.core.firebase.FoodApiEnvironment
 import com.google.firebase.auth.FirebaseAuth
 import dagger.Module
 import dagger.Provides
@@ -22,9 +23,9 @@ object AccessDataModule {
     @Provides @Singleton fun identity(driver: FirebaseAccessIdentityDriver, @AccessCoroutineScope scope: CoroutineScope) = SharedAccessIdentitySource(driver, scope)
     @Provides @Singleton fun reader(retrofit: Retrofit, driver: FirebaseAccessIdentityDriver, json: Json, auth: FirebaseAuth): AccessFactsReader =
         RemoteAccessFacts(retrofit.newBuilder().baseUrl(BuildConfig.ELIGIBILITY_API_BASE_URL).build().create(AccessFactsApi::class.java),
-            driver, json, BuildConfig.FIREBASE_MODE == "LOCAL" && auth.app.options.projectId == "demo-chaski-hu15")
+            driver, json, FoodApiEnvironment.isConfigured(auth.app.options.projectId))
     @Provides @Singleton fun context(identity: SharedAccessIdentitySource, facts: AccessFactsReader,
-        @AccessCoroutineScope scope: CoroutineScope): SharedAccessContext = SharedAccessContext(identity, facts, scope, BuildConfig.FIREBASE_MODE == "LOCAL",
+        @AccessCoroutineScope scope: CoroutineScope, auth: FirebaseAuth): SharedAccessContext = SharedAccessContext(identity, facts, scope, FoodApiEnvironment.isConfigured(auth.app.options.projectId),
             monotonicMillis = { android.os.SystemClock.elapsedRealtime() })
     @Provides @Singleton fun storeAuthorization(context: SharedAccessContext): com.chaskifood.app.core.access.domain.StoreAuthorization =
         CurrentStoreAuthorization(context)

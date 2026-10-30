@@ -1,3 +1,4 @@
+import { connectedHttp } from "./connectedHandler.fixture";
 import { before, after, test } from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
@@ -281,4 +282,30 @@ test("unavailable Auth never terminalizes a new intent or creates an order",asyn
   const unavailableAuth={getUser:async()=>{throw new Error("controlled Auth unavailability");}} as any;
   await assert.rejects(new OrderService(db,unavailableAuth,f.now).confirm(f.intent));
   assert.equal((await f.service.recover(f.buyer.uid,f.intent.intentId)).body.outcome,"UNKNOWN");await absentRecords(f);
+});
+
+
+test("CLOUD handler keeps authenticated idempotency and buyer-only recovery with demo adapters",async()=>{
+  const f=await fixture(),send=connectedHttp(app),body=bodyFor(f.intent);
+  assert.equal((await send(undefined,"/orders",body)).status,401);
+  assert.equal((await send("invalid-token","/orders",body)).status,401);
+  const [first,second]=await Promise.all([send(f.buyer.token,"/orders",body),send(f.buyer.token,"/orders",body)]);
+  assert.equal(first.body.outcome,"SUCCEEDED");assert.equal(second.body.receipt.orderId,first.body.receipt.orderId);
+  assert.equal((await send(f.buyer.token,`/order-attempts/${f.intent.intentId}`)).body.outcome,"SUCCEEDED");
+  assert.equal((await send(f.owner.token,`/order-attempts/${f.intent.intentId}`)).body.outcome,"UNKNOWN");
+  assert.ok(!JSON.stringify(first.body).includes("PRIVATE_ADMIN"));
+  await db.doc(`business_requests/${f.owner.uid}`).update({status:"SUSPENDED"});
+  assert.equal((await send(f.buyer.token,"/orders",bodyFor({...f.intent,intentId:randomUUID()}))).body.reason,"BUSINESS_UNAVAILABLE");
+  assert.equal((await send(f.buyer.token,`/order-attempts/${f.intent.intentId}`)).body.outcome,"SUCCEEDED");
+});
+
+test("CLOUD handler does not bypass HU34 purchase roles, altered consent or uncertain recovery",async()=>{
+  const f=await fixture(),send=connectedHttp(app);
+  const own=parseAcceptedPurchase({...f.intent.accepted,ownerUid:f.owner.uid});
+  const denied=await send(f.owner.token,"/orders",bodyFor({intentId:randomUUID(),accepted:own}));
+  assert.equal(denied.status,403);assert.equal(denied.body.reason,"PURCHASE_FORBIDDEN");
+  const changed=structuredClone(bodyFor(f.intent)) as any;changed.expected.amounts.totalMinor++;
+  assert.equal((await send(f.buyer.token,"/orders",changed)).status,400);
+  assert.equal((await send(f.buyer.token,`/order-attempts/${randomUUID()}`)).body.outcome,"UNKNOWN");
+  await absentRecords(f);
 });

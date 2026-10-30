@@ -220,8 +220,9 @@ internal class FirebaseCheckoutRepository @Inject constructor(
         )
         // Contact evidence is frozen during review, never re-read after acceptance.
         // Auth is the existing visible identity; foodApi still compares its authoritative profile.
-        val buyer = if (com.chaskifood.app.BuildConfig.FIREBASE_MODE == "LOCAL")
-            buyers?.read(uid, context.sessionGeneration) else null
+        val buyer = buyers?.read(uid, context.sessionGeneration)
+        if (!contexts.isCurrentSession(context)) return CheckoutReviewResult.SignedOut
+        if (!contexts.isCurrent(context)) return CheckoutReviewResult.Error("La compra cambió. Vuelve a comprobarla.")
         val accepted = if (buyer == null) null else AcceptedPurchase(uid, administrative.businessId, storeId,
             requireNotNull(administrative.businessName), latestCandidate.store.name,
             latestDocument.getString("phone")?.takeIf { it.isNotBlank() }, buyer.name, buyer.phone,

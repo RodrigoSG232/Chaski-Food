@@ -1,3 +1,4 @@
+import { connectedHttp } from "./connectedHandler.fixture";
 import { before, after, test } from "node:test";
 import assert from "node:assert/strict";
 import { initializeApp, deleteApp } from "firebase-admin/app";
@@ -264,4 +265,19 @@ test("facts conflicto confirmado no devuelve autorizaciones parciales", async ()
 test("facts propietario con estado de local inconsistente falla cerrado", async () => {
   const o = await owner(); await db.doc(`stores/${o.uid}-store`).update({ status: "UNKNOWN" });
   const r = await request(o); assert.equal(r.status, 503); assert.deepEqual(r.body, { error: "DATA_INCONSISTENT" });
+});
+
+
+test("CLOUD coordinator shares identity, suspension, scoped stores and admin checks",async()=>{
+  const send=connectedHttp(app),approved=await owner(),ordinary=await account();await prepare(ordinary.email);
+  assert.equal((await send(undefined,"/access/facts")).status,401);
+  const facts=await send(approved.token,"/access/facts");assert.equal(facts.status,200);
+  assert.equal(facts.body.ownership.status,"APPROVED");assert.equal(facts.body.stores.length,2);
+  assert.ok(facts.body.stores.every((store:any)=>store.businessId===approved.uid));
+  assert.equal((await send(ordinary.token,"/access/operations",{action:"PREPARE",email:ordinary.email,expectedRevision:1,operationId:`cloud-${++n}`})).status,403);
+  await db.doc(`business_requests/${approved.uid}`).update({status:"SUSPENDED"});
+  const suspended=await send(approved.token,"/access/facts");assert.equal(suspended.body.ownership.status,"SUSPENDED");
+  assert.deepEqual(suspended.body.stores,[]);
+  await auth.updateUser(ordinary.uid,{emailVerified:false});
+  assert.equal((await send(ordinary.token,"/access/facts")).status,401);
 });

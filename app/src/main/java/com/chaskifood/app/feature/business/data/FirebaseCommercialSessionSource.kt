@@ -1,7 +1,7 @@
 package com.chaskifood.app.feature.business.data
 
 import android.content.Context
-import com.chaskifood.app.BuildConfig
+import com.chaskifood.app.core.firebase.FoodApiEnvironment
 import com.google.firebase.auth.FirebaseAuth
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.tasks.await
@@ -14,7 +14,7 @@ import javax.inject.Singleton
 @Singleton
 class FirebaseCommercialSessionSource @Inject constructor(private val auth: FirebaseAuth) : CommercialSessionSource {
     override fun capture(): CommercialSession {
-        if (BuildConfig.FIREBASE_MODE != "LOCAL" || auth.app.options.projectId != "demo-chaski-hu15") throw CommercialFailure("LOCAL_ONLY")
+        if (!FoodApiEnvironment.isConfigured(auth.app.options.projectId)) throw CommercialFailure("ENVIRONMENT_UNAVAILABLE")
         val user = auth.currentUser ?: throw CommercialFailure("AUTHENTICATION_REQUIRED")
         return CommercialSession(user.uid, user.email, user, user.isEmailVerified)
     }

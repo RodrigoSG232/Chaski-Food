@@ -1,3 +1,4 @@
+import { connectedHttp } from "./connectedHandler.fixture";
 import { before,after,test } from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
@@ -146,4 +147,17 @@ test("HTTP requires a valid token and direct client Firestore reads remain denie
   assert.equal((await page({...f.manager,token:"invalid"},f.store)).status,401);
   const response=await fetch(`http://127.0.0.1:8089/v1/projects/${project}/databases/(default)/documents/food_orders/${"b1".repeat(32)}`,
     {headers:{Authorization:`Bearer ${f.manager.token}`}});assert.equal(response.status,403);
+});
+
+
+test("CLOUD inbox keeps scoped current bindings, privacy and read access during suspension",async()=>{
+  const f=await fixture(),send=connectedHttp(app);await seedOrder(f.store,f.owner.uid,"d".repeat(64));
+  assert.equal((await send(undefined,`/stores/${f.store}/orders`)).status,401);
+  for(const actor of [f.owner,f.buyer,admin])assert.equal((await send(actor.token,`/stores/${f.store}/orders`)).status,403);
+  assert.equal((await send(f.manager.token,`/stores/${f.other}/orders`)).status,403);
+  await db.doc(`business_requests/${f.owner.uid}`).update({status:"SUSPENDED"});
+  const result=await send(f.manager.token,`/stores/${f.store}/orders`);
+  assert.equal(result.status,200);assert.equal(result.body.orders.length,1);assert.ok(!JSON.stringify(result.body).includes("PRIVATE"));
+  await auth.updateUser(f.manager.uid,{disabled:true});
+  assert.equal((await send(f.manager.token,`/stores/${f.store}/orders`)).status,401);
 });

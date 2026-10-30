@@ -2,7 +2,6 @@ package com.chaskifood.app.feature.business.presentation
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.chaskifood.app.BuildConfig
 import com.chaskifood.app.core.access.data.SharedAccessContext
 import com.chaskifood.app.core.access.domain.*
 import com.chaskifood.app.core.common.ApiResult
@@ -27,17 +26,14 @@ class BusinessViewModel @Inject constructor(
         val permitted = access?.capabilities?.grants.orEmpty().any {
             it.capability == AccessCapability.READ_OWN_BUSINESS_STATUS || it.capability == AccessCapability.REQUEST_BUSINESS
         }
-        if (BuildConfig.FIREBASE_MODE != "LOCAL" || access == null || !permitted) flowOf(null)
+        if (access == null || !permitted) flowOf(null)
         else businessRepository.getBusinessRequest(access.identity.session.uid)
             .map { RequestSnapshot(state.origin, it) }
             .catch { if (it is CancellationException) throw it; emit(RequestSnapshot(state.origin, ApiResult.Failure("No se pudo consultar el negocio."))) }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(0), null)
 
-    val businessRequest: StateFlow<ApiResult<BusinessRequest?>?> = (if (BuildConfig.FIREBASE_MODE == "LOCAL") {
-        combine(context.states, ownRequest) { access, request -> request?.takeIf { it.origin == access.origin }?.result }
-    } else authRepository.currentUserFlow.flatMapLatest { user ->
-        if (user == null) flowOf(ApiResult.Success(null)) else businessRepository.getBusinessRequest(user.uid)
-    }).stateIn(viewModelScope, SharingStarted.WhileSubscribed(0), null)
+    val businessRequest: StateFlow<ApiResult<BusinessRequest?>?> =
+        combine(context.states, ownRequest) { access, request -> request?.takeIf { it.origin == access.origin }?.result }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(0), null)
 
     private val selection = MutableStateFlow<String?>(null)
     private var selectedIdentity: AccessIdentity.Authenticated? = null

@@ -76,7 +76,7 @@ class RemoteAccessFactsTest {
         error(409, "AUTHORIZATION_CONFLICT"); val result = ResolveAccess()(user, reader().read(state).facts) as AccessResolution.Conflict
         assertEquals(setOf(AccessGrant(AccessCapability.READ_PERSONAL_PURCHASES, AccessScope.Account("a"))), result.capabilities.grants)
     }
-    @Test fun `Cloud no consulta endpoint ni fabrica permisos`() = runBlocking {
+    @Test fun `configuracion no autorizada no consulta endpoint ni fabrica permisos`() = runBlocking {
         assertEquals(AccessCheckProblem.ENVIRONMENT_UNAVAILABLE, reader(false).read(state).problem); assertEquals(0, calls)
     }
     @Test fun `JSON incompleto y numeros incompatibles no son hechos`() {

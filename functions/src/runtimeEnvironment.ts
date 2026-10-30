@@ -23,10 +23,10 @@ export function resolveRuntimeEnvironment(env: NodeJS.ProcessEnv): RuntimeEnviro
     }
     return { mode: "LOCAL", projectId };
   }
-  if (env.FUNCTIONS_EMULATOR || !env.K_SERVICE || !projectId || projectId.startsWith("demo-") ||
+  if (env.FUNCTIONS_EMULATOR || !env.K_SERVICE || projectId !== "chaski-food-9adba" ||
       env.FIRESTORE_EMULATOR_HOST || env.FIREBASE_AUTH_EMULATOR_HOST || env.FIREBASE_DATABASE_EMULATOR_HOST ||
-      env.FIREBASE_STORAGE_EMULATOR_HOST || env.FUNCTIONS_EMULATOR_HOST || env.CHASKI_ROUTE_FIXTURE ||
-      (env.FUNCTION_TARGET && env.FUNCTION_TARGET !== "foodApi")) {
+      env.FIREBASE_STORAGE_EMULATOR_HOST || env.FUNCTIONS_EMULATOR_HOST || env.CHASKI_ROUTE_FIXTURE || env.CHASKI_NOTIFICATIONS_FIXTURE ||
+      env.FUNCTION_TARGET !== "foodApi") {
     throw new RuntimeConfigurationError();
   }
   return { mode: "CLOUD", projectId };

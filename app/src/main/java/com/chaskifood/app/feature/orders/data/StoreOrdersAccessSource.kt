@@ -1,6 +1,5 @@
 package com.chaskifood.app.feature.orders.data
 
-import com.chaskifood.app.BuildConfig
 import com.chaskifood.app.core.access.data.*
 import com.chaskifood.app.core.access.domain.*
 import com.chaskifood.app.feature.cart.data.CartSessionSource
@@ -19,7 +18,6 @@ internal class SharedStoreOrdersAccessSource @Inject constructor(
     override fun observe(target:StoreOrdersTarget):Flow<StoreOrdersAuthorization> =
         combine(access.states,sessions.sessions){_,_->current(target)}.distinctUntilChanged()
     override fun current(target:StoreOrdersTarget):StoreOrdersAuthorization {
-        if(BuildConfig.FIREBASE_MODE!="LOCAL")return StoreOrdersAuthorization.Unavailable
         val session=sessions.current();val uid=session.uid?:return StoreOrdersAuthorization.SignedOut
         val state=access.currentState()
         if(state.phase==AccessContextPhase.LOADING)return StoreOrdersAuthorization.Verifying

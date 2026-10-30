@@ -1,6 +1,5 @@
 package com.chaskifood.app.feature.business.data
 
-import com.chaskifood.app.BuildConfig
 import com.chaskifood.app.feature.business.data.remote.CommercialMutation
 import com.chaskifood.app.core.common.ApiResult
 import com.chaskifood.app.core.firebase.FirebaseAccessControl
@@ -240,16 +239,15 @@ class FirebaseStoreRepository @Inject constructor(
             close()
             return@callbackFlow
         }
-        if (BuildConfig.FIREBASE_MODE == "LOCAL") {
+        run {
             try { commercial.ensureBinding(user.uid) }
             catch (cancelled: CancellationException) { throw cancelled }
             catch (error: Exception) { trySend(ApiResult.Failure(error.message ?: "No se pudo comprobar la vinculación.", error)); close(); return@callbackFlow }
         }
         val storeListeners = mutableListOf<ListenerRegistration>()
         var generation = 0
-        val query = if (BuildConfig.FIREBASE_MODE == "LOCAL") managersRef.whereEqualTo("email", email)
+        val query = managersRef.whereEqualTo("email", email)
             .whereEqualTo("boundUid", user.uid).whereEqualTo("bindingState", "VERIFIED")
-            else managersRef.whereEqualTo("email", email)
         val managerListener = query.addSnapshotListener { snapshot, error ->
             if (error != null) { trySend(ApiResult.Failure("No se pudieron consultar tus asignaciones.", error)); return@addSnapshotListener }
             storeListeners.forEach { it.remove() }; storeListeners.clear()

@@ -32,7 +32,7 @@ class StoreOrdersViewModel @Inject constructor(private val repository:StoreOrder
                     StoreOrdersAuthorization.Verifying->StoreOrdersUiState()
                     StoreOrdersAuthorization.SignedOut->StoreOrdersUiState(loading=false,accessDenied=true,message="Inicia sesión para consultar los pedidos.")
                     StoreOrdersAuthorization.Denied->StoreOrdersUiState(loading=false,accessDenied=true,message="Tu acceso a este local ya no está autorizado.")
-                    StoreOrdersAuthorization.Unavailable->StoreOrdersUiState(loading=false,accessDenied=true,message="No pudimos comprobar los permisos. La bandeja solo está habilitada en LOCAL.")
+                    StoreOrdersAuthorization.Unavailable->StoreOrdersUiState(loading=false,accessDenied=true,message="No pudimos comprobar los permisos. Vuelve a comprobar tu acceso.")
                 }
                 if(next!=null)fetch(next,null)
             }

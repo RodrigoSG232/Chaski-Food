@@ -2,7 +2,6 @@ package com.chaskifood.app.core.navigation
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.chaskifood.app.BuildConfig
 import com.chaskifood.app.core.access.data.*
 import com.chaskifood.app.core.access.domain.*
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -21,7 +20,7 @@ class AccessNavigationViewModel @Inject constructor(
         refreshJob?.cancel()
         if (enabled) context.invalidate()
     }
-    val enabled = BuildConfig.FIREBASE_MODE == "LOCAL"
+    val enabled = true // Authorization is enforced in every environment, including unavailable configuration.
     val states = combine(context.states, identity.states) { access, current ->
         if (access.origin == current.origin && (current.availability == IdentityAvailability.READY ||
             access.phase in setOf(AccessContextPhase.ERROR, AccessContextPhase.UNAVAILABLE))) access
@@ -47,11 +46,10 @@ class AccessNavigationViewModel @Inject constructor(
     fun current() = context.currentState()
     fun sessionStamp(origin: AccessProvenance) = instanceId + ":" + origin.generation
     fun allows(route: String?, businessId: String? = null, storeId: String? = null, resubmit: Boolean = false): Boolean =
-        !enabled || AccessNavigationPolicy.allows(current().resolution, route, businessId, storeId, resubmit)
+        AccessNavigationPolicy.allows(current().resolution, route, businessId, storeId, resubmit)
 fun runIfAllowedFrom(expected: AccessProvenance, route: String?, businessId: String? = null,
         storeId: String? = null, resubmit: Boolean = false, action: () -> Unit) {
-        if (!enabled) action()
-        else context.runIfCurrent { state ->
+        context.runIfCurrent { state ->
             if ((expected == state.origin) &&
                 AccessNavigationPolicy.allows(state.resolution, route, businessId, storeId, resubmit)) action()
         }
