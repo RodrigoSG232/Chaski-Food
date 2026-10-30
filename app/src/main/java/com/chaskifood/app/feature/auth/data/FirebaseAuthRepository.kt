@@ -41,8 +41,6 @@ class FirebaseAuthRepository @Inject constructor(
     private val signOutMarker: SignOutMarkerStore,
 ) : AuthRepository {
 
-    private fun prepareSignIn() = check(signOutMarker.clearBeforeSignIn()) { "No se pudo preparar el inicio de sesión." }
-
     private var resendToken: PhoneAuthProvider.ForceResendingToken? = null
     private var resendPhone: String? = null
     private var resendUserId: String? = null
@@ -60,8 +58,8 @@ class FirebaseAuthRepository @Inject constructor(
 
     override suspend fun loginWithEmail(email: String, password: String): ApiResult<AuthUser> {
         return try {
-            prepareSignIn()
             val result = firebaseAuth.signInWithEmailAndPassword(email, password).await()
+            signOutMarker.clearAfterSignIn()
             val firebaseUser = result.user
             val user = firebaseUser?.toAuthUser()
             if (user != null && firebaseUser != null) {
@@ -90,8 +88,8 @@ class FirebaseAuthRepository @Inject constructor(
         }
         var accountCreated = false
         return try {
-            prepareSignIn()
             val result = firebaseAuth.createUserWithEmailAndPassword(email, password).await()
+            signOutMarker.clearAfterSignIn()
             accountCreated = true
             result.user?.sendEmailVerification()
             val firebaseUser = result.user
@@ -123,8 +121,8 @@ class FirebaseAuthRepository @Inject constructor(
     override suspend fun signInWithGoogle(idToken: String): ApiResult<AuthUser> {
         return try {
             val credential = GoogleAuthProvider.getCredential(idToken, null)
-            prepareSignIn()
             val result = firebaseAuth.signInWithCredential(credential).await()
+            signOutMarker.clearAfterSignIn()
             val firebaseUser = result.user
             val user = firebaseUser?.toAuthUser()
             if (user != null && firebaseUser != null) {
@@ -169,16 +167,13 @@ class FirebaseAuthRepository @Inject constructor(
             .setCallbacks(object : PhoneAuthProvider.OnVerificationStateChangedCallbacks() {
                 override fun onVerificationCompleted(credential: PhoneAuthCredential) {
                     if (firebaseAuth.currentUser?.uid != requestedUser?.uid) return
-                    if (requestedUser == null && !signOutMarker.clearBeforeSignIn()) {
-                        if (continuation.isActive) continuation.resume(ApiResult.Failure("No se pudo preparar el inicio de sesión."))
-                        return
-                    }
                     val task = if (requestedUser == null) firebaseAuth.signInWithCredential(credential)
                         else requestedUser.linkWithCredential(credential)
                     task.addOnCompleteListener { completed ->
                         if (completed.isSuccessful) {
                             if (firebaseAuth.currentUser?.uid != completed.result?.user?.uid) return@addOnCompleteListener
                             val verifiedUser = completed.result?.user ?: return@addOnCompleteListener
+                            if (requestedUser == null) signOutMarker.clearAfterSignIn()
                             verifiedUser.getIdToken(true).addOnCompleteListener {
                                 profileStore.ensureTask(verifiedUser).addOnCompleteListener { saved ->
                                     if (continuation.isActive) {
@@ -242,8 +237,8 @@ class FirebaseAuthRepository @Inject constructor(
             if (currentUser != null) {
                 currentUser.linkWithCredential(credential).await()
             } else {
-                prepareSignIn()
                 firebaseAuth.signInWithCredential(credential).await()
+                signOutMarker.clearAfterSignIn()
             }
             firebaseAuth.currentUser?.let { user ->
                 profileStore.ensure(user)

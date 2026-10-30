@@ -20,17 +20,26 @@ class SignOutMarkerStoreTest {
         assertTrue(marker.mustCompleteSignOut("manager"))
     }
 
-    @Test fun explicitSignInClearsTheMarkerBeforeAuthenticatingSameUid() {
-        val storage = Storage("manager"); val marker = SignOutMarkerStore(storage)
-        assertTrue(marker.clearBeforeSignIn())
-        assertFalse(marker.mustCompleteSignOut("manager"))
-        val writes = storage.writes
-        assertTrue(marker.clearBeforeSignIn()); assertEquals("No write when already clear", writes, storage.writes)
+    @Test fun failedSignInAttemptKeepsTheMarkerSoTheOldUserCannotBeRestored() {
+        // The repository clears only after a successful sign-in; a failed attempt never calls clearAfterSignIn.
+        val marker = SignOutMarkerStore(Storage("manager"))
+        assertTrue("Old user restored by the SDK after a failed login is closed again", marker.mustCompleteSignOut("manager"))
     }
 
-    @Test fun failedClearBlocksSignInAndFailedMarkNeverBlocksSignOut() {
-        val stale = SignOutMarkerStore(Storage("manager", writable = false))
-        assertFalse(stale.clearBeforeSignIn())
+    @Test fun successfulSignInClearsTheMarkerAndRepeatsAreFree() {
+        val storage = Storage("manager"); val marker = SignOutMarkerStore(storage)
+        marker.clearAfterSignIn()
+        assertFalse(marker.mustCompleteSignOut("manager"))
+        val writes = storage.writes
+        marker.clearAfterSignIn(); assertEquals("No write when already clear", writes, storage.writes)
+    }
+
+    @Test fun storageFailuresOnlyEverFailClosed() {
+        // A failed clear keeps the marker: at worst the same UID is signed out at next start.
+        val stale = Storage("manager", writable = false); val marker = SignOutMarkerStore(stale)
+        marker.clearAfterSignIn()
+        assertTrue(marker.mustCompleteSignOut("manager"))
+        // A failed mark never blocks sign-out and never grants anything.
         val unwritable = Storage(writable = false)
         SignOutMarkerStore(unwritable).markSigningOut("manager")
         assertNull(unwritable.value)
