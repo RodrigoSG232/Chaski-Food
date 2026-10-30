@@ -55,10 +55,13 @@ class NotificationColdStartEmulatorTest {
 
     @Test fun signOut() = runBlocking {
         phase("signout")
-        coordinator().beforeSignOut(); FirebaseAuth.getInstance().signOut()
-        assertNull(FirebaseAuth.getInstance().currentUser)
-        // Observed: if the process dies within milliseconds of signOut, the SDK may restore the previous user.
-        kotlinx.coroutines.delay(3_000)
+        // Same order as FirebaseAuthRepository.signOut with the real marker storage, and no wait afterwards:
+        // am instrument kills the process immediately, the case where the SDK alone restored the previous user.
+        val auth = FirebaseAuth.getInstance()
+        com.chaskifood.app.feature.auth.data.SignOutMarkerStore(
+            com.chaskifood.app.feature.auth.data.PreferencesSignOutMarkerStorage(context)).markSigningOut(requireNotNull(auth.currentUser).uid)
+        coordinator().beforeSignOut(); auth.signOut()
+        assertNull(auth.currentUser)
     }
 
     @Test fun signedOutRecreatedProcessShowsNothing() {

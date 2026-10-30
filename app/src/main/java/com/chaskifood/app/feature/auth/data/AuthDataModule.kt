@@ -16,4 +16,9 @@ abstract class AuthDataModule {
     abstract fun bindAuthRepository(
         impl: FirebaseAuthRepository,
     ): AuthRepository
+
+    @Binds
+    internal abstract fun bindSignOutMarkerStorage(
+        impl: PreferencesSignOutMarkerStorage,
+    ): SignOutMarkerStorage
 }
