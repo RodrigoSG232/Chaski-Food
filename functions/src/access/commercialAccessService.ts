@@ -43,8 +43,10 @@ export class CommercialAccessService {
     const snapshot = await tx.get(this.db.collection("store_managers").where("email", "==", subject.email));
     const rows = snapshot.docs.map(d => assignmentFrom(d.id, d.data()));
     let hasLiveBindings = false;
+    let boundRows = 0;
     if (subject.uid) {
       const bound = await tx.get(this.db.collection("store_managers").where("boundUid", "==", subject.uid));
+      boundRows = bound.size;
       hasLiveBindings = bound.docs.some(d => d.data().bindingState !== "REVOKED");
       if (bound.docs.some(d => d.data().bindingState !== "REVOKED" && d.data().email !== subject.email)) {
         throw new CommercialAccessError("RECONCILIATION_REQUIRED");
@@ -57,6 +59,12 @@ export class CommercialAccessService {
       throw new CommercialAccessError("BINDING_OWNED_BY_ANOTHER_UID");
     }
     const sourceHash = rowHash(rows);
+    // Implicit CLIENT (D2-H1): no index and no commercial evidence at all, read inside this same transaction.
+    // Nothing is written here; the first commercial operation creates the index at revision 1. Any trace of
+    // ownership, assignment or partial index keeps requiring an authorized preparation.
+    if (!preparing && !mail && !user && !business && !owners?.size && rows.length === 0 && boundRows === 0) {
+      return { subject, business, rows, mail, user, revision: 0, sourceHash };
+    }
     if (!preparing && (!mail || (subject.uid && !user))) throw new CommercialAccessError("PREPARATION_REQUIRED");
     if (!preparing && mail!.sourceHash !== sourceHash) throw new CommercialAccessError("INDEX_INCONSISTENT");
     if (mail && (!Number.isSafeInteger(mail.revision) || mail.revision < 0)) throw new CommercialAccessError("INDEX_INCONSISTENT");

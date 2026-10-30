@@ -30,7 +30,7 @@ async function account(verified=true,isAdmin=false):Promise<Account> {
 async function prepareActor(a:Account|{email:string}) {
   return (await access.execute(admin,{action:"PREPARE",operationId:`op-${++n}`,email:a.email,expectedRevision:0})).revision;
 }
-async function fixture(options:{pending?:boolean;unverified?:boolean;noManager?:boolean}={}) {
+async function fixture(options:{pending?:boolean;unverified?:boolean;noManager?:boolean;implicitBuyer?:boolean}={}) {
   const owner=await account(),buyer=await account(!options.unverified),manager=options.pending?{email:`pending-${++n}@example.test`}:await account();
   const store=`${owner.uid}-store`,address="address",product=`${owner.uid}-product`,category=`${owner.uid}-category`;
   let tick=Date.now();const now=()=>new Date(tick),time=Timestamp.fromMillis(tick);
@@ -47,7 +47,7 @@ async function fixture(options:{pending?:boolean;unverified?:boolean;noManager?:
   await db.doc(`categories/${category}`).set({businessId:owner.uid,name:"Categoría",isActive:true});
   await db.doc(`products/${product}`).set({businessId:owner.uid,categoryId:category,name:"Plato ficticio",price:9999,isActive:true});
   await db.doc(`store_product_configs/${store}_${product}`).set({businessId:owner.uid,storeId:store,productId:product,price:10,availability:"AVAILABLE",updatedAt:time,updatedBy:owner.uid});
-  await prepareActor(owner);await prepareActor(buyer);const managerRevision=await prepareActor(manager);
+  await prepareActor(owner);if(!options.implicitBuyer)await prepareActor(buyer);const managerRevision=await prepareActor(manager);
   if(!options.noManager)await access.execute(owner,{action:"ASSIGN",operationId:`op-${++n}`,expectedRevision:managerRevision,businessId:owner.uid,email:manager.email,
     storeIds:[store],fullName:"Responsable ficticio",phone:"000"});
   let routes=0;
@@ -276,6 +276,30 @@ test("concurrent approval changes purchase capability through the existing HU34 
   assert.ok([201,403].includes(result.status));
   assert.equal((await f.service.confirm({...f.intent,intentId:randomUUID()})).body.reason,"PURCHASE_FORBIDDEN");
   if(result.status===201)assert.equal((await f.service.recover(f.buyer.uid,f.intent.intentId)).body.outcome,"SUCCEEDED");
+});
+test("D2-H1: buyer never prepared by an admin purchases as implicit CLIENT and the order writes no HU34 index",async()=>{
+  const f=await fixture({implicitBuyer:true});
+  const r=await http(f.buyer.token,"/orders",bodyFor(f.intent));assert.equal(r.status,201,JSON.stringify(r.body));
+  assert.equal((await db.doc(`commercial_access_index/uid_${f.buyer.uid}`).get()).exists,false);
+  const facts=await http(f.buyer.token,"/access/facts");assert.equal(facts.status,200);assert.equal(facts.body.revision,0);
+  assert.equal((await http(f.buyer.token,"/orders",bodyFor(f.intent))).status,200);
+});
+test("D2-H1: unprepared commercial evidence on the buyer fails closed instead of implicit CLIENT",async()=>{
+  const f=await fixture({implicitBuyer:true});
+  await db.doc(`business_requests/${f.buyer.uid}`).set({ownerUid:f.buyer.uid,status:"PENDING_REVIEW",businessName:"Solicitud ficticia"});
+  await assert.rejects(f.service.confirm(f.intent),(error:any)=>error.code==="ACCESS_FACTS_UNAVAILABLE");
+  await absentRecords(f);
+});
+test("D2-H1: concurrent ASSIGN of an implicit buyer serializes with the purchase",async()=>{
+  for(let round=0;round<3;round++){
+    const f=await fixture({implicitBuyer:true});
+    const [order,assigned]=await Promise.all([f.service.confirm(f.intent),access.execute(f.owner,{action:"ASSIGN",operationId:`op-${++n}`,
+      expectedRevision:0,businessId:f.owner.uid,email:f.buyer.email,storeIds:[f.store],fullName:"Responsable ficticio",phone:"000"})]);
+    assert.equal(assigned.revision,1);assert.ok([201,403].includes(order.status),JSON.stringify(order.body));
+    if(order.status===201)assert.equal((await f.service.recover(f.buyer.uid,f.intent.intentId)).body.outcome,"SUCCEEDED");
+    else await absentRecords(f);
+    assert.equal((await f.service.confirm({...f.intent,intentId:randomUUID()})).body.reason,"PURCHASE_FORBIDDEN");
+  }
 });
 test("unavailable Auth never terminalizes a new intent or creates an order",async()=>{
   const f=await fixture();

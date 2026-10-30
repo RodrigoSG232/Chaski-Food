@@ -268,6 +268,94 @@ test("facts propietario con estado de local inconsistente falla cerrado", async 
 });
 
 
+// D2-H1: implicit CLIENT. None of these accounts is prepared by an administrator.
+const indexDocs = async (a: Account) => [
+  (await db.doc(`commercial_access_index/email_${digest(a.email)}`).get()).exists,
+  (await db.doc(`commercial_access_index/uid_${a.uid}`).get()).exists,
+];
+test("cliente recien registrado sin PREPARE resuelve CLIENT con revision 0 y sin escrituras", async () => {
+  const client = await account();
+  const r = await request(client); assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.equal(r.body.revision, 0); assert.equal(r.body.ownership, null);
+  assert.deepEqual(r.body.assignments, []); assert.deepEqual(r.body.stores, []);
+  assert.deepEqual(await indexDocs(client), [false, false]);
+  const unverified = await account(false);
+  assert.equal((await request(unverified)).body.revision, 0);
+});
+test("cliente implicito registra negocio desde revision 0 y la operacion crea el indice", async () => {
+  const client = await account();
+  const r = await op(client, "REGISTER", 0, { business }); assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.equal(r.body.revision, 1); assert.deepEqual(await indexDocs(client), [true, true]);
+  const facts = await request(client); assert.equal(facts.body.revision, 1); assert.equal(facts.body.ownership.status, "PENDING_REVIEW");
+  assert.equal((await op(client, "REGISTER", 0, { business })).body.error, "STALE_REVISION");
+});
+test("asignacion sin PREPARE a un correo sin rastro comercial crea el indice y respeta verificacion", async () => {
+  const o = await owner(); const verified = await account(); const pending = await account(false);
+  assert.equal((await assign(o, verified, 0)).status, 200);
+  const facts = await request(verified); assert.equal(facts.status, 200, JSON.stringify(facts.body));
+  assert.equal(facts.body.revision, 1); assert.equal(facts.body.assignments.length, 1);
+  assert.equal((await assign(o, pending, 0)).status, 200);
+  assert.equal((await db.doc(`store_managers/${o.uid}_${pending.email}`).get()).get("bindingState"), "PENDING");
+  assert.equal((await op(pending, "REGISTER", 1, { business })).body.error, "RECONCILIATION_REQUIRED");
+  const noAccount = `${prefix}-future-${++n}@example.test`;
+  assert.equal((await assign(o, { email: noAccount }, 0)).status, 200);
+  assert.equal((await db.doc(`store_managers/${o.uid}_${noAccount}`).get()).get("bindingState"), "PENDING");
+});
+test("revocacion de un responsable creado sin PREPARE deja de concederle locales", async () => {
+  const o = await owner(); const target = await account();
+  const assigned = (await assign(o, target, 0)).body.revision as number;
+  const revoked = await op(o, "REVOKE", assigned, { businessId: o.uid, email: target.email });
+  assert.equal(revoked.status, 200, JSON.stringify(revoked.body));
+  const facts = await request(target); assert.equal(facts.status, 200); assert.deepEqual(facts.body.assignments, []);
+  assert.equal(facts.body.revision, assigned + 1);
+});
+test("cualquier evidencia comercial sin preparar mantiene PREPARATION_REQUIRED o falla cerrado", async () => {
+  const unpreparedOwner = await account();
+  await db.doc(`business_requests/${unpreparedOwner.uid}`).set({ ownerUid: unpreparedOwner.uid, status: "APPROVED" });
+  assert.equal((await request(unpreparedOwner)).body.error, "PREPARATION_REQUIRED");
+  const o = await owner(); const legacy = await account();
+  await db.doc(`store_managers/${o.uid}_${legacy.email}`).set({ businessId: o.uid, email: legacy.email, assignedStoreIds: [`${o.uid}-store`] });
+  assert.equal((await request(legacy)).body.error, "PREPARATION_REQUIRED");
+  const formerlyBound = await account();
+  await db.doc(`store_managers/${o.uid}_other-${++n}@example.test`).set({ businessId: o.uid, email: `other-${n}@example.test`,
+    assignedStoreIds: [], bindingState: "REVOKED", boundUid: formerlyBound.uid });
+  assert.equal((await request(formerlyBound)).body.error, "PREPARATION_REQUIRED");
+  const partial = await account();
+  await db.doc(`commercial_access_index/uid_${partial.uid}`).set({ kind: "UID", schemaVersion: 1, uid: partial.uid,
+    emailKey: `email_${digest(partial.email)}`, authEmail: partial.email, revision: 1 });
+  assert.equal((await request(partial)).body.error, "PREPARATION_REQUIRED");
+  const foreign = await account();
+  await db.doc(`business_requests/${prefix}-foreign-${++n}`).set({ ownerUid: foreign.uid, status: "PENDING_REVIEW" });
+  const inconsistent = await request(foreign); assert.equal(inconsistent.status, 503); assert.equal(inconsistent.body.error, "DATA_INCONSISTENT");
+});
+test("concurrencia: facts durante REGISTER solo observa estados serializados", async () => {
+  for (let round = 0; round < 3; round++) {
+    const client = await account();
+    const [registered, ...reads] = await Promise.all([op(client, "REGISTER", 0, { business }), request(client), request(client), request(client)]);
+    assert.equal(registered.status, 200, JSON.stringify(registered.body));
+    for (const r of reads) {
+      assert.equal(r.status, 200, JSON.stringify(r.body));
+      if (r.body.revision === 0) assert.equal(r.body.ownership, null);
+      else { assert.equal(r.body.revision, 1); assert.equal(r.body.ownership.status, "PENDING_REVIEW"); }
+    }
+    assert.equal((await request(client)).body.revision, 1);
+  }
+});
+test("concurrencia: REGISTER y ASSIGN simultaneos sobre la misma cuenta implicita nunca ganan ambos", async () => {
+  for (let round = 0; round < 3; round++) {
+    const o = await owner(); const target = await account();
+    const [registered, assigned] = await Promise.all([op(target, "REGISTER", 0, { business }), assign(o, target, 0)]);
+    const winners = [registered, assigned].filter(r => r.status === 200);
+    assert.equal(winners.length, 1, JSON.stringify([registered.body, assigned.body]));
+    const loser = registered.status === 200 ? assigned : registered;
+    assert.ok(["STALE_REVISION", "AUTHORIZATION_CONFLICT", "MANAGER_CANNOT_REGISTER"].includes(loser.body.error), JSON.stringify(loser.body));
+    const facts = await request(target); assert.equal(facts.status, 200, JSON.stringify(facts.body)); assert.equal(facts.body.revision, 1);
+    const hasBusiness = (await db.doc(`business_requests/${target.uid}`).get()).exists;
+    const hasRow = (await db.doc(`store_managers/${o.uid}_${target.email}`).get()).exists;
+    assert.notEqual(hasBusiness, hasRow);
+  }
+});
+
 test("CLOUD coordinator shares identity, suspension, scoped stores and admin checks",async()=>{
   const send=connectedHttp(app),approved=await owner(),ordinary=await account();await prepare(ordinary.email);
   assert.equal((await send(undefined,"/access/facts")).status,401);
