@@ -102,6 +102,8 @@ test("full walk of both phases is chronological, complete and without duplicates
   assert.deepEqual((await walk(buyer, "HISTORICAL", 50)).ids, expected(orders, buyer.uid, "HISTORICAL"));
   const first = await call(buyer, "?phase=ACTIVE&pageSize=50");
   assert.equal(first.body.orders.every((o: any) => o.statusKnown === true), true);
+  assert.deepEqual(first.body.orders[0].itemPreview, [{ name: "Plato ficticio", quantity: 1 }]);
+  assert.equal(first.body.orders[0].itemLineCount, 1);
 });
 
 test("unknown valid status is ACTIVE with statusKnown=false; missing status is an inconsistency for the whole page", async () => {

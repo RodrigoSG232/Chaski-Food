@@ -27,10 +27,21 @@ test("status table: known phases, unknown valid status shown as ACTIVE, missing 
 test("summary is a whitelist for the owning buyer and keeps exact amounts", () => {
   const s = projectBuyerOrderSummary(id, order(), uid);
   assert.deepEqual(Object.keys(s).sort(), ["orderId", "createdAtEpochMillis", "status", "phase", "statusKnown", "storeName", "businessName",
-    "itemCount", "totalMinor", "currency"].sort());
+    "itemCount", "itemPreview", "itemLineCount", "totalMinor", "currency"].sort());
+  assert.deepEqual(s.itemPreview, [{ name: "Plato", quantity: 2 }, { name: "Bebida", quantity: 1 }]); assert.equal(s.itemLineCount, 2);
   assert.equal(s.itemCount, 3); assert.equal(s.totalMinor, 2800); assert.equal(s.createdAtEpochMillis, 1800000000005);
   assert.equal(JSON.stringify(s).includes("PRIVATE"), false);
   assert.throws(() => projectBuyerOrderSummary(id, order(), "other"));
+});
+
+test("item preview keeps at most two snapshot lines in order and counts the rest", () => {
+  const items = ["A", "B", "C", "D"].map((name, i) => ({ productId: "p" + i, categoryId: "c", name, quantity: i + 1, unitPriceMinor: 100,
+    lineTotalMinor: 100 * (i + 1) }));
+  const s = projectBuyerOrderSummary(id, { ...order(), items, subtotalMinor: 1000, totalMinor: 1300 }, uid);
+  assert.deepEqual(s.itemPreview, [{ name: "A", quantity: 1 }, { name: "B", quantity: 2 }]);
+  assert.equal(s.itemLineCount, 4); assert.equal(s.itemCount, 10);
+  const one = projectBuyerOrderSummary(id, { ...order(), items: [order().items[0]], subtotalMinor: 2000, totalMinor: 2300 }, uid);
+  assert.deepEqual(one.itemPreview, [{ name: "Plato", quantity: 2 }]); assert.equal(one.itemLineCount, 1);
 });
 
 test("corrupted documents never become partial rows", () => {

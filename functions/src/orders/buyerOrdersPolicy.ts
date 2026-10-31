@@ -13,6 +13,8 @@ export const MAX_BUYER_PAGE_SIZE = 50;
 /** Documents read per Firestore query and per request. Bounds billable reads; select() only trims transfer. */
 export const BUYER_SCAN_BATCH = 50;
 export const BUYER_SCAN_BUDGET = 200;
+/** Lines shown on a list row, taken in snapshot order from the HU16 historical items; the rest is «+N más». */
+export const BUYER_ITEM_PREVIEW = 2;
 /** Fields the projections need; everything else (buyer identity, hashes, quote) is never read into the response. */
 export const BUYER_ORDER_FIELDS = ["schemaVersion", "orderId", "buyerUid", "status", "createdAt", "items", "subtotalMinor",
   "deliveryFeeMinor", "totalMinor", "currency", "paymentMethod", "storeSnapshot", "businessSnapshot"] as const;
@@ -40,6 +42,9 @@ export function projectBuyerOrderSummary(id: string, data: Record<string, any>, 
     return { orderId: id, createdAtEpochMillis: core.createdAtEpochMillis, status: state.status, phase: state.phase,
       statusKnown: state.known, storeName: snapshotName(data.storeSnapshot), businessName: snapshotName(data.businessSnapshot),
       itemCount: core.items.reduce((sum: number, item: { quantity: number }) => sum + item.quantity, 0),
+      itemPreview: core.items.slice(0, BUYER_ITEM_PREVIEW).map((item: { name: string; quantity: number }) =>
+        ({ name: item.name, quantity: item.quantity })),
+      itemLineCount: core.items.length,
       totalMinor: core.totalMinor, currency: core.currency };
   } catch (error) {
     if (error instanceof OrderHttpError) throw error;

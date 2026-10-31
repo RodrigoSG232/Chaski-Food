@@ -3,6 +3,20 @@ package com.chaskifood.app.feature.checkout.presentation
 import com.chaskifood.app.core.navigation.LocalProtectedAction
 import com.chaskifood.app.core.navigation.LocalNavigationAccess
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material3.Icon
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import com.chaskifood.app.feature.checkout.domain.OrderReceipt
+import com.chaskifood.app.feature.orders.presentation.BuyerOrderStatusChip
+import com.chaskifood.app.feature.orders.presentation.shortOrderId
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -54,6 +68,7 @@ fun RealCheckoutScreen(
     modifier: Modifier = Modifier,
     viewModel: CheckoutViewModel = hiltViewModel(),
     recoveryOnly: Boolean = false,
+    onOpenOrder: (String) -> Unit = {},
 ) {
     val authorize = LocalProtectedAction.current
     val origin = LocalNavigationAccess.current?.current()?.origin
@@ -71,7 +86,9 @@ fun RealCheckoutScreen(
     Scaffold(
         modifier = modifier,
         containerColor = ChaskiBackground,
-        topBar = { ChaskiAppBar(title = "Revisar compra", onBackClick = onBack) },
+        // «Revisar compra» antes de confirmar; tras una confirmación exitosa (directa o recuperada), «Pedido enviado».
+        topBar = { ChaskiAppBar(title = if (state.confirmation is CheckoutConfirmation.Success) "Pedido enviado" else "Revisar compra",
+            onBackClick = onBack) },
     ) { innerPadding ->
         LazyColumn(
             modifier = Modifier.fillMaxSize().padding(innerPadding),
@@ -83,7 +100,8 @@ fun RealCheckoutScreen(
                     CheckoutConfirmationPanel(state.confirmation,
                         onRecover = { authorize { viewModel.recover() } },
                         onRetry = if (recoveryOnly) null else ({ authorize { viewModel.retryOriginal() } }),
-                        onReview = if (recoveryOnly) null else ({ authorize { viewModel.review() } }))
+                        onReview = if (recoveryOnly) null else ({ authorize { viewModel.review() } }),
+                        onOpenOrder = onOpenOrder)
                 }
                 recoveryOnly -> item("no-pending") {
                     CheckoutMessage("No tienes una confirmación pendiente de recuperar en este dispositivo.")
@@ -265,15 +283,12 @@ private fun CheckoutAmountRow(label: String, minor: Long, bold: Boolean = false)
 
 @Composable
 internal fun CheckoutConfirmationPanel(state: CheckoutConfirmation, onRecover: () -> Unit,
-    onRetry: (() -> Unit)?, onReview: (() -> Unit)?) {
+    onRetry: (() -> Unit)?, onReview: (() -> Unit)?, onOpenOrder: (String) -> Unit = {}) {
     Column(verticalArrangement = Arrangement.spacedBy(ChaskiDimens.SpacingMd)) {
         when (state) {
             CheckoutConfirmation.Working -> { CircularProgressIndicator(); CheckoutMessage("Verificando confirmación. No vuelvas a enviar otra compra.") }
             is CheckoutConfirmation.Success -> {
-                CheckoutMessage("Pedido confirmado: ${state.receipt.orderId}")
-                Text("Estado: ${state.receipt.status.name}")
-                Text("Total: ${formatCartPrice(state.receipt.accepted.amounts.totalMinor)}")
-                if (!state.cartConsumed) Text("Conservamos tu carrito porque cambió después de la revisión.")
+                OrderSentPanel(state.receipt, state.cartConsumed, onOpenOrder)
             }
             is CheckoutConfirmation.Pending -> {
                 CheckoutMessage("Resultado pendiente de verificar. Conservamos el intento original y tu carrito.")
@@ -319,3 +334,43 @@ internal fun CheckoutConfirmationPanel(state: CheckoutConfirmation, onRecover: (
         }
     }
 }
+
+/** HU17: confirmación exitosa, igual para la respuesta directa y la recuperada. «Ver mi pedido» usa el ID completo. */
+@Composable
+private fun OrderSentPanel(receipt: OrderReceipt, cartConsumed: Boolean, onOpenOrder: (String) -> Unit) {
+    Column(Modifier.fillMaxWidth().semantics { liveRegion = LiveRegionMode.Polite },
+        verticalArrangement = Arrangement.spacedBy(ChaskiDimens.SpacingLg)) {
+        Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(ChaskiDimens.SpacingSm)) {
+            Box(Modifier.size(64.dp).clip(CircleShape).background(OrderSentBg), contentAlignment = Alignment.Center) {
+                Icon(Icons.Filled.Check, contentDescription = null, tint = OrderSentFg, modifier = Modifier.size(32.dp))
+            }
+            Text("Recibimos tu pedido", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+            Text("El local revisará tu pedido. Puedes consultar su estado cuando quieras.", textAlign = TextAlign.Center,
+                style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        Surface(shape = MaterialTheme.shapes.medium, tonalElevation = 1.dp) {
+            Column(Modifier.fillMaxWidth().padding(ChaskiDimens.SpacingLg), verticalArrangement = Arrangement.spacedBy(ChaskiDimens.SpacingSm)) {
+                Text("Pedido #${shortOrderId(receipt.orderId)}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                BuyerOrderStatusChip(receipt.status.name, known = true)
+                ReceiptRow("Local", receipt.accepted.storeName)
+                ReceiptRow("Pago", "Efectivo contra entrega")
+                ReceiptRow("Total", formatCartPrice(receipt.accepted.amounts.totalMinor), bold = true)
+            }
+        }
+        if (!cartConsumed) Text("Conservamos tu carrito porque cambió después de la revisión.",
+            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        ChaskiButton("Ver mi pedido", onClick = { onOpenOrder(receipt.orderId) }, modifier = Modifier.fillMaxWidth())
+    }
+}
+
+@Composable
+private fun ReceiptRow(label: String, value: String, bold: Boolean = false) {
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+        Text(label, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(value, fontWeight = if (bold) FontWeight.Bold else FontWeight.Normal)
+    }
+}
+
+private val OrderSentBg = Color(0xFFE8F5E9)
+private val OrderSentFg = Color(0xFF1B5E20)

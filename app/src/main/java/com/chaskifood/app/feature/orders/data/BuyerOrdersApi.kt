@@ -8,13 +8,15 @@ import retrofit2.http.*
     val orders: List<BuyerOrderSummaryResponse>, val nextCursor: String?)
 @Serializable internal data class BuyerOrderSummaryResponse(val orderId: String, val createdAtEpochMillis: Long, val status: String,
     val phase: String, val statusKnown: Boolean, val storeName: String, val businessName: String, val itemCount: Int,
-    val totalMinor: Long, val currency: String)
+    val totalMinor: Long, val currency: String, val itemPreview: List<BuyerOrderItemPreviewResponse>, val itemLineCount: Int)
+@Serializable internal data class BuyerOrderItemPreviewResponse(val name: String, val quantity: Int)
 @Serializable internal data class BuyerOrderDetailEnvelope(val contractVersion: Int, val order: BuyerOrderDetailResponse)
 @Serializable internal data class BuyerOrderDetailResponse(val orderId: String, val createdAtEpochMillis: Long, val status: String,
     val phase: String, val statusKnown: Boolean, val storeName: String, val businessName: String, val itemCount: Int,
     val totalMinor: Long, val currency: String, val storePhone: String?, val pickupAddressText: String,
     val delivery: BuyerOrderDeliveryResponse, val items: List<StoreOrderLineResponse>, val subtotalMinor: Long,
-    val deliveryFeeMinor: Long, val paymentMethod: String, val statusHistory: List<BuyerOrderStatusResponse>)
+    val deliveryFeeMinor: Long, val paymentMethod: String, val statusHistory: List<BuyerOrderStatusResponse>,
+    val itemPreview: List<BuyerOrderItemPreviewResponse>, val itemLineCount: Int)
 @Serializable internal data class BuyerOrderDeliveryResponse(val label: String?, val addressText: String, val reference: String?,
     val instructions: String?)
 @Serializable internal data class BuyerOrderStatusResponse(val status: String, val statusKnown: Boolean, val occurredAtEpochMillis: Long)

@@ -10,16 +10,27 @@ data class BuyerOrdersSession(val uid: String, val generation: Long) {
     init { require(uid.isNotBlank() && generation >= 0) }
 }
 
+/** Línea mostrada en la fila de la lista, copiada del snapshot histórico del pedido. */
+data class BuyerOrderItemPreview(val name: String, val quantity: Int) {
+    init { orderText(name); require(quantity > 0) }
+}
+
 /** `statusKnown = false`: estado válido que esta versión no reconoce (se muestra como «Estado en actualización»). */
 data class BuyerOrderSummary(
     val orderId: String, val createdAtEpochMillis: Long, val status: String, val statusKnown: Boolean,
     val phase: BuyerOrderPhase, val storeName: String, val businessName: String, val itemCount: Int, val totalMinor: Long,
+    /** Hasta [MAX_ITEM_PREVIEW] líneas; el resto se muestra como «+N más». */
+    val itemPreview: List<BuyerOrderItemPreview>, val itemLineCount: Int,
 ) {
+    val hiddenLineCount: Int get() = itemLineCount - itemPreview.size
     init {
         orderId(orderId); orderText(status); orderText(storeName); orderText(businessName)
         require(createdAtEpochMillis in 1..MAX_ORDER_EPOCH_MILLIS && itemCount > 0)
+        require(itemLineCount in 1..itemCount && this.itemPreview.size == minOf(itemLineCount, MAX_ITEM_PREVIEW) &&
+            this.itemPreview.sumOf { it.quantity.toLong() } <= itemCount)
         orderMinor(totalMinor)
     }
+    companion object { const val MAX_ITEM_PREVIEW = 2 }
 }
 
 data class BuyerOrderDelivery(val label: String?, val addressText: String, val reference: String?, val instructions: String?) {
@@ -42,6 +53,8 @@ class BuyerOrderDetail(
         require(this.items.isNotEmpty() && this.items.map { it.productId }.distinct().size == this.items.size)
         require(this.items.fold(0L) { sum, i -> orderMinor(Math.addExact(sum, i.lineTotalMinor)) } == amounts.subtotalMinor)
         require(amounts.totalMinor == summary.totalMinor && this.items.sumOf { it.quantity } == summary.itemCount)
+        require(summary.itemLineCount == this.items.size && summary.itemPreview ==
+            this.items.take(BuyerOrderSummary.MAX_ITEM_PREVIEW).map { BuyerOrderItemPreview(it.name, it.quantity) })
         require(this.statusHistory.isNotEmpty() && this.statusHistory.zipWithNext().all { (a, b) -> a.occurredAtEpochMillis <= b.occurredAtEpochMillis })
     }
 }

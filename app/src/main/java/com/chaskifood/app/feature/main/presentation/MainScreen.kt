@@ -45,8 +45,8 @@ fun MainScreen(
     onProductClick: (String, String) -> Unit = { _, _ -> },
     onOpenCategories: () -> Unit = {},
     onOpenFood: (String) -> Unit = {},
-    onTrack: (String) -> Unit = {},
-    onDelivered: (String) -> Unit = {},
+    onOpenOrder: (String) -> Unit = {},
+    onOpenMyPurchases: () -> Unit = {},
     onOpenPaymentMethods: () -> Unit = {},
     onOpenLocations: () -> Unit = {},
     onOpenReferral: () -> Unit = {},
@@ -120,14 +120,12 @@ fun MainScreen(
                 ) else EmptyState("Las compras nuevas no están habilitadas para esta cuenta.")
             }
             composable(ChaskiTab.ORDERS.route) {
-                if (!commercial) OrdersScreen(
-                    onTrack = onTrack,
-                    onDelivered = onDelivered,
-                )
+                if (!commercial) OrdersScreen(onOpenOrder = onOpenOrder)
             }
             composable(ChaskiTab.ACCOUNT.route) {
                 AccountScreen(
                     onRecoverPurchase = onRecoverPurchase,
+                    onOpenMyPurchases = onOpenMyPurchases,
                     onOpenProfileInfo = onOpenProfileInfo,
                     onOpenSecurity = onOpenSecurity,
                     onOpenPaymentMethods = onOpenPaymentMethods,

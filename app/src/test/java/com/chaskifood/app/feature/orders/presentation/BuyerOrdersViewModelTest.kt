@@ -16,7 +16,8 @@ class BuyerOrdersViewModelTest {
     private val buyer = BuyerOrdersSession("buyer", 1)
     private fun id(n: Int) = n.toString(16).padStart(64, '0')
     private fun row(n: Int, phase: BuyerOrderPhase = BuyerOrderPhase.ACTIVE, status: String = "PREPARING", known: Boolean = true) =
-        BuyerOrderSummary(id(n), 1_800_000_000_000 - n, status, known, phase, "Local", "Negocio", 1, 1300)
+        BuyerOrderSummary(id(n), 1_800_000_000_000 - n, status, known, phase, "Local", "Negocio", 1, 1300,
+            listOf(BuyerOrderItemPreview("Plato", 1)), 1)
     private fun page(phase: BuyerOrderPhase, rows: List<BuyerOrderSummary>, cursor: String?) = BuyerOrdersResult.Loaded(BuyerOrdersPage(phase, rows, cursor))
 
     private class Repo(initial: BuyerOrdersSession?) : BuyerOrdersRepository {

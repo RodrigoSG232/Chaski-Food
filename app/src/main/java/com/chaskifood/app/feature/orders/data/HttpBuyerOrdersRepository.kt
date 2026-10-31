@@ -72,12 +72,14 @@ private fun phaseOf(value: String) = BuyerOrderPhase.valueOf(value)
 
 private fun BuyerOrderSummaryResponse.toDomain(): BuyerOrderSummary {
     require(currency == "PEN")
-    return BuyerOrderSummary(orderId, createdAtEpochMillis, status, statusKnown, phaseOf(phase), storeName, businessName, itemCount, totalMinor)
+    return BuyerOrderSummary(orderId, createdAtEpochMillis, status, statusKnown, phaseOf(phase), storeName, businessName, itemCount, totalMinor,
+        itemPreview.map { BuyerOrderItemPreview(it.name, it.quantity) }, itemLineCount)
 }
 
 private fun BuyerOrderDetailResponse.toDomain(): BuyerOrderDetail {
     require(currency == "PEN" && paymentMethod == "CASH_ON_DELIVERY")
-    val summary = BuyerOrderSummary(orderId, createdAtEpochMillis, status, statusKnown, phaseOf(phase), storeName, businessName, itemCount, totalMinor)
+    val summary = BuyerOrderSummary(orderId, createdAtEpochMillis, status, statusKnown, phaseOf(phase), storeName, businessName, itemCount, totalMinor,
+        itemPreview.map { BuyerOrderItemPreview(it.name, it.quantity) }, itemLineCount)
     return BuyerOrderDetail(summary, storePhone, pickupAddressText,
         BuyerOrderDelivery(delivery.label, delivery.addressText, delivery.reference, delivery.instructions),
         items.map { StoreOrderLine(it.productId, it.name, it.quantity, it.unitPriceMinor, it.lineTotalMinor) },
