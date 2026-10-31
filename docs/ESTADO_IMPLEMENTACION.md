@@ -17,15 +17,15 @@ Vocabulario: **implementado** = código integrado; **verificado** = hay evidenci
 | **HU15** revisión de compra | **Validado en Cloud** | Elegibilidad y cotización vial HeiGIT (`lima-driving-car-v1`). |
 | **HU16** confirmar pedido | **Validado en Cloud (31-10)** | Pedido idempotente, outbox, `newOrderNotifier` con FCM real y bandeja del responsable. Pedido de prueba `PENDING_CONFIRMATION`, evento `SENT`. |
 | **HU34** acceso según permisos | **Validado en Cloud** | Coordinador comercial en foodApi, índice privado, reglas publicadas, vinculación VERIFIED, cliente implícito, lease renovable y paneles con cierre de sesión. Comprador, propietario, responsable y administrador comprobados. |
-| **HU17** pedidos propios | **Implementado y aprobado en LOCAL (31-10); índice publicado; pendiente `foodApi` y CONECTADO** | Lista En curso/Historial, detalle histórico, «Mis compras» en Cuenta (propietario/responsable) y «Ver mi pedido» en Checkout. Falta: `foodApi` y validación CONECTADO (§4.1). |
+| **HU17** pedidos propios | **Implementado y aprobado en LOCAL; índice y `foodApi` publicados (31-10); pendiente validación CONECTADO** | Lista En curso/Historial, detalle histórico, «Mis compras» en Cuenta (propietario/responsable) y «Ver mi pedido» en Checkout. Falta: validación con el APK CONECTADO (§4.1). |
 | HU18–HU22 | **Siguiente trabajo** | Ver §4.1. |
 | HU23–HU33, EN04 | No iniciadas | Hay pantallas de ejemplo (seguimiento, pago, valoración) que **no** son funcionalidad productiva. Release sin configurar. |
 
 HU34 no figura en la planificación original del curso: es una historia acordada por el equipo (sus decisiones vigentes están en [DECISIONES](DECISIONES.md)).
 
 ## 2. Estado de Firebase Cloud (31-10-2026)
-- **Functions:** `foodApi` (revisión `foodapi-00002-naj`) y `newOrderNotifier` ACTIVE en `southamerica-west1`, trigger Eventarc sobre `order_events/{eventId}`, secreto `HEIGIT_API_KEY` habilitado. **`checkoutApi` eliminada.**
-- **Reglas:** las de `firestore.rules` (publicadas el 31-10, idénticas al repositorio). **Índices:** los 3 de `firestore.indexes.json` en READY; el de HU17 (`food_orders` `buyerUid ASC, createdAt DESC, __name__ DESC`) se publicó el 31-10 sin alterar los 2 anteriores. `foodApi` en Cloud (revisión `foodapi-00002-naj`) **todavía no** tiene las rutas `GET /me/orders`.
+- **Functions:** `foodApi` (revisión `foodapi-00003-vab`, 31-10, con las rutas HU17; punto de retorno `foodapi-00002-naj`) y `newOrderNotifier` ACTIVE en `southamerica-west1`, trigger Eventarc sobre `order_events/{eventId}`, secreto `HEIGIT_API_KEY` habilitado. **`checkoutApi` eliminada.**
+- **Reglas:** las de `firestore.rules` (publicadas el 31-10, idénticas al repositorio). **Índices:** los 3 de `firestore.indexes.json` en READY; el de HU17 (`food_orders` `buyerUid ASC, createdAt DESC, __name__ DESC`) se publicó el 31-10 sin alterar los 2 anteriores.
 - **Datos comerciales:** limpieza L1/L2 hecha; solo queda **CevicheVictory** como negocio de prueba (aprobado, 2 locales, 1 categoría, 2 productos, 4 precios), con un responsable VERIFIED y un dispositivo registrado. Hay **un pedido de prueba** `PENDING_CONFIRMATION` (útil para HU17/HU19) y su evento `SENT`. `users` y Authentication no se tocaron.
 - Publicación (30–31-10): limpieza de datos ficticios (L1/L2), despliegue de funciones (D), registro y aprobación de negocio (E1), asignación y vinculación de responsable (E2), reglas (G) y pedido completo con aviso (F), cada fase con autorización. El detalle por fases queda en el registro histórico local de Dante.
 
@@ -45,7 +45,7 @@ Fuente única de pendientes. Cada elemento indica por qué se postergó, dónde 
 ### 4.1 Próximas historias (planificación original)
 | HU | Título | Notas ya decididas |
 |---|---|---|
-| HU17 | Consultar pedidos activos e históricos | **Pendiente:** (1) índice ✔ publicado y READY (31-10); (2) `foodApi` (solo `functions:food-local:foodApi`, con autorización; vuelta atrás: tráfico a `foodapi-00002-naj`); (3) validación CONECTADO con el pedido de prueba existente. Después, cierre definitivo. |
+| HU17 | Consultar pedidos activos e históricos | **Pendiente:** (1) índice ✔ publicado y READY (31-10); (2) `foodApi` ✔ publicado como `foodapi-00003-vab` (31-10; sin token → 401; sin 5xx nuevos; vuelta atrás: tráfico a `foodapi-00002-naj`); (3) validación CONECTADO con el pedido de prueba existente. Después, cierre definitivo. |
 | HU18 | Cancelar pedido | Según estado (p. ej. `PENDING_CONFIRMATION`). |
 | HU19 | Recibir y responder pedidos | **Aprobado:** aceptar pasa directo `PENDING_CONFIRMATION → PREPARING` (sin `CONFIRMED`). Debe precisar acciones durante suspensión. El pedido de prueba sirve para probarla. |
 | HU20 | Gestionar tiempo de preparación | — |
