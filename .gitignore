@@ -64,7 +64,9 @@ app/google-services.json
 !/docs/ARCHITECTURE.md
 !/docs/GUIA_DESARROLLO.md
 !/docs/ESTADO_IMPLEMENTACION.md
-!/docs/HU16_DECISIONES_Y_REQUISITOS.md
-!/docs/HU34_DECISIONES_Y_REQUISITOS.md
+!/docs/DECISIONES.md
 /contexto/
+# Instrucciones para asistentes de IA: se comparten internamente, no se versionan.
+/AGENTS.md
+/CLAUDE.md
 /revision-ux.md

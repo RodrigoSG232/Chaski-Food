@@ -20,13 +20,13 @@ Vocabulario: **implementado** = código integrado; **verificado** = hay evidenci
 | HU17–HU22 | **Siguiente trabajo** | Ver §4.1. |
 | HU23–HU33, EN04 | No iniciadas | Hay pantallas de ejemplo (seguimiento, pago, valoración) que **no** son funcionalidad productiva. Release sin configurar. |
 
-HU34 no figura en la planificación original del curso: es una historia acordada por el equipo (decisiones en [HU34_DECISIONES_Y_REQUISITOS](HU34_DECISIONES_Y_REQUISITOS.md)).
+HU34 no figura en la planificación original del curso: es una historia acordada por el equipo (sus decisiones vigentes están en [DECISIONES](DECISIONES.md)).
 
 ## 2. Estado de Firebase Cloud (31-10-2026)
 - **Functions:** `foodApi` (revisión `foodapi-00002-naj`) y `newOrderNotifier` ACTIVE en `southamerica-west1`, trigger Eventarc sobre `order_events/{eventId}`, secreto `HEIGIT_API_KEY` habilitado. **`checkoutApi` eliminada.**
 - **Reglas:** las de `firestore.rules` (publicadas el 31-10, idénticas al repositorio). **Índices:** los 2 de `firestore.indexes.json`, habilitados.
 - **Datos comerciales:** limpieza L1/L2 hecha; solo queda **CevicheVictory** como negocio de prueba (aprobado, 2 locales, 1 categoría, 2 productos, 4 precios), con un responsable VERIFIED y un dispositivo registrado. Hay **un pedido de prueba** `PENDING_CONFIRMATION` (útil para HU17/HU19) y su evento `SENT`. `users` y Authentication no se tocaron.
-- El historial completo de la publicación (fases L1→F, L2) está en [HU16 §«Cierre de publicación»](HU16_DECISIONES_Y_REQUISITOS.md).
+- Publicación (30–31-10): limpieza de datos ficticios (L1/L2), despliegue de funciones (D), registro y aprobación de negocio (E1), asignación y vinculación de responsable (E2), reglas (G) y pedido completo con aviso (F), cada fase con autorización. El detalle por fases queda en el registro histórico local de Dante.
 
 ## 3. Evidencia vigente
 | Alcance | Resultado |
@@ -87,5 +87,6 @@ Fuente única de pendientes. Cada elemento indica por qué se postergó, dónde 
 - Etiquetas de navegación de DEC-HU34-26 para el cliente: sustituidas por DEC-HU34-29.
 
 ## 5. Documentos y fuentes
-- Versionados: `README.md`, `AGENTS.md`/`CLAUDE.md`, `docs/ARCHITECTURE.md`, `docs/GUIA_DESARROLLO.md`, este documento y los registros de decisiones [HU16](HU16_DECISIONES_Y_REQUISITOS.md) y [HU34](HU34_DECISIONES_Y_REQUISITOS.md) (históricos: contienen el porqué de cada decisión; lo vigente está aquí y en ARCHITECTURE).
-- Locales, fuera de Git: `contexto/` (caso y planificación originales del curso, fuente de los criterios de aceptación) y `docs/HU04_PLAN.md`.
+- Versionados: `README.md`, `docs/ARCHITECTURE.md`, `docs/GUIA_DESARROLLO.md`, `docs/DECISIONES.md` y este documento.
+- Compartidos internamente (no versionados): `AGENTS.md` y `CLAUDE.md`, instrucciones para asistentes de IA.
+- Locales, fuera de Git: `contexto/` (caso y planificación originales del curso, fuente de los criterios de aceptación), `docs/HU04_PLAN.md` y los registros históricos completos de HU16 y HU34.

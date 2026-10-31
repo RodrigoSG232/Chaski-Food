@@ -10,8 +10,9 @@ App Android de delivery (Kotlin + Jetpack Compose) con backend `foodApi` en Fire
 | 1 | [docs/ESTADO_IMPLEMENTACION.md](docs/ESTADO_IMPLEMENTACION.md) | Qué está hecho, estado de Cloud y **todos los pendientes** (§4). |
 | 2 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Cómo funciona: Android, foodApi, Firestore, reglas, avisos y entornos LOCAL/CONECTADO. |
 | 3 | [docs/GUIA_DESARROLLO.md](docs/GUIA_DESARROLLO.md) | Comandos, pruebas, metodología para nuevas historias, despliegues autorizados, Git e interfaces. |
-| 4 | [AGENTS.md](AGENTS.md) | Reglas de trabajo para asistentes de IA (Claude Code lo carga vía [CLAUDE.md](CLAUDE.md)). |
-| Consulta | [docs/HU16_DECISIONES_Y_REQUISITOS.md](docs/HU16_DECISIONES_Y_REQUISITOS.md), [docs/HU34_DECISIONES_Y_REQUISITOS.md](docs/HU34_DECISIONES_Y_REQUISITOS.md) | Registro histórico de decisiones y del porqué (pedidos/avisos y permisos). |
+| 4 | [docs/DECISIONES.md](docs/DECISIONES.md) | Decisiones aprobadas que siguen vigentes (pedidos, avisos, roles, responsables, interfaz). |
+
+Las instrucciones para asistentes de IA (`AGENTS.md` y `CLAUDE.md`) se comparten internamente en el equipo y no se versionan.
 
 ## Inicio rápido
 ```powershell

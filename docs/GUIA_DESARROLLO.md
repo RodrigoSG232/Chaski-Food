@@ -72,7 +72,7 @@ Nada en Cloud se modifica automáticamente: ni Functions, ni reglas, ni índices
 ## 3. Metodología para implementar historias de usuario
 Proceso riguroso pero proporcional al tamaño de la historia:
 1. Leer la HU y sus criterios de aceptación (fuente original: planificación del curso) y la sección de la historia en [ESTADO_IMPLEMENTACION](ESTADO_IMPLEMENTACION.md#4-pendientes-y-mejoras-futuras).
-2. Revisar el código actual y los documentos relacionados (decisiones de [HU16](HU16_DECISIONES_Y_REQUISITOS.md) y [HU34](HU34_DECISIONES_Y_REQUISITOS.md) si aplican).
+2. Revisar el código actual, las [decisiones vigentes](DECISIONES.md) y la arquitectura relacionada.
 3. Analizar procesos de negocio, roles, dependencias y restricciones.
 4. Detectar escenarios relevantes no explícitos en los criterios (concurrencia, sesión, red, permisos, datos antiguos) **sin cambiar unilateralmente el alcance**.
 5. Identificar riesgos, incompatibilidades y decisiones pendientes.
@@ -105,7 +105,7 @@ Buenas prácticas:
 - Hacer push o merge **no despliega** Cloud.
 
 ## 5. Diseño de interfaces
-- Dante trabaja algunas interfaces en **Pencil** (archivos `.pen`, mediante su servidor MCP con el asistente). El diseño se traduce a Compose reutilizando `ui/theme`, `ui/components` y la navegación existente; la correspondencia Pencil → Compose de HU34 está registrada en [HU34 §18–19](HU34_DECISIONES_Y_REQUISITOS.md).
+- Dante trabaja algunas interfaces en **Pencil** (archivos `.pen`, mediante su servidor MCP con el asistente). El diseño se traduce a Compose reutilizando `ui/theme`, `ui/components` y la navegación existente; las decisiones de interfaz vigentes están en [DECISIONES § Interfaz](DECISIONES.md#interfaz).
 - **Pencil no es obligatorio**: cualquier integrante puede diseñar en Android Studio o con sus herramientas, respetando Material 3, `ChaskiTheme`, los componentes compartidos y los criterios de UX vigentes.
 - Decisión aprobada DEC-HU34-29: **se conserva la interfaz actual del cliente** (Inicio, Buscar, Pedidos, Cuenta, catálogo, carrito, direcciones y Checkout); cambiarla requiere decisión explícita.
 - Si cambias una interfaz de forma relevante, anota en el PR (o en el estado) qué cambió y por qué. No hace falta documentar cada ajuste visual.
