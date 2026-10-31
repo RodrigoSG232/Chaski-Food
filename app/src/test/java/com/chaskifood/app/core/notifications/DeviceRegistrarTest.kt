@@ -26,7 +26,9 @@ class DeviceRegistrarTest {
     private class Api : DeviceApi {
         val calls = mutableListOf<String>()
         var putCode = 204
+        var lastBody: DeviceRegistration? = null
         override suspend fun put(id: String, bearer: String, body: DeviceRegistration): Response<Unit> {
+            lastBody = body
             calls += "PUT:$bearer:${body.token}:${body.bindingVersion}"
             return if (putCode in 200..299) Response.success(204, Unit) else Response.error(putCode, "".toResponseBody())
         }
@@ -40,6 +42,15 @@ class DeviceRegistrarTest {
     private fun registrar(api: Api, sessions: Sessions, push: suspend () -> String = { "fcm-token" }) =
         DeviceRegistrar(api, sessions, Tokens(sessions), "installation", { ++version }, push)
 
+    @Test fun registrationBodyCarriesTheThreeFieldsTheFoodApiRequiresWithTheAppJson() = runTest {
+        val api = Api(); val sessions = Sessions(a)
+        assertEquals(RegistrationOutcome.REGISTERED, registrar(api, sessions).register(a))
+        // Mismo Json que Retrofit (encodeDefaults=false): un campo con valor por defecto se omitiria y daria 400.
+        val json = com.chaskifood.app.core.network.NetworkModule.provideJson()
+        val encoded = json.parseToJsonElement(json.encodeToString(DeviceRegistration.serializer(), checkNotNull(api.lastBody))) as kotlinx.serialization.json.JsonObject
+        assertEquals(setOf("token", "bindingVersion", "platform"), encoded.keys)
+        assertEquals("ANDROID", (encoded["platform"] as kotlinx.serialization.json.JsonPrimitive).content)
+    }
     @Test fun registersCurrentSessionWithItsOwnIdToken() = runTest {
         val api = Api(); val sessions = Sessions(a)
         assertEquals(RegistrationOutcome.REGISTERED, registrar(api, sessions).register(a))

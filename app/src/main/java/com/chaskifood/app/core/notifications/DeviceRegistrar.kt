@@ -29,7 +29,7 @@ internal class DeviceRegistrar(private val api: DeviceApi, private val sessions:
                 val version = nextBindingVersion()
                 val bearer = tokens.token(uid, session.generation)
                 if (!current(session)) return@withTimeoutOrNull RegistrationOutcome.SESSION_CHANGED
-                val response = api.put(installationId, "Bearer $bearer", DeviceRegistration(token, version))
+                val response = api.put(installationId, "Bearer $bearer", DeviceRegistration(token, version, DEVICE_PLATFORM))
                 when {
                     response.isSuccessful -> RegistrationOutcome.REGISTERED
                     response.code() == 403 -> RegistrationOutcome.NOT_ELIGIBLE
