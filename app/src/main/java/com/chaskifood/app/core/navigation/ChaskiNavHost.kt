@@ -525,8 +525,14 @@ fun ChaskiNavHost(
             protectedComposable(access, navController,
                 route = ChaskiDestinations.RESTAURANT_DETAIL,
                 arguments = listOf(navArgument("storeId") { type = NavType.StringType }),
-            ) {
+            ) { entry ->
+                val mainEntry = remember(entry) { navController.getBackStackEntry(ChaskiDestinations.MAIN) }
+                val cartViewModel: CartViewModel = hiltViewModel(mainEntry)
+                val cartState by cartViewModel.uiState.collectAsStateWithLifecycle()
                 StoreOfferScreen(
+                    addedMessage = cartState.message,
+                    onOpenCart = { navController.navigate(ChaskiDestinations.CART) { launchSingleTop = true } },
+                    onDismissAdded = cartViewModel::dismissMessage,
                     onBack = { navController.popBackStack() },
                     onProductClick = { storeId, productId ->
                         navController.navigate(
@@ -564,6 +570,16 @@ fun ChaskiNavHost(
                     cartState = cartState,
                     onAddToCart = { storeId, productId, quantity -> authorize { cartViewModel.addProduct(storeId, productId, quantity) } },
                     onDismissCartMessage = cartViewModel::dismissMessage,
+                    // Tras agregar, se vuelve al catálogo del mismo local para seguir eligiendo (aviso «Ver carrito»).
+                    onAdded = { storeId ->
+                        val storeRoute = ChaskiDestinations.RESTAURANT_DETAIL.replace("{storeId}", Uri.encode(storeId))
+                        val previous = navController.previousBackStackEntry
+                        if (previous?.destination?.route == ChaskiDestinations.RESTAURANT_DETAIL &&
+                            previous.arguments?.getString("storeId") == storeId) navController.popBackStack()
+                        else navController.navigate(storeRoute) {
+                            popUpTo(ChaskiDestinations.PRODUCT_DETAIL) { inclusive = true }; launchSingleTop = true
+                        }
+                    },
                 )
             }
             protectedComposable(access, navController, ChaskiDestinations.CART) { entry ->
@@ -636,7 +652,8 @@ fun ChaskiNavHost(
             protectedComposable(access, navController, ChaskiDestinations.CHECKOUT_RECOVERY) {
                 RealCheckoutScreen(onBack = { navController.popBackStack() },
                     onOpenCart = {}, onSelectAddress = {}, recoveryOnly = true,
-                    onOpenOrder = { orderId -> navController.navigateToOrderDetail(orderId) })
+                    onOpenOrder = { orderId -> navController.openPurchasedOrder(orderId) },
+                    onPurchaseFinished = { navController.openMainTab(FlowTab.Orders) })
             }
             // HU17: compras propias; el ID completo viaja en la ruta y la consulta, el abreviado solo se muestra.
             protectedComposable(access, navController, ChaskiDestinations.MY_ORDERS) {
@@ -656,7 +673,8 @@ fun ChaskiNavHost(
                         }
                     },
                     onSelectAddress = { navController.navigate(ChaskiDestinations.ADDRESS_BOOK) },
-                    onOpenOrder = { orderId -> navController.navigateToOrderDetail(orderId) },
+                    onOpenOrder = { orderId -> navController.openPurchasedOrder(orderId) },
+                    onPurchaseFinished = { navController.openMainTab(FlowTab.Orders) },
                 )
             }
             protectedComposable(access, navController, ChaskiDestinations.PAYMENT) {
@@ -849,6 +867,12 @@ private fun AccessFlowBottomBar(selected: FlowTab, onTabClick: (FlowTab) -> Unit
         }
     } else ChaskiFlowBottomBar(selected, onTabClick)
 }
+/** Tras una compra terminada: Checkout y carrito salen de la pila; Atrás desde el detalle vuelve a Pedidos → En curso. */
+private fun androidx.navigation.NavHostController.openPurchasedOrder(orderId: String) {
+    openMainTab(FlowTab.Orders)
+    navigateToOrderDetail(orderId)
+}
+
 /** Abre el detalle con el ID completo; un ID con formato inválido lo resuelve el ViewModel como «no encontrado». */
 private fun androidx.navigation.NavHostController.navigateToOrderDetail(orderId: String) {
     navigate(ChaskiDestinations.ORDER_DETAIL.replace("{orderId}", Uri.encode(orderId))) { launchSingleTop = true }

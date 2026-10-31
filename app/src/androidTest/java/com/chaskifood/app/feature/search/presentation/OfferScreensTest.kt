@@ -92,7 +92,7 @@ class OfferScreensTest {
         compose.onNodeWithText("S/ 18.90").assertIsDisplayed()
         compose.onNodeWithText("Clásico plato peruano").assertIsDisplayed()
         compose.onNodeWithText("Tiempo estimado: 20 min").assertIsDisplayed()
-        compose.onNodeWithText("Imagen del producto · Firebase Storage").assertIsDisplayed()
+        compose.onNodeWithText("Sin imagen").assertIsDisplayed()
     }
 
     private fun category() = OfferCategory("category-1", "Criollos", 1)

@@ -356,7 +356,7 @@ private fun CartSummary(subtotalMinor: Long, enabled: Boolean,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            ChaskiButton(text = "Revisar compra", onClick = onCheckout, enabled = enabled)
+            ChaskiButton(text = "Continuar", onClick = onCheckout, enabled = enabled)
             ChaskiButton(text = "Seguir explorando", onClick = onExploreProducts,
                 enabled = enabled, variant = ChaskiButtonVariant.Outlined)
         }

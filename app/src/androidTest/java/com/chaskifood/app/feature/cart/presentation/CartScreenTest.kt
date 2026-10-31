@@ -54,7 +54,7 @@ class CartScreenTest {
     @Test fun carritoConProductosPermiteAbrirRevisionDeCompra() {
         var reviews = 0
         show(CartUiState(source = CartState.Ready(cart)), onCheckout = { reviews++ })
-        compose.onNodeWithText("Revisar compra").performClick()
+        compose.onNodeWithText("Continuar").performClick()
         compose.runOnIdle { assertEquals(1, reviews) }
     }
 

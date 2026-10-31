@@ -21,6 +21,13 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AddPhotoAlternate
 import androidx.compose.material.icons.filled.Storefront
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
+import androidx.compose.runtime.LaunchedEffect
+import com.chaskifood.app.feature.cart.presentation.CartUiMessage
+import com.chaskifood.app.feature.cart.presentation.CartUiMessageKind
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -51,10 +58,23 @@ fun StoreOfferScreen(
     onBack: () -> Unit,
     onProductClick: (String, String) -> Unit,
     modifier: Modifier = Modifier,
+    addedMessage: CartUiMessage? = null,
+    onOpenCart: () -> Unit = {},
+    onDismissAdded: (Long) -> Unit = {},
     viewModel: StoreOfferViewModel = hiltViewModel(),
 ) {
     val state by collectChaskiState(viewModel.uiState)
-    Column(modifier.fillMaxSize()) {
+    val snackbar = remember { SnackbarHostState() }
+    // Tras «Agregar al carrito» se vuelve aquí para seguir eligiendo; el aviso ofrece ir al carrito.
+    LaunchedEffect(addedMessage?.id) {
+        val message = addedMessage?.takeIf { it.kind == CartUiMessageKind.Success } ?: return@LaunchedEffect
+        val result = snackbar.showSnackbar(message.text, actionLabel = "Ver carrito", withDismissAction = true,
+            duration = SnackbarDuration.Long)
+        onDismissAdded(message.id)
+        if (result == SnackbarResult.ActionPerformed) onOpenCart()
+    }
+    Box(modifier.fillMaxSize()) {
+    Column(Modifier.fillMaxSize()) {
         ChaskiAppBar(title = "Oferta del local", onBackClick = onBack)
         when (val current = state) {
             StoreOfferUiState.Loading -> StoreOfferMessage("Cargando oferta…")
@@ -65,6 +85,8 @@ fun StoreOfferScreen(
                 onProductClick = { onProductClick(it.storeId, it.id) },
             )
         }
+    }
+    SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(ChaskiDimens.SpacingLg))
     }
 }
 
