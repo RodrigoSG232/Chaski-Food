@@ -46,7 +46,7 @@ Dirección: Presentation → Domain ← Data. `core/` contiene infraestructura c
 | `feature/discover`, `search`, `home`, `restaurants` | Descubrimiento de locales por dirección/horario/cobertura, búsqueda y detalle de ofertas. |
 | `feature/cart` | **HU14**: carrito por UID en Room con validación remota de oferta. |
 | `feature/checkout` | **HU15/HU16**: revisión de compra (`FirebaseCheckoutRepository`), cotización y elegibilidad (foodApi), confirmación idempotente y recuperación (`CheckoutOrderOperations`, intenciones en Room). |
-| `feature/orders` | Bandeja del responsable (`StoreOrdersScreen`, `HttpStoreOrdersRepository`). Las pantallas de seguimiento/valoración del cliente son **demostrativas** (HU17+). |
+| `feature/orders` | Bandeja del responsable (`StoreOrdersScreen`, `HttpStoreOrdersRepository`) y compras propias HU17 (`BuyerOrdersScreen` compartida por la pestaña Pedidos y «Mis compras», `BuyerOrderDetailScreen`, `HttpBuyerOrdersRepository`). Las pantallas de seguimiento/valoración siguen siendo **demostrativas**. |
 | `feature/menu`, `main` | Contenedor principal y piezas de ejemplo. |
 
 Módulos Hilt (todos en `SingletonComponent`): `AccessDataModule`, `DatabaseModule`, `FirebaseModule`, `NetworkModule`, `NotificationsModule`, `AddressDataModule`, `AuthDataModule`, `BusinessDataModule`, `CartDataModule`, `CatalogDataModule`, `CheckoutDataModule`, `DiscoverDataModule`, `StoreOrdersDataModule`, `SearchDataModule`.
@@ -85,6 +85,7 @@ Estructura: `foodApiHandler.ts` (enrutado HTTP y traducción de errores) → ser
 | `POST orders` | HU16 | Confirmación autoritativa e idempotente del pedido. |
 | `GET order-attempts/{intentId}` | HU16 | Recuperación del resultado de una confirmación incierta. |
 | `GET stores/{storeId}/orders` | HU16 | Bandeja paginada del responsable VERIFIED del local. |
+| `GET me/orders?phase=ACTIVE\|HISTORICAL` y `GET me/orders/{orderId}` | HU17 | Compras propias por `buyerUid` (cualquier experiencia); cursor ligado a UID y fase; ajeno = 404. Ver [DECISIONES](DECISIONES.md#consultas-propias-hu17). |
 | `PUT` / `DELETE devices/{installationId}` | HU16 | Registro/retirada del dispositivo FCM (PUT solo responsables con local asignado). |
 | `GET access/facts` | HU34 | Hechos de acceso de la cuenta (propiedad, asignaciones, locales). |
 | `GET access/revision`, `POST access/assignment-revision` | HU34 | Revisiones del índice para control de concurrencia. |
@@ -118,7 +119,7 @@ Las imágenes de locales/productos se guardan en Storage bajo `businesses/{busin
 
 ### Reglas e índices
 - `firestore.rules` (versionado) = reglas **publicadas** desde el 31-10-2026. Cierran a clientes toda escritura comercial que debe pasar por foodApi, exigen vinculación VERIFIED coherente con el índice para operar como responsable y terminan con una denegación general.
-- `firestore.indexes.json`: 2 índices compuestos (`delivery_quotes`, `food_orders`).
+- `firestore.indexes.json`: 3 índices compuestos (`delivery_quotes`; `food_orders` para la bandeja y para compras propias `buyerUid, createdAt desc, __name__ desc`).
 - Las pruebas de reglas están en `functions/test/commercialRules.emulator.ts` (y casos Android en `FirestoreRulesClientEmulatorTest`).
 
 ## 5. Entornos LOCAL y CONECTADO

@@ -2,6 +2,7 @@ package com.chaskifood.app.feature.checkout.presentation
 
 import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -129,11 +130,12 @@ class RealCheckoutScreenTest {
         repository.next=CheckoutReviewResult.Ready(quote)
         repository.confirmGate=CompletableDeferred()
         val model=CheckoutViewModel(repository,SystemCheckoutClock())
-        show(model)
+        val opened=mutableListOf<String>()
+        show(model, onOpenOrder = { opened += it })
         compose.onNodeWithText("Aceptar precios actualizados").performScrollTo().performClick()
         compose.onNode(SemanticsMatcher.expectValue(SemanticsProperties.Role,Role.RadioButton)).performScrollTo().performClick()
         compose.onNode(hasScrollAction()).performScrollToNode(hasText("Confirmar pedido"))
-        compose.onNodeWithText("Confirmar pedido").performClick()
+        compose.onNode(hasText("Confirmar pedido") and hasClickAction()).performClick()
         compose.runOnIdle { model.confirm();assertEquals(1,repository.confirms) }
         compose.onNodeWithText("Verificando confirmación. No vuelvas a enviar otra compra.").assertIsDisplayed()
         compose.runOnIdle { repository.confirmGate!!.complete(Unit) }
@@ -141,9 +143,14 @@ class RealCheckoutScreenTest {
         compose.runOnIdle { repository.orderResult=CheckoutConfirmation.Success(OrderReceipt("order-local",
             "00000000-0000-0000-0000-000000000001",quote.acceptedPurchase!!,System.currentTimeMillis()),true) }
         compose.onNodeWithText("Consultar resultado").performClick()
-        compose.onNodeWithText("Pedido confirmado: order-local").assertIsDisplayed()
-        compose.onNodeWithText("Estado: PENDING_CONFIRMATION").assertIsDisplayed()
-        compose.runOnIdle { assertEquals(1,repository.confirms);assertEquals(1,repository.recoveries) }
+        // HU17: la confirmación recuperada muestra «Pedido enviado» y «Ver mi pedido» abre el ID completo.
+        compose.onNodeWithText("Pedido enviado").assertIsDisplayed()
+        compose.onNodeWithText("Recibimos tu pedido").assertIsDisplayed()
+        compose.onNodeWithText("Pedido #ORDER-LO").assertIsDisplayed()
+        compose.onNodeWithText("Pendiente de confirmación").assertIsDisplayed()
+        compose.onNode(hasScrollAction()).performScrollToNode(hasText("Ver mi pedido"))
+        compose.onNodeWithText("Ver mi pedido").performClick()
+        compose.runOnIdle { assertEquals(1,repository.confirms);assertEquals(1,repository.recoveries);assertEquals(listOf("order-local"),opened) }
     }
 
     @Test fun recuperacionPersonalNoIniciaRevisionNiOfreceCompraNueva() {
@@ -153,7 +160,7 @@ class RealCheckoutScreenTest {
         compose.setContent { ChaskiTheme { RealCheckoutScreen({}, {}, {}, viewModel=model,recoveryOnly=true) } }
         compose.onNodeWithText("Consultar resultado").assertIsDisplayed()
         compose.onNodeWithText("Reintentar intento original").assertDoesNotExist()
-        compose.onNodeWithText("Confirmar pedido").assertDoesNotExist()
+        compose.onNode(hasText("Confirmar pedido") and hasClickAction()).assertDoesNotExist()
         compose.runOnIdle { assertEquals(0,repository.reviews);assertEquals(0,repository.confirms) }
     }
 
@@ -173,10 +180,11 @@ class RealCheckoutScreenTest {
         onBack: () -> Unit = {},
         onOpenCart: () -> Unit = {},
         onSelectAddress: () -> Unit = {},
+        onOpenOrder: (String) -> Unit = {},
     ) {
         compose.setContent {
             ChaskiTheme {
-                RealCheckoutScreen(onBack, onOpenCart, onSelectAddress, viewModel = model)
+                RealCheckoutScreen(onBack, onOpenCart, onSelectAddress, viewModel = model, onOpenOrder = onOpenOrder)
             }
         }
     }

@@ -15,6 +15,7 @@ object AccessNavigationPolicy {
         ChaskiDestinations.PAYMENT, ChaskiDestinations.ADD_CARD,
         ChaskiDestinations.ORDER_PLACED, ChaskiDestinations.ORDER_TRACKING, ChaskiDestinations.ORDER_PROGRESS,
         ChaskiDestinations.ORDER_DELIVERED, ChaskiDestinations.ORDER_RATING)
+    private val personalPurchaseRoutes = setOf(ChaskiDestinations.MY_ORDERS, ChaskiDestinations.ORDER_DETAIL)
     private val adminRoutes = setOf(ChaskiDestinations.ADMIN_BUSINESS_REVIEW,
         ChaskiDestinations.ADMIN_BUSINESS_SUPERVISION, ChaskiDestinations.ADMIN_AUDIT_LOG)
     private val personalRoutes = setOf(ChaskiDestinations.MAIN, ChaskiDestinations.PROFILE_INFO,
@@ -43,6 +44,8 @@ object AccessNavigationPolicy {
             }
         }
         return when {
+            // HU17: lectura de compras propias en cualquier experiencia; no concede START_PURCHASE.
+            route in personalPurchaseRoutes -> has(AccessCapability.READ_PERSONAL_PURCHASES)
             route?.startsWith(ChaskiDestinations.STORE_ORDERS + "/") == true ->
                 businessId != null && storeId != null && has(AccessCapability.READ_STORE_ORDERS)
             route in purchaseRoutes -> has(AccessCapability.START_PURCHASE)

@@ -17,6 +17,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
+import androidx.compose.material.icons.automirrored.filled.ReceiptLong
 import androidx.compose.material.icons.automirrored.filled.HelpOutline
 import androidx.compose.material.icons.automirrored.filled.Message
 import androidx.compose.material.icons.filled.AdminPanelSettings
@@ -79,6 +80,7 @@ fun AccountScreen(
     onOpenSocialAccounts: () -> Unit,
     onOpenReferral: () -> Unit,
     onRecoverPurchase: () -> Unit = {},
+    onOpenMyPurchases: () -> Unit = {},
     onOpenBusiness: () -> Unit = {},
     onOpenStoreOperations: () -> Unit = {},
     onOpenManageCatalog: () -> Unit = {},
@@ -103,7 +105,7 @@ fun AccountScreen(
         onOpenBusiness, onOpenStoreOperations, onOpenManageCatalog, onOpenStoreProductConfiguration,
         onOpenAdminReview, onOpenAdminSupervision, onOpenAdminAuditLog,
         { authorize { viewModel.signOut { protected -> ProfileViewModel.warnIfUnprotected(context, protected); onSignOut() } } },
-        modifier, onRecoverPurchase)
+        modifier, onRecoverPurchase, onOpenMyPurchases)
 }
 
 @Composable
@@ -119,6 +121,7 @@ internal fun AccountContent(
     onOpenAdminReview: () -> Unit = {}, onOpenAdminSupervision: () -> Unit = {}, onOpenAdminAuditLog: () -> Unit = {},
     onSignOut: () -> Unit = {}, modifier: Modifier = Modifier,
     onRecoverPurchase: () -> Unit = {},
+    onOpenMyPurchases: () -> Unit = {},
 ) {
     Column(
         modifier = modifier
@@ -159,6 +162,12 @@ internal fun AccountContent(
 
         AccountMenuItem(icon = Icons.Filled.History, title = "Recuperar compra pendiente",
             subtitle = "Consultar el resultado de una confirmación anterior", onClick = onRecoverPurchase)
+
+        // HU17 (DEC-HU34-01/07): el cliente usa la pestaña Pedidos; las cuentas comerciales consultan aquí sus compras propias.
+        if (experience != CommercialExperience.CLIENT) {
+            AccountMenuItem(icon = Icons.AutoMirrored.Filled.ReceiptLong, title = "Mis compras",
+                subtitle = "Consulta tus pedidos personales", onClick = onOpenMyPurchases)
+        }
 
         if (experience == CommercialExperience.CLIENT) {
         AccountMenuItem(

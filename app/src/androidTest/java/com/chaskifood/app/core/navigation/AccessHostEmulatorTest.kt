@@ -138,8 +138,8 @@ class AccessHostEmulatorTest {
                 originalAddress = androidx.lifecycle.ViewModelProvider(main)[com.chaskifood.app.feature.address.presentation.AddressViewModel::class.java]
                 nav.navigate(ChaskiDestinations.CHECKOUT)
             }
-            compose.waitUntil(25_000) { compose.onAllNodesWithText("Revisar compra").fetchSemanticsNodes().isNotEmpty() }
-            compose.onNodeWithText("Revisar compra").assertIsDisplayed()
+            compose.waitUntil(25_000) { compose.onAllNodesWithText("Confirmar pedido").fetchSemanticsNodes().isNotEmpty() }
+            compose.onAllNodesWithText("Confirmar pedido")[0].assertIsDisplayed()
             compose.runOnIdle { nav.navigate(ChaskiDestinations.ADDRESS_BOOK) }
             compose.waitForIdle()
             compose.runOnIdle {

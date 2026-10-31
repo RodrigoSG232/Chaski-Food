@@ -9,6 +9,8 @@ import androidx.lifecycle.ViewModelStore
 import com.chaskifood.app.core.access.data.*
 import com.chaskifood.app.feature.checkout.presentation.CheckoutViewModel
 import com.chaskifood.app.feature.checkout.presentation.RealCheckoutScreen
+import com.chaskifood.app.feature.orders.domain.*
+import com.chaskifood.app.feature.orders.presentation.*
 import com.chaskifood.app.ui.theme.ChaskiTheme
 import org.junit.Rule
 import java.util.UUID
@@ -57,6 +59,9 @@ class CheckoutOrderHttpEmulatorTest {
             else Room.inMemoryDatabaseBuilder(android,ChaskiDatabase::class.java).build()
         val models=ViewModelStore()
         val scope=CoroutineScope(SupervisorJob()+Dispatchers.Default)
+        // Una sola composición por prueba: HU17 cambia el contenido mostrado sin volver a llamar a setContent.
+        val screen=androidx.compose.runtime.mutableStateOf<(@androidx.compose.runtime.Composable () -> Unit)?>(null)
+        var openedOrder:String?=null
         try {
             Log.i("HU16E2E","phase=auth")
             val user=withTimeout(15000){auth.signInWithEmailAndPassword("hu16-e2e-buyer@example.test","emulator-password").await().user!!}
@@ -121,12 +126,13 @@ class CheckoutOrderHttpEmulatorTest {
             val first=if(closure){
                 lateinit var model:CheckoutViewModel
                 compose.runOnUiThread {model=CheckoutViewModel(repository,SystemCheckoutClock());models.put("checkout",model)}
-                compose.setContent {ChaskiTheme {RealCheckoutScreen(onBack={},onOpenCart={},onSelectAddress={},viewModel=model)}}
+                screen.value={RealCheckoutScreen(onBack={},onOpenCart={},onSelectAddress={},viewModel=model,onOpenOrder={openedOrder=it})}
+                compose.setContent {ChaskiTheme {screen.value?.invoke()}}
                 compose.waitUntil(25000){model.uiState.value.result is CheckoutReviewResult.Ready}
                 compose.onNode(hasScrollAction()).performScrollToNode(hasText("Efectivo al recibir"))
                 compose.onNode(SemanticsMatcher.expectValue(SemanticsProperties.Role,Role.RadioButton)).performClick()
                 compose.onNode(hasScrollAction()).performScrollToNode(hasText("Confirmar pedido"))
-                compose.onNodeWithText("Confirmar pedido").performClick()
+                compose.onNode(hasText("Confirmar pedido") and hasClickAction()).performClick()
                 if(loseResponse){
                     compose.waitUntil(25000){model.uiState.value.confirmation is CheckoutConfirmation.Pending}
                     assertFalse(room.cartDao().getCart(user.uid)!!.items.isEmpty())
@@ -137,8 +143,14 @@ class CheckoutOrderHttpEmulatorTest {
                 }
                 compose.waitUntil(25000){model.uiState.value.confirmation is CheckoutConfirmation.Success}
                 val success=model.uiState.value.confirmation as CheckoutConfirmation.Success
-                compose.onNode(hasScrollAction()).performScrollToNode(hasText("Pedido confirmado: ${success.receipt.orderId}"))
-                compose.onNodeWithText("Pedido confirmado: ${success.receipt.orderId}").assertIsDisplayed()
+                val shown="Pedido #${success.receipt.orderId.take(8).uppercase()}"
+                compose.onNode(hasScrollAction()).performScrollToNode(hasText(shown))
+                compose.onNodeWithText(shown).assertIsDisplayed()
+                // HU17: también tras una respuesta perdida y recuperada, «Ver mi pedido» abre el ID completo.
+                compose.onNodeWithText("Pedido enviado").assertIsDisplayed()
+                compose.onNode(hasScrollAction()).performScrollToNode(hasText("Ver mi pedido"))
+                compose.onNodeWithText("Ver mi pedido").performClick()
+                compose.runOnIdle {assertEquals(success.receipt.orderId,openedOrder)}
                 assertTrue(persistedBeforePost);assertEquals(1,posts.get())
                 assertEquals("987654321",success.receipt.accepted.storePhone)
                 assertEquals("",success.receipt.accepted.delivery.label);assertNull(success.receipt.accepted.buyerPhone)
@@ -155,6 +167,8 @@ class CheckoutOrderHttpEmulatorTest {
             assertEquals(first.receipt.orderId,own.receipt.orderId);assertEquals(cart,room.cartDao().getCart(user.uid)!!.toDomain())
             assertEquals(CheckoutConfirmation.PurchaseForbidden,repository.confirm(context,reviewed.quote))
             if(closure){
+                Log.i("HU16E2E","phase=hu17-own-orders")
+                verifyOwnOrdersUi(retrofit,tokens,sessions,user.uid,first.receipt.orderId,screen)
                 Room.databaseBuilder(android,ChaskiDatabase::class.java,databaseName).build().let {reopened->
                     try {val stored=reopened.checkoutIntentDao().get(user.uid,first.receipt.intentId)!!
                         assertEquals("SUCCEEDED",stored.state);assertEquals(first.receipt.orderId,stored.receiptOrderId)
@@ -164,5 +178,37 @@ class CheckoutOrderHttpEmulatorTest {
                 Log.i("HU16E2E","phase=ui-room-http-recovery-verified")
             }
         } finally {compose.runOnUiThread {models.clear()};scope.cancel();room.close();if(closure)android.deleteDatabase(databaseName);auth.signOut();withTimeoutOrNull(3000){db.terminate().await()};app.delete()}
+    }
+
+    /** HU17 con datos reales de foodApi LOCAL: lista En curso y detalle histórico del pedido recién creado. */
+    private suspend fun verifyOwnOrdersUi(retrofit:Retrofit,tokens:FirebaseBuyerTokenSource,sessions:FirebaseCartSessionSource,uid:String,
+        orderId:String,screen:androidx.compose.runtime.MutableState<(@androidx.compose.runtime.Composable () -> Unit)?>) {
+        val orders=com.chaskifood.app.feature.orders.data.HttpBuyerOrdersRepository(
+            retrofit.create(com.chaskifood.app.feature.orders.data.BuyerOrdersApi::class.java),tokens,sessions)
+        val session=BuyerOrdersSession(uid,sessions.current().generation)
+        val page=(withTimeout(15000){orders.page(session,BuyerOrderPhase.ACTIVE)} as BuyerOrdersResult.Loaded).page
+        val row=page.orders.single {it.orderId==orderId}
+        assertEquals(listOf(BuyerOrderItemPreview("Plato ficticio",2)),row.itemPreview);assertEquals("Local ficticio",row.storeName)
+        val historical=(withTimeout(15000){orders.page(session,BuyerOrderPhase.HISTORICAL)} as BuyerOrdersResult.Loaded).page
+        assertTrue(historical.orders.none {it.orderId==orderId})
+        val detail=(withTimeout(15000){orders.detail(session,orderId)} as BuyerOrderDetailResult.Loaded).detail
+        assertEquals(listOf("PENDING_CONFIRMATION"),detail.statusHistory.map {it.status})
+        assertEquals("Parque público Lima",detail.delivery.addressText);assertNull(detail.delivery.label)
+        assertEquals(BuyerOrderDetailResult.NotFound,orders.detail(session,"f".repeat(64)))
+        val listState=BuyerOrdersUiState(phases=BuyerOrderPhase.entries.associateWith {
+            if(it==BuyerOrderPhase.ACTIVE)BuyerOrdersPhaseState(page.orders,page.nextCursor,loaded=true) else BuyerOrdersPhaseState()})
+        var opened:String?=null
+        compose.runOnUiThread {screen.value={BuyerOrdersContent(listState,{},{},{},{opened=it})}}
+        val short="Pedido #${orderId.take(8).uppercase()}"
+        compose.onNode(hasScrollAction()).performScrollToNode(hasText(short))
+        compose.onNodeWithText(short).assertIsDisplayed().performClick()
+        compose.onNodeWithText("2× Plato ficticio").assertIsDisplayed()
+        compose.runOnIdle {assertEquals(orderId,opened)}
+        compose.runOnUiThread {screen.value={BuyerOrderDetailContent(BuyerOrderDetailUiState(loading=false,detail=detail),{},{})}}
+        compose.onNodeWithText(short).assertIsDisplayed()
+        compose.onNodeWithText("Pendiente de confirmación · actual").assertIsDisplayed()
+        compose.onNode(hasScrollAction()).performScrollToNode(hasText("Efectivo contra entrega"))
+        compose.onNodeWithText("Efectivo contra entrega").assertIsDisplayed()
+        Log.i("HU16E2E","phase=hu17-own-orders-ui-verified")
     }
 }

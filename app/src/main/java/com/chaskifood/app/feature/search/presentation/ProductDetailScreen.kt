@@ -41,6 +41,9 @@ import com.chaskifood.app.feature.cart.domain.CartState
 import com.chaskifood.app.feature.cart.presentation.CartFeedbackBanner
 import com.chaskifood.app.feature.cart.presentation.CartAccessButton
 import com.chaskifood.app.feature.cart.presentation.CartUiState
+import com.chaskifood.app.feature.cart.presentation.CartUiMessageKind
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
 import com.chaskifood.app.feature.search.domain.StoreOfferProduct
 import com.chaskifood.app.ui.components.ChaskiAppBar
 import com.chaskifood.app.ui.components.ChaskiButton
@@ -61,9 +64,18 @@ fun ProductDetailScreen(
     onAddToCart: (String, String, Int) -> Unit,
     onDismissCartMessage: (Long) -> Unit,
     modifier: Modifier = Modifier,
+    onAdded: (storeId: String) -> Unit = {},
     viewModel: ProductDetailViewModel = hiltViewModel(),
 ) {
     val state by collectChaskiState(viewModel.uiState)
+    // Solo una confirmación «agregado» posterior a ESTE toque devuelve al catálogo del local; errores y cambios de
+    // local siguen resolviéndose aquí.
+    var awaitingAddFor by rememberSaveable { mutableStateOf<String?>(null) }
+    val added = cartState.message?.takeIf { it.kind == CartUiMessageKind.Success }
+    LaunchedEffect(added?.id, awaitingAddFor) {
+        val storeId = awaitingAddFor
+        if (added != null && storeId != null) { awaitingAddFor = null; onAdded(storeId) }
+    }
     Column(modifier.fillMaxSize().background(ChaskiBackground)) {
         ChaskiAppBar(title = "Detalle del producto", onBackClick = onBack, actions = {
             CartAccessButton(totalUnits = cartState.totalUnits, onClick = onOpenCart)
@@ -80,7 +92,9 @@ fun ProductDetailScreen(
                         quantity = quantity,
                         onQuantityChange = { quantity = it },
                         cartState = cartState,
-                        onAddToCart = onAddToCart,
+                        onAddToCart = { storeId, productId, units ->
+                            awaitingAddFor = storeId; onAddToCart(storeId, productId, units)
+                        },
                         onSignIn = onSignIn,
                         onSelectAddress = onSelectAddress,
                         onDismissCartMessage = onDismissCartMessage,
@@ -201,7 +215,7 @@ private fun ProductImage(product: StoreOfferProduct) {
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Text(
-                "Imagen del producto · Firebase Storage",
+                "Sin imagen",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

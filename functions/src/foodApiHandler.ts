@@ -1,5 +1,6 @@
 import { DeviceRegistry } from "./notifications/deviceRegistry";
 import { StoreOrdersReader } from "./orders/storeOrdersReader";
+import { BuyerOrdersReader } from "./orders/buyerOrdersReader";
 import { OrderService } from "./orders/orderService";
 import { OrderHttpError, parseOrderSubmission } from "./orders/orderRequest";
 import { intentId as validateIntentId } from "./orders/orderModels";
@@ -78,6 +79,25 @@ export function createFoodApiHandler(dependencies: FoodApiDependencies): FoodHtt
             response.status(denied?403:503).json({error:denied?"ACCESS_DENIED":"AUTHORIZATION_UNAVAILABLE"});
           } else if(error instanceof URIError) response.status(400).json({error:"INVALID_REQUEST"});
           else response.status(503).json({error:"INBOX_UNAVAILABLE"});
+        }
+        return;
+      }
+      // HU17: own purchases of the authenticated UID, whatever its commercial experience; never a purchase permission.
+      const myOrdersPath = /^\/api\/v1\/me\/orders\/?$/.test(request.path);
+      const myOrderPath = /^\/api\/v1\/me\/orders\/([^/]+)\/?$/.exec(request.path);
+      if (myOrdersPath || myOrderPath) {
+        if (request.method !== "GET") { response.status(405).set("Allow","GET").json({error:"METHOD_NOT_ALLOWED"}); return; }
+        try {
+          const app=dependencies.app(runtime);
+          const uid=await verifyBuyerToken(getAuth(app),request.get("authorization"));
+          const reader=new BuyerOrdersReader(getFirestore(app));
+          if(myOrderPath && Object.keys(request.query).length>0) throw new OrderHttpError("INVALID_REQUEST",400);
+          response.status(200).json(myOrderPath ? await reader.detail(uid,decodeURIComponent(myOrderPath[1])) : await reader.page(uid,request.query));
+        } catch(error) {
+          if(error instanceof AuthenticationRequired) response.status(401).json({error:"AUTHENTICATION_REQUIRED"});
+          else if(error instanceof OrderHttpError) response.status(error.status).json({error:error.code});
+          else if(error instanceof URIError) response.status(404).json({error:"ORDER_NOT_FOUND"});
+          else response.status(503).json({error:"ORDERS_UNAVAILABLE"});
         }
         return;
       }

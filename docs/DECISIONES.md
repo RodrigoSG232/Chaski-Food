@@ -18,6 +18,15 @@ Decisiones **aprobadas** por el equipo que siguen aplicando y condicionan las pr
 - **Estado inicial `PENDING_CONFIRMATION`.** HU19 acepta pasando **directo a `PREPARING`**, sin estado `CONFIRMED` (aunque el PDF del curso lo mencione).
 - **Para recibir pedidos** basta al menos un responsable asignado válido; no se exige que esté conectado. Sin responsables se bloquean confirmaciones nuevas (HU16-05, HU16-12).
 
+## Consultas propias (HU17)
+- **Acceso:** el cliente usa la pestaña **Pedidos**; propietario y responsable, **Cuenta → «Mis compras»**, con la misma lista y detalle. Las rutas usan `verifyBuyerToken` y filtran por `buyerUid`: no exigen experiencia comercial ni conceden `START_PURCHASE` (D1, HU34-01/07).
+- **Estados:** una sola tabla en foodApi. Activos: `PENDING_CONFIRMATION`, `PREPARING`, `READY_FOR_PICKUP`, `IN_DELIVERY`; históricos: `COMPLETED`, `CANCELLED`, `REJECTED`. Un estado válido desconocido se muestra como activo («Estado en actualización») y se registra; `status` ausente/nulo o documento corrupto → `503 DATA_INCONSISTENT` (D2, N1).
+- **Refresco:** HTTP al abrir, al volver a la app y al deslizar; sin tiempo real ni caché local (D3).
+- **Paginación:** un flujo cronológico por `buyerUid` (`createdAt desc, __name__ desc`), sin filtrar por estado en Firestore; lotes de 50 hasta 200 documentos por petición; el cursor apunta al **último documento examinado**, va ligado al UID y a la fase (SHA-256 sin clave: vincula, no autentica) y el servidor revalida el ancla. Una página vacía con cursor nunca se presenta como «sin pedidos».
+- **Privacidad:** pedido ajeno o inexistente → mismo 404; el detalle usa los snapshots de HU16 sin coordenadas, datos del comprador, hashes, cotización ni `actorUid`; el historial solo muestra eventos reales de `status_history`.
+- **Lista:** ID visible de 8 caracteres (consultas y navegación usan los 64); hasta dos productos con cantidad y «+N más» desde el snapshot; pago descrito de forma neutral («Efectivo contra entrega»).
+- **Checkout:** el carrito muestra «Continuar»; la pantalla siguiente se titula «Confirmar pedido» y, tras el éxito (directo o recuperado), «Pedido enviado» con «Recibimos tu pedido» y «Ver mi pedido» (D4). Tras la compra, Atrás lleva a Pedidos y no vuelve a la revisión. Desde Cuenta → «Recuperar compra pendiente» el título es «Recuperar compra».
+
 ## Bandeja y avisos
 - **La bandeja es la fuente de verdad**; FCM es solo aviso, puede duplicarse o perderse (HU16-04, HU16-13).
 - Los pedidos se asocian al **local (`storeId`)**, no a una persona; un nuevo responsable autorizado ve los existentes (HU34-03).
@@ -43,3 +52,5 @@ Decisiones **aprobadas** por el equipo que siguen aplicando y condicionan las pr
 - **Se conserva la interfaz actual del cliente** (Inicio, Buscar, Pedidos, Cuenta, catálogo, carrito, direcciones y Checkout) (HU34-29).
 - Inicio del propietario: estado del negocio, Locales y responsables, Catálogo general, Horarios y Oferta/precios por local. Responsable: sus locales con selector, estado y accesos autorizados (HU34-27).
 - Se conserva la ruta principal `MAIN` y sus ámbitos compartidos (HU34-26).
+- **Pencil primero:** las interfaces nuevas se diseñan como frames nuevos con prefijo de historia (p. ej. «HU17 /»), sin sobrescribir los aprobados, y se aprueban antes de programarlas en Compose. Cada `*Screen.kt` nuevo incluye `@Preview` con datos ficticios, sin Hilt, Firebase ni red.
+- **Agregar al carrito** vuelve al catálogo del local con el aviso «Producto agregado al carrito · Ver carrito» (HU14, aprobado durante HU17). Sin foto, el producto muestra «Sin imagen».
