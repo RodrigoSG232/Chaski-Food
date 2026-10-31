@@ -6,36 +6,50 @@ import androidx.room.Query
 import androidx.room.Transaction
 import androidx.room.Upsert
 import kotlinx.coroutines.flow.Flow
+import com.chaskifood.app.feature.cart.data.mapper.toDomain
 
 @Dao
-interface CartDao {
+abstract class CartDao {
     @Transaction
     @Query("SELECT * FROM carts WHERE ownerUid = :ownerUid")
-    fun observeCart(ownerUid: String): Flow<CartWithItems?>
+    abstract fun observeCart(ownerUid: String): Flow<CartWithItems?>
 
     @Transaction
     @Query("SELECT * FROM carts WHERE ownerUid = :ownerUid")
-    suspend fun getCart(ownerUid: String): CartWithItems?
+    abstract suspend fun getCart(ownerUid: String): CartWithItems?
+
+    @Query("SELECT revision FROM carts WHERE ownerUid = :ownerUid")
+    abstract fun observeRevision(ownerUid: String): Flow<Long?>
 
     @Upsert
-    suspend fun upsertHeader(cart: CartEntity)
+    protected abstract suspend fun upsertHeader(cart: CartEntity)
 
     @Query("DELETE FROM cart_items WHERE ownerUid = :ownerUid")
-    suspend fun deleteItems(ownerUid: String)
+    protected abstract suspend fun deleteItems(ownerUid: String)
 
     @Insert
-    suspend fun insertItems(items: List<CartItemEntity>)
+    protected abstract suspend fun insertItems(items: List<CartItemEntity>)
 
-    /** Sustituye únicamente las líneas de este UID o revierte toda la escritura. */
+    /** Toda escritura lógica conserva e incrementa la revisión del UID dentro de Room. */
     @Transaction
-    suspend fun saveCart(cart: CartEntity, items: List<CartItemEntity>) {
-        require(cart.ownerUid.isNotBlank())
-        require(items.all { it.ownerUid == cart.ownerUid })
-        upsertHeader(cart)
+    open suspend fun saveCart(cart: CartEntity, items: List<CartItemEntity>) {
+        require(cart.ownerUid.isNotBlank() && items.all { it.ownerUid == cart.ownerUid })
+        val incoming = CartWithItems(cart, items).toDomain()
+        val stored = getCart(cart.ownerUid)
+        val previous = stored?.toDomain() ?: com.chaskifood.app.feature.cart.domain.Cart(cart.ownerUid)
+        val revision = stored?.cart?.revision ?: 0L
+        require(revision >= 0)
+        if (incoming == previous && stored != null) return
+        val next = if (incoming != previous) Math.addExact(revision, 1L) else revision
+        upsertHeader(cart.copy(revision = next)) // Nunca aceptar una revisión proporcionada por el llamador.
         deleteItems(cart.ownerUid)
         insertItems(items)
     }
 
-    @Query("DELETE FROM carts WHERE ownerUid = :ownerUid")
-    suspend fun deleteCart(ownerUid: String)
+    /** Vaciar no elimina la cabecera ni reinicia la historia: protege reconstrucciones ABA. */
+    @Transaction
+    open suspend fun deleteCart(ownerUid: String) {
+        val old = getCart(ownerUid) ?: return
+        saveCart(old.cart.copy(businessId = null, storeId = null), emptyList())
+    }
 }

@@ -9,6 +9,7 @@ interface StoreRepository {
     suspend fun updateStore(store: BusinessStore): ApiResult<BusinessStore>
     fun getManagersByBusiness(businessId: String): Flow<ApiResult<List<StoreManager>>>
     suspend fun assignManager(manager: StoreManager): ApiResult<StoreManager>
+    suspend fun revokeManager(businessId: String, email: String): ApiResult<Unit>
     fun getStoresForManager(managerEmailOrUid: String): Flow<ApiResult<List<BusinessStore>>>
     suspend fun updateOperationalStatus(storeId: String, status: OperationalStatus, pauseReason: String? = null): ApiResult<Unit>
     suspend fun updateOperatingHours(storeId: String, hours: List<DayOperatingHours>): ApiResult<Unit>

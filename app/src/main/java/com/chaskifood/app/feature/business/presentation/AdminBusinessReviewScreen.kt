@@ -1,5 +1,7 @@
 package com.chaskifood.app.feature.business.presentation
 
+import com.chaskifood.app.core.navigation.LocalProtectedAction
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -80,6 +82,7 @@ fun AdminBusinessReviewScreen(
     modifier: Modifier = Modifier,
     viewModel: AdminBusinessReviewViewModel = hiltViewModel(),
 ) {
+    val authorize = LocalProtectedAction.current
     val selectedFilter by viewModel.selectedFilter.collectAsState()
     val filteredResult by viewModel.filteredRequests.collectAsState()
     val actionState by viewModel.actionState.collectAsState()
@@ -194,11 +197,11 @@ fun AdminBusinessReviewScreen(
                                 request = request,
                                 actionsEnabled = actionState !is UiState.Loading,
                                 onApprove = {
-                                    viewModel.evaluateRequest(
+                                    authorize { viewModel.evaluateRequest(
                                         requestId = request.id,
                                         status = BusinessStatus.APPROVED,
                                         onSuccess = {},
-                                    )
+                                    ) }
                                 },
                                 onObserve = {
                                     viewModel.clearActionError()
@@ -266,14 +269,14 @@ fun AdminBusinessReviewScreen(
                 Button(
                     onClick = {
                         val obs = dialogObservationInput.trim()
-                        viewModel.evaluateRequest(
+                        authorize { viewModel.evaluateRequest(
                             requestId = request.id,
                             status = targetStatus,
                             observations = obs,
                             onSuccess = {
                                 dialogRequestId = null
                             },
-                        )
+                        ) }
                     },
                     enabled = dialogObservationInput.isNotBlank() && actionState !is UiState.Loading,
                     colors = ButtonDefaults.buttonColors(

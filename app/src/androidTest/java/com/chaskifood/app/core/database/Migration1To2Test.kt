@@ -6,6 +6,7 @@ import androidx.room.testing.MigrationTestHelper
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.chaskifood.app.core.database.migration.MIGRATION_1_2
+import com.chaskifood.app.core.database.migration.MIGRATION_2_3
 import java.util.UUID
 import kotlinx.coroutines.runBlocking
 import org.junit.After
@@ -42,11 +43,11 @@ class Migration1To2Test {
         helper.runMigrationsAndValidate(name, 2, true, MIGRATION_1_2).close()
 
         val database = Room.databaseBuilder(context, ChaskiDatabase::class.java, name)
-            .addMigrations(MIGRATION_1_2).build()
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3).build()
         try {
             assertEquals("sample-value", database.appConfigDao().getValue("test-key"))
             assertNull(database.cartDao().getCart("uid-a"))
-            assertEquals(2, database.openHelper.readableDatabase.version)
+            assertEquals(3, database.openHelper.readableDatabase.version)
             database.openHelper.readableDatabase.query("PRAGMA foreign_key_check").use { cursor ->
                 assertTrue(!cursor.moveToFirst())
             }
@@ -62,7 +63,7 @@ class Migration1To2Test {
         helper.runMigrationsAndValidate(name, 2, true, MIGRATION_1_2).close()
 
         val database = Room.databaseBuilder(context, ChaskiDatabase::class.java, name)
-            .addMigrations(MIGRATION_1_2).build()
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3).build()
         try {
             assertNull(database.appConfigDao().getValue("missing"))
             assertNull(database.cartDao().getCart("uid-a"))

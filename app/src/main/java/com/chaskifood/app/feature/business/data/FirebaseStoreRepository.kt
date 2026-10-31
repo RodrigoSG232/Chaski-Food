@@ -1,5 +1,6 @@
 package com.chaskifood.app.feature.business.data
 
+import com.chaskifood.app.feature.business.data.remote.CommercialMutation
 import com.chaskifood.app.core.common.ApiResult
 import com.chaskifood.app.core.firebase.FirebaseAccessControl
 import com.chaskifood.app.feature.business.domain.validOperatingHours
@@ -33,6 +34,7 @@ class FirebaseStoreRepository @Inject constructor(
     private val firestore: FirebaseFirestore,
     private val storage: FirebaseStorage,
     private val access: FirebaseAccessControl,
+    private val commercial: CommercialOperations,
 ) : StoreRepository {
 
     private val storesRef by lazy { firestore.collection("stores") }
@@ -152,7 +154,7 @@ class FirebaseStoreRepository @Inject constructor(
                 }
 
                 val list = snapshot?.documents?.mapNotNull { doc ->
-                    if (!doc.exists()) return@mapNotNull null
+                    if (!doc.exists() || doc.getString("bindingState") == "REVOKED") return@mapNotNull null
                     val data = doc.data ?: return@mapNotNull null
                     @Suppress("UNCHECKED_CAST")
                     val assignedIds = (data["assignedStoreIds"] as? List<*>)?.mapNotNull { it as? String } ?: emptyList()
@@ -176,32 +178,23 @@ class FirebaseStoreRepository @Inject constructor(
 
     override suspend fun assignManager(manager: StoreManager): ApiResult<StoreManager> {
         return try {
+            val actor = access.requireUser()
             access.requireBusinessOwner(manager.businessId)
             require(manager.assignedStoreIds.isNotEmpty()) { "Selecciona al menos un local." }
             for (id in manager.assignedStoreIds) {
                 check(storesRef.document(id).get().await().getString("businessId") == manager.businessId) { "Local ajeno al negocio." }
             }
-            if (manager.id.isNotBlank()) {
-                check(managersRef.document(manager.id).get().await().getString("businessId") == manager.businessId) { "Responsable ajeno al negocio." }
-            }
-            val email = manager.email.trim().lowercase()
+            val email = manager.email.trim().lowercase(java.util.Locale.ROOT)
             require(email.contains('@') && !email.contains('/')) { "Correo de responsable inválido." }
-            val docRef = managersRef.document(manager.businessId + "_" + email)
-            val managerId = docRef.id
-            val updatedManager = manager.copy(id = managerId)
-
-            val data = mapOf(
-                "businessId" to updatedManager.businessId,
-                "email" to updatedManager.email.trim().lowercase(),
-                "fullName" to updatedManager.fullName,
-                "phone" to updatedManager.phone,
-                "assignedStoreIds" to updatedManager.assignedStoreIds,
-                "createdAt" to updatedManager.createdAt,
-            )
-
-            val batch = firestore.batch().set(docRef, data)
-            if (manager.id.isNotBlank() && manager.id != managerId) batch.delete(managersRef.document(manager.id))
-            batch.commit().await()
+            val managerId = manager.businessId + "_" + email
+            val previousEmail = if (manager.id.isNotBlank() && manager.id != managerId) {
+                check(manager.id.startsWith(manager.businessId + "_")) { "Responsable ajeno al negocio." }
+                manager.id.removePrefix(manager.businessId + "_")
+            } else null
+            commercial.execute(CommercialMutation("ASSIGN", businessId = manager.businessId, email = email,
+                storeIds = manager.assignedStoreIds.distinct().sorted(), fullName = manager.fullName, phone = manager.phone,
+                previousEmail = previousEmail), actor.uid, actor)
+            val updatedManager = manager.copy(id = managerId, email = email)
             ApiResult.Success(updatedManager)
         } catch (cancelled: CancellationException) {
             throw cancelled
@@ -209,6 +202,15 @@ class FirebaseStoreRepository @Inject constructor(
             ApiResult.Failure(e.localizedMessage ?: "Error al asignar el responsable.", e)
         }
     }
+
+    override suspend fun revokeManager(businessId: String, email: String): ApiResult<Unit> = try {
+        val actor = access.requireUser()
+        access.requireBusinessOwner(businessId)
+        commercial.execute(CommercialMutation("REVOKE", businessId = businessId,
+            email = email.trim().lowercase(java.util.Locale.ROOT)), actor.uid, actor)
+        ApiResult.Success(Unit)
+    } catch (cancelled: CancellationException) { throw cancelled }
+    catch (error: Exception) { ApiResult.Failure(error.message ?: "No se pudo retirar la asignación.", error) }
 
     override fun getStoresForManager(managerEmailOrUid: String): Flow<ApiResult<List<BusinessStore>>> = callbackFlow {
         if (managerEmailOrUid.isBlank()) {
@@ -237,9 +239,16 @@ class FirebaseStoreRepository @Inject constructor(
             close()
             return@callbackFlow
         }
+        run {
+            try { commercial.ensureBinding(user.uid) }
+            catch (cancelled: CancellationException) { throw cancelled }
+            catch (error: Exception) { trySend(ApiResult.Failure(error.message ?: "No se pudo comprobar la vinculación.", error)); close(); return@callbackFlow }
+        }
         val storeListeners = mutableListOf<ListenerRegistration>()
         var generation = 0
-        val managerListener = managersRef.whereEqualTo("email", email).addSnapshotListener { snapshot, error ->
+        val query = managersRef.whereEqualTo("email", email)
+            .whereEqualTo("boundUid", user.uid).whereEqualTo("bindingState", "VERIFIED")
+        val managerListener = query.addSnapshotListener { snapshot, error ->
             if (error != null) { trySend(ApiResult.Failure("No se pudieron consultar tus asignaciones.", error)); return@addSnapshotListener }
             storeListeners.forEach { it.remove() }; storeListeners.clear()
             val currentGeneration = ++generation

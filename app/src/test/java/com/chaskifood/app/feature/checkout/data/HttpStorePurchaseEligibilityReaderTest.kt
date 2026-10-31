@@ -48,6 +48,14 @@ class HttpStorePurchaseEligibilityReaderTest {
         assertEquals(PurchaseEligibility.Eligible("business"),
             HttpStorePurchaseEligibilityReader(api { Response.success(valid()) }, Tokens()).check("store", "uid", 1))
     }
+    @Test fun `conserva solo el nombre publico recibido cuando es elegible`() = runTest {
+        val body = valid().copy(businessName = "Negocio público")
+        assertEquals(PurchaseEligibility.Eligible("business", "Negocio público"),
+            HttpStorePurchaseEligibilityReader(api { Response.success(body) }, Tokens()).check("store", "uid", 1))
+        assertEquals(PurchaseEligibility.Eligible("business"),
+            HttpStorePurchaseEligibilityReader(api { Response.success(body.copy(businessName = " ")) }, Tokens())
+                .check("store", "uid", 1))
+    }
     @Test fun `suspension se distingue de un fallo tecnico`() = runTest {
         val reader = HttpStorePurchaseEligibilityReader(api { Response.success(valid("BUSINESS_SUSPENDED")) }, Tokens())
         assertEquals(PurchaseEligibility.Blocked(PurchaseBlockReason.BUSINESS_SUSPENDED), reader.check("store", "uid", 1))

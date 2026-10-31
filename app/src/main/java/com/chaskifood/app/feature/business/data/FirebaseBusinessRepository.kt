@@ -1,5 +1,7 @@
 package com.chaskifood.app.feature.business.data
 
+import com.chaskifood.app.feature.business.data.remote.CommercialMutation
+import com.chaskifood.app.feature.business.data.remote.CommercialBusiness
 import com.chaskifood.app.core.common.ApiResult
 import com.chaskifood.app.feature.business.domain.AuditLog
 import com.chaskifood.app.feature.business.domain.BusinessRepository
@@ -25,6 +27,7 @@ import javax.inject.Singleton
 class FirebaseBusinessRepository @Inject constructor(
     private val firestore: FirebaseFirestore,
     private val access: FirebaseAccessControl,
+    private val commercial: CommercialOperations,
 ) : BusinessRepository {
     private val collectionRef by lazy { firestore.collection("business_requests") }
     private val auditLogsRef by lazy { firestore.collection("audit_logs") }
@@ -68,7 +71,7 @@ class FirebaseBusinessRepository @Inject constructor(
     }
 
     override fun getAllBusinessRequests(): Flow<ApiResult<List<BusinessRequest>>> = callbackFlow {
-        try { access.requireAdmin() } catch (cancelled: CancellationException) { throw cancelled }
+        try { access.requireAdmin(forceRefresh = false) } catch (cancelled: CancellationException) { throw cancelled }
         catch (_: Exception) { trySend(ApiResult.Failure("No tienes permisos administrativos.")); close(); return@callbackFlow }
         val listener = collectionRef.addSnapshotListener { snapshot, error ->
             if (error != null) {
@@ -113,26 +116,9 @@ class FirebaseBusinessRepository @Inject constructor(
             request.ruc.matches(Regex("[0-9]{11}")) && request.phone.isNotBlank() && request.email.isNotBlank()) {
             "Completa los datos obligatorios del negocio."
         }
-        val reference = collectionRef.document(user.uid)
-        firestore.runTransaction { transaction ->
-            val existing = transaction.get(reference)
-            check(access.requireUser().uid == user.uid) { "La sesión cambió." }
-            if (resubmission) {
-                check(existing.getString("ownerUid") == user.uid && existing.getString("status") == "OBSERVED") {
-                    "Solo puedes reenviar una solicitud observada."
-                }
-            } else check(!existing.exists()) { "Ya tienes una solicitud registrada. Consulta su estado." }
-            val fields = mapOf(
-                "ownerUid" to user.uid, "businessName" to request.businessName.trim(), "ruc" to request.ruc,
-                "legalAddress" to request.legalAddress.trim(), "phone" to request.phone.trim(),
-                "email" to request.email.trim(), "category" to request.category,
-                "status" to BusinessStatus.PENDING_REVIEW.name, "observations" to null,
-                "suspensionReason" to null, "reviewedBy" to null, "reviewedAt" to null,
-                "updatedAt" to FieldValue.serverTimestamp(),
-            )
-            if (resubmission) transaction.update(reference, fields)
-            else transaction.set(reference, fields + ("createdAt" to FieldValue.serverTimestamp()))
-        }.await()
+        commercial.execute(CommercialMutation(if (resubmission) "RESUBMIT" else "REGISTER", business = CommercialBusiness(
+            request.businessName.trim(), request.ruc, request.legalAddress.trim(), request.phone.trim(), request.email.trim(), request.category,
+        )), user.uid, user)
         request.copy(id = user.uid, ownerUid = user.uid, status = BusinessStatus.PENDING_REVIEW,
             observations = null, reviewedBy = null, reviewedAt = null, suspensionReason = null)
     }
@@ -141,12 +127,14 @@ class FirebaseBusinessRepository @Inject constructor(
         observations: String?, reviewerEmail: String): ApiResult<Unit> = operation {
         require(status in setOf(BusinessStatus.APPROVED, BusinessStatus.OBSERVED, BusinessStatus.REJECTED))
         require(status == BusinessStatus.APPROVED || !observations.isNullOrBlank()) { "Indica el motivo de la decisión." }
-        auditedTransition(requestId, BusinessStatus.PENDING_REVIEW, status,
-            when (status) {
-                BusinessStatus.APPROVED -> "APROBAR_NEGOCIO"
-                BusinessStatus.OBSERVED -> "OBSERVAR_NEGOCIO"
-                else -> "RECHAZAR_NEGOCIO"
-            }, observations?.trim(), mapOf("observations" to observations?.trim()))
+        if (status == BusinessStatus.APPROVED) {
+            val admin = access.requireAdmin()
+            commercial.execute(CommercialMutation("APPROVE", businessId = requestId), admin.uid, admin)
+        } else {
+            auditedTransition(requestId, BusinessStatus.PENDING_REVIEW, status,
+                if (status == BusinessStatus.OBSERVED) "OBSERVAR_NEGOCIO" else "RECHAZAR_NEGOCIO",
+                observations?.trim(), mapOf("observations" to observations?.trim()))
+        }
     }
 
     override suspend fun suspendBusiness(requestId: String, reason: String, adminEmail: String,
@@ -290,7 +278,7 @@ class FirebaseBusinessRepository @Inject constructor(
     catch (error: Exception) { ApiResult.Failure(error.message ?: "No se pudo completar la operación.", error) }
 
     override fun getAuditLogs(): Flow<ApiResult<List<AuditLog>>> = callbackFlow {
-        try { access.requireAdmin() } catch (cancelled: CancellationException) { throw cancelled }
+        try { access.requireAdmin(forceRefresh = false) } catch (cancelled: CancellationException) { throw cancelled }
         catch (_: Exception) { trySend(ApiResult.Failure("No tienes permisos administrativos.")); close(); return@callbackFlow }
         val listener = auditLogsRef.addSnapshotListener { snapshot, error ->
             if (error != null) {

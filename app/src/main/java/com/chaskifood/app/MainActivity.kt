@@ -12,8 +12,11 @@ import dagger.hilt.android.AndroidEntryPoint
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
+    @javax.inject.Inject lateinit var notifications:com.chaskifood.app.core.notifications.NotificationCoordinator
+    override fun onNewIntent(intent:android.content.Intent){super.onNewIntent(intent);setIntent(intent);notifications.open(intent)}
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        notifications.open(intent)
         enableEdgeToEdge(
             statusBarStyle = SystemBarStyle.light(
                 scrim = Color.TRANSPARENT,

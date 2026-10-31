@@ -1,5 +1,7 @@
 package com.chaskifood.app.feature.business.presentation
 
+import com.chaskifood.app.core.navigation.LocalProtectedAction
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -76,7 +78,8 @@ fun RegisterBusinessScreen(
     isResubmission: Boolean = false,
     viewModel: RegisterBusinessViewModel = hiltViewModel(),
 ) {
-    LaunchedEffect(isResubmission) { if (isResubmission) viewModel.loadExistingForResubmission() }
+    val authorize = LocalProtectedAction.current
+    LaunchedEffect(isResubmission) { if (isResubmission) authorize { viewModel.loadExistingForResubmission() } }
     val loadedObservations by viewModel.observations.collectAsState()
     val canResubmit by viewModel.readyToResubmit.collectAsState()
     val name by viewModel.businessName.collectAsState()
@@ -387,11 +390,11 @@ fun RegisterBusinessScreen(
                 AuthSubmitButton(
                     text = stringResource(R.string.submit_business_request),
                     onClick = {
-                        if (isResubmission && !canResubmit) viewModel.loadExistingForResubmission()
-                        else viewModel.submitRequest(
+                        if (isResubmission && !canResubmit) authorize { viewModel.loadExistingForResubmission() }
+                        else authorize { viewModel.submitRequest(
                             isResubmission = isResubmission,
                             onSuccess = onSubmitted,
-                        )
+                        ) }
                     },
                 )
             }

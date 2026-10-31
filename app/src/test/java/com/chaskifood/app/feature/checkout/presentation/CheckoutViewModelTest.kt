@@ -405,6 +405,27 @@ class CheckoutViewModelTest {
         assertTrue(model.uiState.value.result is CheckoutReviewResult.Ready)
     }
 
+    @Test fun `reutilizar quoteId tras relogin no restaura Ready ni consentimiento`() = runTest {
+        val original = quote(oldPrice = 1000)
+        val persisted = original.copy(deliveryQuote = original.deliveryQuote.copy(quoteId = "persisted-quote"))
+        val repository = FakeCheckoutRepository(CheckoutReviewResult.Ready(persisted))
+        val model = CheckoutViewModel(repository, clock)
+        model.review(); runCurrent()
+        model.selectPaymentMethod(CheckoutPaymentMethod.CASH_ON_DELIVERY)
+        model.acceptPriceChanges(); runCurrent()
+        assertTrue(model.uiState.value.reviewComplete)
+        repository.context.value = CheckoutContextState.SignedOut; runCurrent()
+        repository.context.value = CheckoutContextState.Ready(context().copy(sessionGeneration = 3)); runCurrent()
+        assertFalse(model.uiState.value.result is CheckoutReviewResult.Ready)
+        assertFalse(model.uiState.value.acceptedPriceChanges)
+        assertFalse(model.uiState.value.reviewComplete)
+        model.review(); runCurrent()
+        val ready = model.uiState.value.result as CheckoutReviewResult.Ready
+        assertEquals("persisted-quote", ready.quote.deliveryQuote.quoteId)
+        assertFalse(model.uiState.value.acceptedPriceChanges)
+        assertFalse(model.uiState.value.reviewComplete)
+    }
+
     private fun quote(oldPrice: Long) = CheckoutQuote(
         ownerUid = "customer", storeId = "store", storeName = "Local",
         addressId = "address", addressLabel = "Casa", addressText = "Lima",

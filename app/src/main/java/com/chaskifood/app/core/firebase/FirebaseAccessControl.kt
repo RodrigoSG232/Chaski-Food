@@ -15,9 +15,14 @@ class FirebaseAccessControl @Inject constructor(
 ) {
     fun requireUser(): FirebaseUser = checkNotNull(auth.currentUser) { "Inicia sesión para continuar." }
 
-    suspend fun requireAdmin(): FirebaseUser {
+    /**
+     * Las mutaciones fuerzan un token nuevo para confirmar el claim con el servidor. Las lecturas usan el token en
+     * caché ([forceRefresh] = false): las reglas validan `admin()` con ese mismo token, y forzarlo dispararía el
+     * IdTokenListener y reiniciaría la comprobación de acceso ("Verificando permisos") al abrir cada pantalla.
+     */
+    suspend fun requireAdmin(forceRefresh: Boolean = true): FirebaseUser {
         val user = requireUser()
-        check(user.getIdToken(true).await().claims["admin"] == true) { "No tienes permisos administrativos." }
+        check(user.getIdToken(forceRefresh).await().claims["admin"] == true) { "No tienes permisos administrativos." }
         check(auth.currentUser?.uid == user.uid) { "La sesión cambió." }
         return user
     }

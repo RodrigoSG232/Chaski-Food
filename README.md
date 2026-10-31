@@ -60,7 +60,7 @@ Con el JSON Debug legítimo seleccionado, compila desde la raíz:
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
 
-En este modo Auth y Firestore usan Firebase real, y Checkout envía el Firebase ID Token a los endpoints HTTPS de `foodApi`. No se necesita una clave HeiGIT en Android. Usa únicamente cuentas y datos de prueba autorizados; probar Checkout no crea pedidos. En un dispositivo físico no se necesita `adb reverse` para CONECTADO. Al alternar APKs LOCAL/CONECTADO con el mismo `applicationId`, `adb install -r` conserva los datos locales: verifica la sesión, dirección y carrito antes de probar; no borres datos de otra persona.
+En este modo Auth y Firestore usan Firebase real, y Checkout envía el Firebase ID Token a los endpoints HTTPS de `foodApi`. No se necesita una clave HeiGIT en Android. Usa únicamente cuentas y datos de prueba autorizados; revisar Checkout no crea pedidos; la confirmación HU16 sí crea un pedido y solo debe probarse con autorización y datos de prueba. En un dispositivo físico no se necesita `adb reverse` para CONECTADO. Al alternar APKs LOCAL/CONECTADO con el mismo `applicationId`, `adb install -r` conserva los datos locales: verifica la sesión, dirección y carrito antes de probar; no borres datos de otra persona.
 
 ## Pruebas y nuevas rutas del backend
 
@@ -81,3 +81,21 @@ pnpm exec firebase deploy --config ../firebase.json --only functions:food-local 
 ```
 
 Ese comando es una referencia para una futura operación autorizada; no uses `--force` y revisa cualquier propuesta de eliminación del CLI. `checkoutApi` pertenece a otro codebase y no debe modificarse.
+
+
+## Verificación local del paquete Functions antes de publicar
+
+Con Node 22 y pnpm 11.25.0, `pnpm --dir functions run build` limpia únicamente el directorio generado `functions/lib/` y recompila TypeScript. `pnpm --dir functions run verify:package` enumera los archivos con el mismo mecanismo del Firebase CLI fijado, exige el entrypoint y los manifiestos, y rechaza archivos inesperados. No consulta Cloud, no lee valores secretos y no genera un archivo de subida.
+
+Los hooks `predeploy` de `food-local` ejecutan ambas comprobaciones en ese orden y detienen la operación si fallan. Las exclusiones explícitas de `firebase.json` protegen configuraciones privadas, secretos locales, dependencias, logs y pruebas; `.gitignore` por sí solo no protege el paquete. Se conserva `scripts/build.cjs` para que una compilación del paquete en Cloud Build siga funcionando. No se modifican los permisos de scripts de pnpm ni el lockfile.
+
+Estas comprobaciones no autorizan un despliegue. HU34/HU16 todavía requieren habilitación coordinada del backend, Android CONECTADO y FCM real. `checkoutApi` permanece intacta; su retirada definitiva se hará únicamente después de verificar el reemplazo por `foodApi` y la ausencia de consumidores dependientes, con autorización específica.
+
+
+## HU34/HU16: preparación CONECTADO (B1)
+
+El código local de `foodApi` admite acceso comercial, confirmación/recuperación y bandeja con los mismos servicios de identidad, autorización y transacciones de LOCAL. CLOUD exige señales del runtime, `FUNCTION_TARGET=foodApi`, proyecto `chaski-food-9adba` y ausencia de emuladores/fixtures. Android exige el proyecto y la URL HTTPS autorizados; las guardas HU34 permanecen activas incluso si la configuración falla. No existe fallback entre entornos. Release continúa cerrado.
+
+Esto no acredita la versión efectivamente publicada. Antes de probar en Cloud se requiere inspección/despliegue autorizados, reconciliar reglas/índices y verificar compatibilidad de datos. Los tests de política CLOUD usan adaptadores demo explícitos: no ejecutan servicios Cloud. Para las suites HTTP con datos compartidos usa `node --test --test-concurrency=1 lib/test/*.emulator.js` desde `functions/`, en un laboratorio demo limpio; las invitaciones ficticias fijas pueden conservar revisiones entre campañas.
+
+B2 sigue pendiente: no se habilitaron FCM real, tokens reales, el registro de dispositivos en CLOUD ni el notifier Cloud. La bandeja HTTP es independiente del push. `checkoutApi` y sus datos históricos permanecen intactos; su retirada futura requiere verificar reemplazo y ausencia de consumidores y una autorización específica.

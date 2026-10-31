@@ -24,6 +24,7 @@ import com.chaskifood.app.feature.catalog.domain.StoreProductConfigurationReposi
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
@@ -230,12 +231,46 @@ class StoreProductConfigurationViewModelTest {
         assertTrue(model.operations.value.getValue("store-1_product-1").error!!.contains("precio", ignoreCase = true))
     }
 
-    private fun model() = StoreProductConfigurationViewModel(
+    @Test fun `HU34 selector no revela local ajeno ni mantiene seleccion revocada`() = runTest {
+        val changes = MutableStateFlow(0)
+        var permitted = setOf("store-2")
+        val permissions = object : com.chaskifood.app.core.access.domain.StoreAuthorization {
+            override val enforced = true
+            override val changes = changes.map { Unit }
+            override fun hasAuthorizedStores() = permitted.isNotEmpty()
+            override fun allows(businessId: String, storeId: String) = businessId == "business-1" && storeId in permitted
+        }
+        stores.owned.value = ApiResult.Success(listOf("store-1", "store-2").map { BusinessStore(id = it, businessId = "business-1") })
+        val vm = model(permissions); runCurrent()
+        val success = vm.uiState.value as StoreProductConfigurationUiState.Success
+        assertEquals(listOf("store-2"), success.stores.map { it.id })
+        assertEquals("store-2", success.selectedStoreId)
+        vm.selectStore("store-1"); runCurrent()
+        assertEquals("store-2", (vm.uiState.value as StoreProductConfigurationUiState.Success).selectedStoreId)
+        permitted = emptySet(); changes.value++; runCurrent()
+        assertFalse(vm.uiState.value is StoreProductConfigurationUiState.Success)
+        vm.saveConfiguration("product-1", 10.0, StoreProductAvailability.AVAILABLE); runCurrent()
+        assertTrue(vm.operations.value.isEmpty())
+    }
+    @Test fun `ruta de oferta seleccionada no consulta ni permite cambiar a otro local`() = runTest {
+        stores.owned.value=ApiResult.Success(listOf(BusinessStore(id="store-1",businessId="business-1"),BusinessStore(id="store-2",businessId="business-1")))
+        catalog.products("business-1").value=ApiResult.Success(emptyList())
+        val vm=StoreProductConfigurationViewModel(auth,businesses,stores,catalog,configurations,
+            com.chaskifood.app.core.access.domain.OperationTestAuthorization,
+            androidx.lifecycle.SavedStateHandle(mapOf("storeId" to "store-2"))).also {viewModels.put("selected",it)}
+        runCurrent()
+        val state=vm.uiState.value as StoreProductConfigurationUiState.Success
+        assertEquals("store-2",state.selectedStoreId);assertEquals(listOf("store-2"),state.stores.map {it.id})
+        vm.selectStore("store-1");runCurrent();assertEquals("store-2",(vm.uiState.value as StoreProductConfigurationUiState.Success).selectedStoreId)
+    }
+
+    private fun model(permissions: com.chaskifood.app.core.access.domain.StoreAuthorization = com.chaskifood.app.core.access.domain.OperationTestAuthorization) = StoreProductConfigurationViewModel(
         auth,
         businesses,
         stores,
         catalog,
         configurations,
+        permissions,
     ).also { viewModels.put("store-products", it) }
 
     private fun prepareSuccessfulContent(productCount: Int = 1) {
@@ -270,7 +305,7 @@ private class ConfigurationTestAuth : AuthRepository {
     override suspend fun verifyPhoneCode(verificationId: String, code: String): ApiResult<Unit> = error("unused")
     override suspend fun sendPasswordResetEmail(email: String): ApiResult<Unit> = error("unused")
     override suspend fun updateProfile(displayName: String): ApiResult<Unit> = error("unused")
-    override suspend fun signOut() { currentUserFlow.value = null }
+    override suspend fun signOut(): Boolean { currentUserFlow.value = null; return true }
 }
 
 private class ConfigurationTestBusinesses : BusinessRepository {
@@ -305,6 +340,7 @@ private class ConfigurationTestStores : StoreRepository {
     override suspend fun createStore(store: BusinessStore): ApiResult<BusinessStore> = error("unused")
     override suspend fun updateStore(store: BusinessStore): ApiResult<BusinessStore> = error("unused")
     override fun getManagersByBusiness(businessId: String): Flow<ApiResult<List<StoreManager>>> = error("unused")
+    override suspend fun revokeManager(businessId: String, email: String): ApiResult<Unit> = error("unused")
     override suspend fun assignManager(manager: StoreManager): ApiResult<StoreManager> = error("unused")
     override suspend fun updateOperationalStatus(storeId: String, status: OperationalStatus, pauseReason: String?): ApiResult<Unit> = error("unused")
     override suspend fun updateOperatingHours(storeId: String, hours: List<DayOperatingHours>): ApiResult<Unit> = error("unused")

@@ -24,7 +24,7 @@ internal class HttpStorePurchaseEligibilityReader @Inject constructor(
                 if (body.storeId != storeId || body.checkedAt.isBlank()) return@withTimeoutOrNull PurchaseEligibility.Unavailable
                 when (body.decision) {
                     "ELIGIBLE" -> body.businessId?.takeIf { it.isNotBlank() && '/' !in it }
-                        ?.let(PurchaseEligibility::Eligible) ?: PurchaseEligibility.Unavailable
+                        ?.let { PurchaseEligibility.Eligible(it, body.businessName?.takeIf(String::isNotBlank)) } ?: PurchaseEligibility.Unavailable
                     "BUSINESS_SUSPENDED" -> PurchaseEligibility.Blocked(PurchaseBlockReason.BUSINESS_SUSPENDED)
                     "BUSINESS_NOT_APPROVED" -> PurchaseEligibility.Blocked(PurchaseBlockReason.BUSINESS_NOT_APPROVED)
                     "STORE_UNAVAILABLE" -> PurchaseEligibility.Blocked(PurchaseBlockReason.STORE_UNAVAILABLE)

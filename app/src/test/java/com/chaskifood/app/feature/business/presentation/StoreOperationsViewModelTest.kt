@@ -6,6 +6,7 @@ import com.chaskifood.app.feature.business.domain.*
 import com.chaskifood.app.feature.business.testing.BusinessTestAuth
 import com.chaskifood.app.feature.business.testing.BusinessTestRepository
 import com.chaskifood.app.feature.business.testing.OperationTestStores
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -24,7 +25,7 @@ class StoreOperationsViewModelTest {
     private val businesses = BusinessTestRepository()
     @Before fun setUp() { Dispatchers.setMain(dispatcher) }
     @After fun tearDown() { store.clear(); Dispatchers.resetMain() }
-    private fun model() = StoreOperationsViewModel(repo, auth, businesses).also { store.put("operations", it) }
+    private fun model() = StoreOperationsViewModel(repo, auth, businesses, com.chaskifood.app.core.access.domain.OperationTestAuthorization).also { store.put("operations", it) }
 
     @Test fun `duenio aprobado carga todos los locales de su negocio`() = runTest {
         businesses.existing = BusinessRequest(
@@ -120,4 +121,32 @@ class StoreOperationsViewModelTest {
         assertEquals("08:00", repo.savedHours!![0].openTime)
         repo.gates.getValue("a").complete(Unit); runCurrent()
     }
-}
+    @Test fun `HU34 filtra local ajeno y retira acceso antes de nuevas operaciones`() = runTest {
+        val changes = kotlinx.coroutines.flow.MutableStateFlow(0)
+        var permitted = setOf("a")
+        val permissions = object : com.chaskifood.app.core.access.domain.StoreAuthorization {
+            override val enforced = true
+            override val changes = changes.map { Unit }
+            override fun hasAuthorizedStores() = permitted.isNotEmpty()
+            override fun allows(businessId: String, storeId: String) = businessId == "business" && storeId in permitted
+        }
+        repo.assigned.value = ApiResult.Success(listOf("a", "b", "foreign").map { BusinessStore(id = it, businessId = "business") })
+        val vm = StoreOperationsViewModel(repo, auth, businesses, permissions).also { store.put("restricted", it) }
+        runCurrent()
+        assertEquals(listOf("a"), (vm.uiState.value as StoreOperationsUiState.Success).stores.map { it.id })
+        vm.updateStatus("b", OperationalStatus.CLOSED); runCurrent(); assertEquals(0, repo.calls)
+        permitted = setOf("b"); changes.value++; runCurrent()
+        assertEquals(listOf("b"), (vm.uiState.value as StoreOperationsUiState.Success).stores.map { it.id })
+        vm.updateStatus("a", OperationalStatus.CLOSED); runCurrent(); assertEquals(0, repo.calls)
+        permitted = emptySet(); changes.value++; runCurrent()
+        assertFalse(vm.uiState.value is StoreOperationsUiState.Success)
+        vm.updateStatus("b", OperationalStatus.CLOSED); runCurrent(); assertEquals(0, repo.calls)
+    }    @Test fun `ruta seleccionada limita lista y escrituras al local indicado`() = runTest {
+        val vm = StoreOperationsViewModel(repo, auth, businesses,
+            com.chaskifood.app.core.access.domain.OperationTestAuthorization,
+            androidx.lifecycle.SavedStateHandle(mapOf("storeId" to "b"))).also { store.put("selected",it) }
+        runCurrent()
+        assertEquals(listOf("b"),(vm.uiState.value as StoreOperationsUiState.Success).stores.map {it.id})
+        vm.updateStatus("a",OperationalStatus.CLOSED);runCurrent();assertEquals(0,repo.calls)
+        vm.updateStatus("b",OperationalStatus.CLOSED);runCurrent();assertEquals(1,repo.calls)
+    }}

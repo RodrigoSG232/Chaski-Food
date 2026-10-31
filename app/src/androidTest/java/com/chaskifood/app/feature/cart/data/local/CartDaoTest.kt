@@ -43,9 +43,9 @@ class CartDaoTest {
     }
 
     @Test
-    fun baseNuevaV2AdmiteCarritoVacioYConservaAppConfig() = runBlocking {
+    fun baseNuevaV3AdmiteCarritoVacioYConservaAppConfig() = runBlocking {
         val uid = "uid-a"
-        assertEquals(2, database.openHelper.readableDatabase.version)
+        assertEquals(3, database.openHelper.readableDatabase.version)
         assertNull(database.cartDao().getCart(uid))
         val empty = Cart(uid)
 
@@ -70,7 +70,8 @@ class CartDaoTest {
         assertEquals(b, dao.getCart("uid-b")?.toDomain())
 
         dao.deleteCart("uid-a")
-        assertNull(dao.getCart("uid-a"))
+        assertEquals(Cart("uid-a"), dao.getCart("uid-a")?.toDomain())
+        assertEquals(3L, dao.getCart("uid-a")?.cart?.revision)
         assertEquals(b, dao.getCart("uid-b")?.toDomain())
         database.openHelper.readableDatabase.query(
             "SELECT COUNT(*) FROM cart_items WHERE ownerUid = 'uid-a'",

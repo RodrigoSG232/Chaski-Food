@@ -1,6 +1,45 @@
 {
-  "functions": [{ "source": "functions", "codebase": "food-local" }],
-  "firestore": { "rules": "firestore.rules" },
+  "functions": [
+    {
+      "source": "functions",
+      "codebase": "food-local",
+      "ignore": [
+        "node_modules",
+        ".git",
+        ".gitignore",
+        ".env*",
+        ".secret*",
+        "**/*.pem",
+        "**/*.key",
+        "**/*.p12",
+        "**/*.pfx",
+        "**/*service-account*.json",
+        "**/*serviceAccount*.json",
+        "**/google-services*.json",
+        "**/*.log",
+        "**/*.zip",
+        "**/*.tgz",
+        "**/*.tsbuildinfo",
+        "test",
+        "**/lib/test/**",
+        "coverage",
+        ".artifacts",
+        "tmp",
+        "temp",
+        "**/scripts/verifyPackage.cjs",
+        ".npmrc",
+        "**/*credentials*.json",
+        "**/*firebase-adminsdk*.json",
+        "**/*.jks",
+        "**/*.keystore"
+      ],
+      "predeploy": [
+        "pnpm --dir \"$RESOURCE_DIR\" run build",
+        "pnpm --dir \"$RESOURCE_DIR\" run verify:package"
+      ]
+    }
+  ],
+  "firestore": { "rules": "firestore.rules", "indexes": "firestore.indexes.json" },
   "emulators": {
     "auth": { "host": "127.0.0.1", "port": 9099 },
     "firestore": { "host": "127.0.0.1", "port": 8089 },

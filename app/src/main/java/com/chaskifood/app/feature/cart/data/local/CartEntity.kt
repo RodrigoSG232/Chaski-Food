@@ -1,5 +1,6 @@
 package com.chaskifood.app.feature.cart.data.local
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 
@@ -10,4 +11,5 @@ data class CartEntity(
     val businessId: String?,
     val storeId: String?,
     val currencyCode: String,
+    @ColumnInfo(defaultValue = "0") val revision: Long = 0,
 )

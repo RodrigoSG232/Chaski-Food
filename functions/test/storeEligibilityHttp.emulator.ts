@@ -27,7 +27,7 @@ async function account(uid: string, claims = {}) {
   return (await response.json() as { idToken: string }).idToken;
 }
 async function seed(businessStatus = "APPROVED", storeStatus = "ACTIVE") {
-  await db.doc("business_requests/http-owner").set({ ownerUid: "http-owner", status: businessStatus, ruc: "PRIVATE", observations: "PRIVATE" });
+  await db.doc("business_requests/http-owner").set({ ownerUid: "http-owner", businessName: "Negocio público", status: businessStatus, ruc: "PRIVATE", observations: "PRIVATE" });
   await db.doc("stores/http-store").set({ businessId: "http-owner", status: storeStatus });
 }
 async function check(token: string | undefined = buyer, storeId = "http-store") {
@@ -44,7 +44,8 @@ after(async () => { await db.terminate(); await deleteApp(app); });
 test("APPROVED + ACTIVE devuelve solo datos mínimos", async () => {
   await seed(); const { response, body } = await check();
   assert.equal(response.status, 200); assert.equal(body.decision, "ELIGIBLE");
-  assert.deepEqual(Object.keys(body).sort(), ["businessId", "checkedAt", "decision", "storeId"]);
+  assert.deepEqual(Object.keys(body).sort(), ["businessId", "businessName", "checkedAt", "decision", "storeId"]);
+  assert.equal(body.businessName, "Negocio público");
   assert.equal(response.headers.get("cache-control"), "no-store");
   assert.equal(response.headers.get("x-eligibility-reads"), "2");
 });
@@ -52,6 +53,7 @@ for (const [role, getToken] of [["comprador", () => buyer], ["propietario", () =
   test(`SUSPENDED bloquea a ${role}`, async () => {
     await seed("SUSPENDED"); const { response, body } = await check(getToken());
     assert.equal(response.status, 200); assert.equal(body.decision, "BUSINESS_SUSPENDED");
+    assert.equal("businessName" in body, false);
   });
 }
 for (const status of ["PENDING_REVIEW", "OBSERVED", "REJECTED"]) {

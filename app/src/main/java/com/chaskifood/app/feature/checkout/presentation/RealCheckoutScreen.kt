@@ -1,5 +1,8 @@
 package com.chaskifood.app.feature.checkout.presentation
 
+import com.chaskifood.app.core.navigation.LocalProtectedAction
+import com.chaskifood.app.core.navigation.LocalNavigationAccess
+
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -32,6 +35,8 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.chaskifood.app.feature.cart.presentation.formatCartPrice
+import com.chaskifood.app.feature.checkout.domain.OrderRejection
+import com.chaskifood.app.feature.checkout.domain.CheckoutConfirmation
 import com.chaskifood.app.feature.checkout.domain.CheckoutLine
 import com.chaskifood.app.feature.checkout.domain.CheckoutQuote
 import com.chaskifood.app.feature.checkout.domain.CheckoutReviewResult
@@ -48,12 +53,15 @@ fun RealCheckoutScreen(
     onSelectAddress: () -> Unit,
     modifier: Modifier = Modifier,
     viewModel: CheckoutViewModel = hiltViewModel(),
+    recoveryOnly: Boolean = false,
 ) {
+    val authorize = LocalProtectedAction.current
+    val origin = LocalNavigationAccess.current?.current()?.origin
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val lifecycleOwner = LocalLifecycleOwner.current
-    DisposableEffect(lifecycleOwner, viewModel) {
+    DisposableEffect(lifecycleOwner, viewModel, origin, recoveryOnly) {
         val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME) viewModel.review()
+            if (event == Lifecycle.Event.ON_RESUME) authorize { if (recoveryOnly) viewModel.loadPending() else viewModel.review() }
             if (event == Lifecycle.Event.ON_PAUSE) viewModel.onScreenPaused()
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -71,6 +79,16 @@ fun RealCheckoutScreen(
             verticalArrangement = Arrangement.spacedBy(ChaskiDimens.SpacingMd),
         ) {
             when {
+                state.confirmation != CheckoutConfirmation.None -> item("confirmation") {
+                    CheckoutConfirmationPanel(state.confirmation,
+                        onRecover = { authorize { viewModel.recover() } },
+                        onRetry = if (recoveryOnly) null else ({ authorize { viewModel.retryOriginal() } }),
+                        onReview = if (recoveryOnly) null else ({ authorize { viewModel.review() } }))
+                }
+                recoveryOnly -> item("no-pending") {
+                    CheckoutMessage("No tienes una confirmación pendiente de recuperar en este dispositivo.")
+                    ChaskiButton("Buscar intento pendiente", onClick = { authorize { viewModel.loadPending() } })
+                }
                 state.loading -> item("loading") {
                     Row(verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(ChaskiDimens.SpacingMd)) {
@@ -80,14 +98,14 @@ fun RealCheckoutScreen(
                 }
                 state.result == null -> {
                     item("changed") { CheckoutMessage("La compra cambió. Vuelve a comprobarla antes de continuar.") }
-                    item("review-again") { ChaskiButton("Volver a comprobar", onClick = viewModel::review) }
+                    item("review-again") { ChaskiButton("Volver a comprobar", onClick = { authorize { viewModel.review() } }) }
                 }
                 state.result is CheckoutReviewResult.SignedOut -> item("signed-out") {
                     CheckoutMessage("Inicia sesión para revisar tu compra.")
                 }
                 state.result is CheckoutReviewResult.Error -> {
                     item("error") { CheckoutMessage((state.result as CheckoutReviewResult.Error).message) }
-                    item("retry") { ChaskiButton("Reintentar", onClick = viewModel::review) }
+                    item("retry") { ChaskiButton("Reintentar", onClick = { authorize { viewModel.review() } }) }
                 }
                 state.result is CheckoutReviewResult.Blocked -> {
                     val blocked = state.result as CheckoutReviewResult.Blocked
@@ -100,11 +118,24 @@ fun RealCheckoutScreen(
                     }
                     item("cart-action") { ChaskiButton("Volver al carrito", onClick = onOpenCart,
                         variant = ChaskiButtonVariant.Outlined) }
-                    item("retry") { ChaskiButton("Volver a comprobar", onClick = viewModel::review) }
+                    item("retry") { ChaskiButton("Volver a comprobar", onClick = { authorize { viewModel.review() } }) }
                 }
                 state.result is CheckoutReviewResult.Ready -> {
                     val quote = (state.result as CheckoutReviewResult.Ready).quote
                     item("store") { CheckoutInfo("Local", quote.storeName) }
+                    quote.acceptedPurchase?.let { accepted ->
+                        item("consent-details") {
+                            Column(verticalArrangement = Arrangement.spacedBy(ChaskiDimens.SpacingSm)) {
+                                CheckoutInfo("Negocio", accepted.businessName)
+                                CheckoutInfo("Comprador", accepted.buyerName)
+                                accepted.buyerPhone?.let { CheckoutInfo("Teléfono de contacto", it) }
+                                CheckoutInfo("Recojo", accepted.pickup.addressText)
+                                accepted.storePhone?.let { CheckoutInfo("Teléfono del local", it) }
+                                accepted.delivery.destination.reference?.takeIf { it.isNotBlank() }?.let { CheckoutInfo("Referencia de entrega", it) }
+                                accepted.delivery.destination.instructions?.takeIf { it.isNotBlank() }?.let { CheckoutInfo("Instrucciones de entrega", it) }
+                            }
+                        }
+                    }
                     item("address") {
                         Surface(color = MaterialTheme.colorScheme.surface,
                             shape = MaterialTheme.shapes.medium) {
@@ -127,7 +158,7 @@ fun RealCheckoutScreen(
                                 Text("Revisa los nuevos importes antes de continuar.")
                                 ChaskiButton(
                                     text = if (state.acceptedPriceChanges) "Precios revisados" else "Aceptar precios actualizados",
-                                    onClick = viewModel::acceptPriceChanges,
+                                    onClick = { authorize { viewModel.acceptPriceChanges() } },
                                     enabled = !state.acceptedPriceChanges,
                                     variant = ChaskiButtonVariant.Outlined,
                                 )
@@ -143,7 +174,7 @@ fun RealCheckoutScreen(
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     RadioButton(
                                         selected = state.paymentMethod == CheckoutPaymentMethod.CASH_ON_DELIVERY,
-                                        onClick = { viewModel.selectPaymentMethod(CheckoutPaymentMethod.CASH_ON_DELIVERY) },
+                                        onClick = { authorize { viewModel.selectPaymentMethod(CheckoutPaymentMethod.CASH_ON_DELIVERY) } },
                                     )
                                     Text("Efectivo al recibir", modifier = Modifier.weight(1f))
                                 }
@@ -155,12 +186,17 @@ fun RealCheckoutScreen(
                     item("summary") { CheckoutAmountSummary(quote) }
                     item("status") {
                         CheckoutMessage(
-                            if (state.reviewComplete) "Compra revisada. La confirmación del pedido estará disponible próximamente."
+                            if (quote.acceptedPurchase == null) "La confirmación no está habilitada en este entorno."
+                            else if (state.reviewComplete) "Compra revisada. Confirma para enviar el pedido."
                             else "Selecciona la modalidad de pago y revisa cualquier cambio de precio.",
                         )
                     }
+                    item("confirm") {
+                        ChaskiButton("Confirmar pedido", onClick = { authorize { viewModel.confirm() } },
+                            enabled = state.reviewComplete && quote.acceptedPurchase != null)
+                    }
                     item("review-again") {
-                        ChaskiButton("Volver a comprobar", onClick = viewModel::review,
+                        ChaskiButton("Volver a comprobar", onClick = { authorize { viewModel.review() } },
                             variant = ChaskiButtonVariant.Outlined)
                     }
                 }
@@ -224,5 +260,62 @@ private fun CheckoutAmountRow(label: String, minor: Long, bold: Boolean = false)
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
         Text(label, modifier = Modifier.weight(1f), fontWeight = if (bold) FontWeight.Bold else FontWeight.Normal)
         Text(formatCartPrice(minor), fontWeight = if (bold) FontWeight.Bold else FontWeight.Normal)
+    }
+}
+
+@Composable
+internal fun CheckoutConfirmationPanel(state: CheckoutConfirmation, onRecover: () -> Unit,
+    onRetry: (() -> Unit)?, onReview: (() -> Unit)?) {
+    Column(verticalArrangement = Arrangement.spacedBy(ChaskiDimens.SpacingMd)) {
+        when (state) {
+            CheckoutConfirmation.Working -> { CircularProgressIndicator(); CheckoutMessage("Verificando confirmación. No vuelvas a enviar otra compra.") }
+            is CheckoutConfirmation.Success -> {
+                CheckoutMessage("Pedido confirmado: ${state.receipt.orderId}")
+                Text("Estado: ${state.receipt.status.name}")
+                Text("Total: ${formatCartPrice(state.receipt.accepted.amounts.totalMinor)}")
+                if (!state.cartConsumed) Text("Conservamos tu carrito porque cambió después de la revisión.")
+            }
+            is CheckoutConfirmation.Pending -> {
+                CheckoutMessage("Resultado pendiente de verificar. Conservamos el intento original y tu carrito.")
+                ChaskiButton("Consultar resultado", onClick = onRecover)
+                if (onRetry != null) ChaskiButton("Reintentar intento original", onClick = onRetry, variant = ChaskiButtonVariant.Outlined)
+            }
+            is CheckoutConfirmation.Conflict -> {
+                CheckoutMessage("El intento presenta un conflicto. No se creará otra compra automáticamente.")
+                ChaskiButton("Consultar resultado", onClick = onRecover)
+            }
+            is CheckoutConfirmation.Rejected -> {
+                val reason = when (state.reason) {
+                    OrderRejection.REVIEW_REQUIRED -> "Las condiciones de la compra cambiaron."
+                    OrderRejection.QUOTE_EXPIRED -> "La cotización de reparto venció."
+                    OrderRejection.PURCHASE_FORBIDDEN -> "La cuenta no puede iniciar compras nuevas."
+                    OrderRejection.BUSINESS_UNAVAILABLE -> "El negocio no está habilitado para recibir compras."
+                    OrderRejection.STORE_UNAVAILABLE -> "El local no está disponible."
+                    OrderRejection.NO_RESPONSIBLE -> "El local no tiene un responsable asignado."
+                    OrderRejection.INVALID_LOCATION -> "La ubicación ya no es válida."
+                    OrderRejection.OUTSIDE_COVERAGE -> "La dirección está fuera de cobertura."
+                }
+                CheckoutMessage("$reason Tu carrito se conserva.")
+                if (onReview != null) ChaskiButton("Revisar nuevamente", onClick = onReview)
+            }
+            CheckoutConfirmation.ReviewRequired -> {
+                CheckoutMessage("Las condiciones cambiaron. Revisa y acepta la compra nuevamente.")
+                if (onReview != null) ChaskiButton("Volver a comprobar", onClick = onReview)
+            }
+            CheckoutConfirmation.StorageError -> {
+                CheckoutMessage("No pudimos guardar o recuperar el intento. Consulta su estado antes de confirmar otra compra.")
+                ChaskiButton("Recuperar intento", onClick = onRecover)
+            }
+            CheckoutConfirmation.Busy -> {
+                CheckoutMessage("Ya hay una operación de confirmación en curso.")
+                ChaskiButton("Consultar intento pendiente", onClick = onRecover)
+            }
+            CheckoutConfirmation.PurchaseForbidden -> {
+                CheckoutMessage("No tienes permiso para iniciar compras nuevas. Puedes recuperar una confirmación anterior.")
+                ChaskiButton("Recuperar intento", onClick = onRecover)
+            }
+            CheckoutConfirmation.SessionChanged -> CheckoutMessage("La sesión cambió. Vuelve a entrar para consultar tus intentos.")
+            CheckoutConfirmation.None -> Unit
+        }
     }
 }

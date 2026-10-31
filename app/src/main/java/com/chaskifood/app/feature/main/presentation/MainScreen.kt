@@ -1,8 +1,18 @@
 package com.chaskifood.app.feature.main.presentation
 
+import com.chaskifood.app.ui.components.EmptyState
+
+import com.chaskifood.app.core.navigation.ChaskiDestinations
+
+import com.chaskifood.app.core.navigation.LocalNavigationAccess
+
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.material3.Scaffold
+import androidx.compose.runtime.getValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.chaskifood.app.core.access.domain.*
+import com.chaskifood.app.feature.business.presentation.CommercialHomeScreen
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
@@ -28,6 +38,7 @@ fun MainScreen(
     deliveryNotice: String? = null,
     onDismissDeliveryNotice: () -> Unit = {},
     onSeeAllRestaurants: () -> Unit = {},
+    onRecoverPurchase: () -> Unit = {},
     onOpenCart: () -> Unit = {},
     cartUnits: Long? = null,
     onRestaurantClick: (String) -> Unit = {},
@@ -49,13 +60,30 @@ fun MainScreen(
     onOpenAdminReview: () -> Unit = {},
     onOpenAdminSupervision: () -> Unit = {},
     onOpenAdminAuditLog: () -> Unit = {},
+    onOpenManageStores: () -> Unit = {},
+    onOpenStoreOrders: (String, String) -> Unit = { _, _ -> },
+    onOpenSelectedHours: (String?, String?) -> Unit = { _, _ -> },
+    onOpenSelectedOffers: (String?, String?) -> Unit = { _, _ -> },
     onSignOut: () -> Unit = {},
 ) {
     val navController = rememberNavController()
+    val access = LocalNavigationAccess.current
+    val observed = access?.states?.collectAsStateWithLifecycle()?.value
+    val resolved = access?.current()?.takeIf { it.origin == observed?.origin }?.resolution as? AccessResolution.Resolved
+    val experience = resolved?.experience ?: CommercialExperience.CLIENT
+    val commercial = experience != CommercialExperience.CLIENT
+    val localCount = resolved?.capabilities?.grants.orEmpty().filter { it.capability == AccessCapability.READ_STORE_ORDERS }
+        .mapNotNull { it.scope as? AccessScope.Store }.distinct().size
+    val homeLabel = if (experience == CommercialExperience.OWNER) "Mi negocio" else if (localCount > 1) "Mis locales" else "Mi local"
+    LaunchedEffect(commercial) {
+        if (commercial && navController.currentDestination?.route in listOf(ChaskiTab.SEARCH.route, ChaskiTab.ORDERS.route)) {
+            navController.selectMainTab(ChaskiTab.HOME)
+        }
+    }
 
-    LaunchedEffect(requestedTab) {
+    LaunchedEffect(requestedTab, commercial) {
         if (requestedTab != null) {
-            navController.selectMainTab(requestedTab)
+            navController.selectMainTab(if (commercial && requestedTab != ChaskiTab.ACCOUNT) ChaskiTab.HOME else requestedTab)
             onTabRequestHandled()
         }
     }
@@ -63,7 +91,7 @@ fun MainScreen(
     Scaffold(
         modifier = modifier,
         containerColor = ChaskiSurface,
-        bottomBar = { ChaskiBottomNav(navController = navController) },
+        bottomBar = { if (commercial) CommercialBottomNav(navController, homeLabel) else ChaskiBottomNav(navController = navController) },
     ) { innerPadding ->
         NavHost(
             navController = navController,
@@ -71,7 +99,8 @@ fun MainScreen(
             modifier = Modifier.padding(innerPadding).consumeWindowInsets(innerPadding),
         ) {
             composable(ChaskiTab.HOME.route) {
-                HomeScreen(
+                if (commercial) CommercialHomeScreen(onOpenManageStores, onOpenManageCatalog, onOpenSelectedHours, onOpenSelectedOffers, onOrders = onOpenStoreOrders)
+                else if (access == null || access.allows(ChaskiDestinations.CART)) HomeScreen(
                     deliveryAddress = deliveryAddress,
                     deliveryAddressUnavailable = deliveryAddressUnavailable,
                     deliveryNotice = deliveryNotice,
@@ -81,23 +110,24 @@ fun MainScreen(
                     onOpenLocations = onOpenLocations,
                     onOpenCart = onOpenCart,
                     cartUnits = cartUnits,
-                )
+                ) else EmptyState("Utiliza Cuenta para acceder a tus funciones autorizadas.")
             }
             composable(ChaskiTab.SEARCH.route) {
-                OfferSearchScreen(
+                if (access == null || access.allows(ChaskiDestinations.CART)) OfferSearchScreen(
                     onStoreClick = onRestaurantClick,
                     onProductClick = onProductClick,
                     onSelectAddress = onOpenLocations,
-                )
+                ) else EmptyState("Las compras nuevas no están habilitadas para esta cuenta.")
             }
             composable(ChaskiTab.ORDERS.route) {
-                OrdersScreen(
+                if (!commercial) OrdersScreen(
                     onTrack = onTrack,
                     onDelivered = onDelivered,
                 )
             }
             composable(ChaskiTab.ACCOUNT.route) {
                 AccountScreen(
+                    onRecoverPurchase = onRecoverPurchase,
                     onOpenProfileInfo = onOpenProfileInfo,
                     onOpenSecurity = onOpenSecurity,
                     onOpenPaymentMethods = onOpenPaymentMethods,

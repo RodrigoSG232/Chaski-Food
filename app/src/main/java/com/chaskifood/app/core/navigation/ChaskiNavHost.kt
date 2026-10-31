@@ -1,5 +1,7 @@
 package com.chaskifood.app.core.navigation
 
+import com.chaskifood.app.feature.orders.presentation.StoreOrdersScreen
+
 import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.consumeWindowInsets
@@ -77,34 +79,75 @@ import com.chaskifood.app.ui.components.ChaskiFlowBottomBar
 import com.chaskifood.app.ui.components.FlowTab
 
 @Composable
-fun ChaskiNavHost() {
-    val navController = rememberNavController()
+fun ChaskiNavHost(
+    navController: androidx.navigation.NavHostController = rememberNavController(),
+    startDestination: String = ChaskiDestinations.SPLASH,
+) {
+    val access: AccessNavigationViewModel = hiltViewModel()
+    AccessNavigationEvents(access, navController)
     val onTabSelected: (FlowTab) -> Unit = { navController.openMainTab(it) }
 
     val backStackEntry by navController.currentBackStackEntryAsState()
+    val accessState by access.states.collectAsStateWithLifecycle()
+    val noticeModel:com.chaskifood.app.core.notifications.NotificationNavigationViewModel=hiltViewModel()
+    val pendingNotice by noticeModel.notifications.pending.collectAsStateWithLifecycle()
+    val permissionContext=androidx.compose.ui.platform.LocalContext.current
+    val permissionLauncher=androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.RequestPermission()){}
+    LaunchedEffect(accessState,pendingNotice) {
+        if(accessState.phase==com.chaskifood.app.core.access.data.AccessContextPhase.RESOLVED){
+            val notice=noticeModel.notifications.takeAuthorized()
+            if(notice!=null){
+                val route=ChaskiDestinations.STORE_ORDERS+"/${Uri.encode(notice.businessId)}/${Uri.encode(notice.storeId)}"
+                access.runIfAllowedFrom(access.current().origin,route,notice.businessId,notice.storeId){
+                    navController.navigate(route){launchSingleTop=true}
+                    navController.currentBackStackEntry?.savedStateHandle?.set("notificationRefresh",java.util.UUID.randomUUID().toString())
+                }
+            }
+            val resolved=accessState.resolution as? com.chaskifood.app.core.access.domain.AccessResolution.Resolved
+            if(android.os.Build.VERSION.SDK_INT>=33 && access.enabled && resolved?.capabilities?.grants?.any {
+                it.capability==com.chaskifood.app.core.access.domain.AccessCapability.READ_STORE_ORDERS}==true){
+                val prefs=permissionContext.getSharedPreferences("notification_permission",android.content.Context.MODE_PRIVATE)
+                if(!prefs.getBoolean("asked",false)){
+                    prefs.edit().putBoolean("asked",true).apply()
+                    permissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+                }
+            }
+        }
+    }
+
+    if (access.enabled) {
+        val main = runCatching { navController.getBackStackEntry(ChaskiDestinations.MAIN) }.getOrNull()
+        if (main != null) {
+            val cart: CartViewModel = hiltViewModel(main)
+            val cartAccessState by cart.uiState.collectAsStateWithLifecycle()
+            LaunchedEffect(accessState, cartAccessState.confirmation?.token) {
+                if (!access.allows(ChaskiDestinations.CART)) cartAccessState.confirmation?.let { cart.cancelStoreChange(it.token) }
+            }
+        }
+    }
     Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).safeDrawingPadding()) {
         if (backStackEntry?.destination?.route in demoDestinations) DemoNotice()
         Box(Modifier.weight(1f)) {
         NavHost(
             navController = navController,
-            startDestination = ChaskiDestinations.SPLASH,
+            startDestination = startDestination,
             modifier = Modifier.fillMaxSize(),
         ) {
-            composable(ChaskiDestinations.SPLASH) {
+            protectedComposable(access, navController, ChaskiDestinations.SPLASH) {
                 SplashScreen(
                     onNavigateToMain = {
-                        navController.navigate(ChaskiDestinations.MAIN) {
+                        if(navController.currentDestination?.route==ChaskiDestinations.SPLASH)navController.navigate(ChaskiDestinations.MAIN) {
                             popUpTo(ChaskiDestinations.SPLASH) { inclusive = true }
                         }
                     },
                     onNavigateToOnboarding = {
-                        navController.navigate(ChaskiDestinations.ONBOARDING) {
+                        if(navController.currentDestination?.route==ChaskiDestinations.SPLASH)navController.navigate(ChaskiDestinations.ONBOARDING) {
                             popUpTo(ChaskiDestinations.SPLASH) { inclusive = true }
                         }
                     },
                 )
             }
-            composable(ChaskiDestinations.ONBOARDING) {
+            protectedComposable(access, navController, ChaskiDestinations.ONBOARDING) {
                 OnboardingScreen(
                     onGetStarted = {
                         navController.navigate(ChaskiDestinations.SIGN_IN) {
@@ -113,7 +156,7 @@ fun ChaskiNavHost() {
                     },
                 )
             }
-            composable(ChaskiDestinations.SIGN_IN) {
+            protectedComposable(access, navController, ChaskiDestinations.SIGN_IN) {
                 SignInScreen(
                     onSignIn = { hasPhone ->
                         if (hasPhone) {
@@ -132,7 +175,7 @@ fun ChaskiNavHost() {
                     },
                 )
             }
-            composable(ChaskiDestinations.SIGN_UP) {
+            protectedComposable(access, navController, ChaskiDestinations.SIGN_UP) {
                 SignUpScreen(
                     onSignUp = { hasPhone ->
                         if (hasPhone) {
@@ -148,7 +191,7 @@ fun ChaskiNavHost() {
                     },
                 )
             }
-            composable(ChaskiDestinations.SIGN_UP_PHONE) {
+            protectedComposable(access, navController, ChaskiDestinations.SIGN_UP_PHONE) {
                 val phoneViewModel: PhoneAuthViewModel = hiltViewModel()
                 SignUpPhoneScreen(
                     viewModel = phoneViewModel,
@@ -165,7 +208,7 @@ fun ChaskiNavHost() {
                     },
                 )
             }
-            composable(
+            protectedComposable(access, navController,
                 route = ChaskiDestinations.VERIFY_PHONE,
                 arguments = listOf(navArgument("verificationId") { type = NavType.StringType }),
             ) { backStackEntry ->
@@ -190,7 +233,7 @@ fun ChaskiNavHost() {
                     },
                 )
             }
-            composable(ChaskiDestinations.FORGOT_PASSWORD) {
+            protectedComposable(access, navController, ChaskiDestinations.FORGOT_PASSWORD) {
                 ForgotPasswordScreen(
                     onResetSent = { email ->
                         val encodedEmail = Uri.encode(email)
@@ -203,7 +246,7 @@ fun ChaskiNavHost() {
                     },
                 )
             }
-            composable(
+            protectedComposable(access, navController,
                 route = ChaskiDestinations.CHECK_EMAIL,
                 arguments = listOf(navArgument("email") { type = NavType.StringType }),
             ) { backStackEntry ->
@@ -216,7 +259,7 @@ fun ChaskiNavHost() {
                     },
                 )
             }
-            composable(ChaskiDestinations.LOCATION) {
+            protectedComposable(access, navController, ChaskiDestinations.LOCATION) {
                 LocationScreen(
                     onUseCurrentLocation = {
                         navController.navigate(ChaskiDestinations.MAIN) {
@@ -231,14 +274,14 @@ fun ChaskiNavHost() {
                     },
                 )
             }
-            composable(ChaskiDestinations.LOCATION_SEARCH) {
+            protectedComposable(access, navController, ChaskiDestinations.LOCATION_SEARCH) {
                 LocationSearchScreen(
                     onBack = {
                         navController.popBackStack()
                     },
                 )
             }
-            composable(ChaskiDestinations.MAIN) { mainEntry ->
+            protectedComposable(access, navController, ChaskiDestinations.MAIN) { mainEntry ->
                 val requestedRoute by mainEntry.savedStateHandle
                     .getStateFlow<String?>(MAIN_TAB_REQUEST, null).collectAsStateWithLifecycle()
                 val addressViewModel: AddressViewModel = hiltViewModel()
@@ -246,6 +289,7 @@ fun ChaskiNavHost() {
                 val cartViewModel: CartViewModel = hiltViewModel(mainEntry)
                 val cartState by cartViewModel.uiState.collectAsStateWithLifecycle()
                 MainScreen(
+                    onRecoverPurchase = { navController.navigate(ChaskiDestinations.CHECKOUT_RECOVERY) { launchSingleTop = true } },
                     requestedTab = ChaskiTab.entries.find { it.route == requestedRoute },
                     onTabRequestHandled = { mainEntry.savedStateHandle[MAIN_TAB_REQUEST] = null },
                     deliveryAddress = addressState.book?.let { book ->
@@ -303,6 +347,16 @@ fun ChaskiNavHost() {
                     onOpenSocialAccounts = {
                         navController.navigate(ChaskiDestinations.SOCIAL_ACCOUNTS)
                     },
+                    onOpenManageStores = { navController.navigate(ChaskiDestinations.MANAGE_STORES) },
+                    onOpenStoreOrders = { business, store ->
+                        navController.navigate(ChaskiDestinations.STORE_ORDERS + "/${Uri.encode(business)}/${Uri.encode(store)}") { launchSingleTop = true }
+                    },
+                    onOpenSelectedHours = { _, store ->
+                        navController.navigate(ChaskiDestinations.STORE_OPERATIONS + (store?.let { "?storeId=${Uri.encode(it)}" } ?: ""))
+                    },
+                    onOpenSelectedOffers = { _, store ->
+                        navController.navigate(ChaskiDestinations.STORE_PRODUCT_CONFIGURATION + (store?.let { "?storeId=${Uri.encode(it)}" } ?: ""))
+                    },
                     onOpenBusiness = {
                         navController.navigate(ChaskiDestinations.BUSINESS_STATUS)
                     },
@@ -331,7 +385,7 @@ fun ChaskiNavHost() {
                     },
                 )
             }
-            composable(ChaskiDestinations.ADDRESS_BOOK) { entry ->
+            protectedComposable(access, navController, ChaskiDestinations.ADDRESS_BOOK) { entry ->
                 // Una sola observación para Inicio y gestión, con vida del destino Main.
                 val mainEntry = remember(entry) { navController.getBackStackEntry(ChaskiDestinations.MAIN) }
                 val viewModel: AddressViewModel = hiltViewModel(mainEntry)
@@ -345,7 +399,7 @@ fun ChaskiNavHost() {
                     },
                 )
             }
-            composable(
+            protectedComposable(access, navController,
                 route = ChaskiDestinations.REGISTER_BUSINESS + "?resubmit={resubmit}",
                 arguments = listOf(navArgument("resubmit") { type = NavType.BoolType; defaultValue = false }),
             ) { entry ->
@@ -359,7 +413,7 @@ fun ChaskiNavHost() {
                     onBack = { navController.popBackStack() },
                 )
             }
-            composable(ChaskiDestinations.BUSINESS_STATUS) {
+            protectedComposable(access, navController, ChaskiDestinations.BUSINESS_STATUS) {
                 BusinessStatusScreen(
                     onRegisterNew = {
                         navController.navigate(ChaskiDestinations.REGISTER_BUSINESS)
@@ -373,46 +427,48 @@ fun ChaskiNavHost() {
                     onBack = { navController.popBackStack() },
                 )
             }
-            composable(ChaskiDestinations.MANAGE_STORES) {
+            protectedComposable(access, navController, ChaskiDestinations.MANAGE_STORES) {
                 ManageStoresScreen(
                     onBack = { navController.popBackStack() },
                 )
             }
-            composable(ChaskiDestinations.STORE_OPERATIONS) {
+            protectedComposable(access, navController, ChaskiDestinations.STORE_OPERATIONS + "?storeId={storeId}",
+                arguments = listOf(navArgument("storeId") { type = NavType.StringType; nullable = true; defaultValue = null })) {
                 StoreOperationsScreen(
                     onBack = { navController.popBackStack() },
                 )
             }
-            composable(ChaskiDestinations.MANAGE_CATALOG) {
+            protectedComposable(access, navController, ChaskiDestinations.MANAGE_CATALOG) {
                 ManageCatalogScreen(
                     onBack = { navController.popBackStack() },
                 )
             }
-            composable(ChaskiDestinations.STORE_PRODUCT_CONFIGURATION) {
+            protectedComposable(access, navController, ChaskiDestinations.STORE_PRODUCT_CONFIGURATION + "?storeId={storeId}",
+                arguments = listOf(navArgument("storeId") { type = NavType.StringType; nullable = true; defaultValue = null })) {
                 StoreProductConfigurationScreen(
                     onBack = { navController.popBackStack() },
                 )
             }
-            composable(ChaskiDestinations.ADMIN_BUSINESS_REVIEW) {
+            protectedComposable(access, navController, ChaskiDestinations.ADMIN_BUSINESS_REVIEW) {
                 AdminBusinessReviewScreen(
                     onBack = { navController.popBackStack() },
                 )
             }
-            composable(ChaskiDestinations.ADMIN_BUSINESS_SUPERVISION) {
+            protectedComposable(access, navController, ChaskiDestinations.ADMIN_BUSINESS_SUPERVISION) {
                 AdminBusinessSupervisionScreen(
                     onBack = { navController.popBackStack() },
                 )
             }
-            composable(ChaskiDestinations.ADMIN_AUDIT_LOG) {
+            protectedComposable(access, navController, ChaskiDestinations.ADMIN_AUDIT_LOG) {
                 AdminAuditLogScreen(
                     onBack = { navController.popBackStack() },
                 )
             }
-            composable(ChaskiDestinations.PROFILE_INFO) {
+            protectedComposable(access, navController, ChaskiDestinations.PROFILE_INFO) {
                 Scaffold(
                     containerColor = Color.White,
                     bottomBar = {
-                        ChaskiFlowBottomBar(
+                        AccessFlowBottomBar(
                             selected = FlowTab.Account,
                             onTabClick = onTabSelected,
                         )
@@ -430,11 +486,11 @@ fun ChaskiNavHost() {
                     )
                 }
             }
-            composable(ChaskiDestinations.SEARCH_CATEGORIES) {
+            protectedComposable(access, navController, ChaskiDestinations.SEARCH_CATEGORIES) {
                 androidx.compose.material3.Scaffold(
                     containerColor = com.chaskifood.app.ui.theme.ChaskiBackground,
                     bottomBar = {
-                        com.chaskifood.app.ui.components.ChaskiFlowBottomBar(
+                        AccessFlowBottomBar(
                             selected = com.chaskifood.app.ui.components.FlowTab.Home,
                             onTabClick = onTabSelected,
                         )
@@ -454,7 +510,7 @@ fun ChaskiNavHost() {
                     )
                 }
             }
-            composable(ChaskiDestinations.RESTAURANTS) {
+            protectedComposable(access, navController, ChaskiDestinations.RESTAURANTS) {
                 RestaurantsScreen(
                     onBack = { navController.popBackStack() },
                     onTabSelected = onTabSelected,
@@ -468,7 +524,7 @@ fun ChaskiNavHost() {
                     },
                 )
             }
-            composable(
+            protectedComposable(access, navController,
                 route = ChaskiDestinations.RESTAURANT_DETAIL,
                 arguments = listOf(navArgument("storeId") { type = NavType.StringType }),
             ) {
@@ -483,7 +539,7 @@ fun ChaskiNavHost() {
                     },
                 )
             }
-            composable(
+            protectedComposable(access, navController,
                 route = ChaskiDestinations.PRODUCT_DETAIL,
                 arguments = listOf(
                     navArgument("storeId") { type = NavType.StringType },
@@ -493,6 +549,7 @@ fun ChaskiNavHost() {
                 val mainEntry = remember(entry) { navController.getBackStackEntry(ChaskiDestinations.MAIN) }
                 val cartViewModel: CartViewModel = hiltViewModel(mainEntry)
                 val cartState by cartViewModel.uiState.collectAsStateWithLifecycle()
+                val authorize = LocalProtectedAction.current
                 ProductDetailScreen(
                     onBack = { navController.popBackStack() },
                     onOpenCart = {
@@ -507,11 +564,11 @@ fun ChaskiNavHost() {
                         navController.navigate(ChaskiDestinations.ADDRESS_BOOK) { launchSingleTop = true }
                     },
                     cartState = cartState,
-                    onAddToCart = cartViewModel::addProduct,
+                    onAddToCart = { storeId, productId, quantity -> authorize { cartViewModel.addProduct(storeId, productId, quantity) } },
                     onDismissCartMessage = cartViewModel::dismissMessage,
                 )
             }
-            composable(ChaskiDestinations.CART) { entry ->
+            protectedComposable(access, navController, ChaskiDestinations.CART) { entry ->
                 val mainEntry = remember(entry) { navController.getBackStackEntry(ChaskiDestinations.MAIN) }
                 val cartViewModel: CartViewModel = hiltViewModel(mainEntry)
                 CartScreen(
@@ -529,7 +586,7 @@ fun ChaskiNavHost() {
                     },
                 )
             }
-            composable(
+            protectedComposable(access, navController,
                 route = ChaskiDestinations.FOODS_PER_CATEGORY,
                 arguments = listOf(
                     navArgument("category") { type = NavType.StringType },
@@ -545,14 +602,14 @@ fun ChaskiNavHost() {
                     },
                 )
             }
-            composable(ChaskiDestinations.FILTER) {
+            protectedComposable(access, navController, ChaskiDestinations.FILTER) {
                 FilterScreen(
                     onBack = { navController.popBackStack() },
                     onTabSelected = onTabSelected,
                     onShowResults = { navController.popBackStack() },
                 )
             }
-            composable(ChaskiDestinations.MENU_TOPPING) {
+            protectedComposable(access, navController, ChaskiDestinations.MENU_TOPPING) {
                 MenuToppingScreen(
                     onBack = { navController.popBackStack() },
                     onTabSelected = onTabSelected,
@@ -561,7 +618,7 @@ fun ChaskiNavHost() {
                     },
                 )
             }
-            composable(ChaskiDestinations.YOUR_ORDER) {
+            protectedComposable(access, navController, ChaskiDestinations.YOUR_ORDER) {
                 YourOrderScreen(
                     onBack = { navController.popBackStack() },
                     onTabSelected = onTabSelected,
@@ -573,7 +630,16 @@ fun ChaskiNavHost() {
                     },
                 )
             }
-            composable(ChaskiDestinations.CHECKOUT) {
+            protectedComposable(access, navController, ChaskiDestinations.STORE_ORDERS + "/{businessId}/{storeId}",
+                arguments = listOf(navArgument("businessId") { type = NavType.StringType }, navArgument("storeId") { type = NavType.StringType })) {
+                val notificationRefresh by it.savedStateHandle.getStateFlow<String?>("notificationRefresh",null).collectAsStateWithLifecycle()
+                StoreOrdersScreen(onBack = { navController.popBackStack() },notificationRefresh=notificationRefresh)
+            }
+            protectedComposable(access, navController, ChaskiDestinations.CHECKOUT_RECOVERY) {
+                RealCheckoutScreen(onBack = { navController.popBackStack() },
+                    onOpenCart = {}, onSelectAddress = {}, recoveryOnly = true)
+            }
+            protectedComposable(access, navController, ChaskiDestinations.CHECKOUT) {
                 RealCheckoutScreen(
                     onBack = { navController.popBackStack() },
                     onOpenCart = {
@@ -584,7 +650,7 @@ fun ChaskiNavHost() {
                     onSelectAddress = { navController.navigate(ChaskiDestinations.ADDRESS_BOOK) },
                 )
             }
-            composable(ChaskiDestinations.PAYMENT) {
+            protectedComposable(access, navController, ChaskiDestinations.PAYMENT) {
                 PaymentScreen(
                     onBack = { navController.popBackStack() },
                     onTabSelected = onTabSelected,
@@ -596,13 +662,13 @@ fun ChaskiNavHost() {
                     },
                 )
             }
-            composable(ChaskiDestinations.ADD_CARD) {
+            protectedComposable(access, navController, ChaskiDestinations.ADD_CARD) {
                 AddCardScreen(
                     onBack = { navController.popBackStack() },
                     onTabSelected = onTabSelected,
                 )
             }
-            composable(ChaskiDestinations.ORDER_PLACED) {
+            protectedComposable(access, navController, ChaskiDestinations.ORDER_PLACED) {
                 OrderPlacedScreen(
                     onTabSelected = onTabSelected,
                     onTrackOrder = {
@@ -613,7 +679,7 @@ fun ChaskiNavHost() {
                     onAddMoreOrders = { navController.popBackStack(ChaskiDestinations.MAIN, inclusive = false) },
                 )
             }
-            composable(ChaskiDestinations.ORDER_TRACKING) {
+            protectedComposable(access, navController, ChaskiDestinations.ORDER_TRACKING) {
                 OrderTrackingScreen(
                     onBack = { navController.popBackStack() },
                     onOpenProgress = {
@@ -621,14 +687,14 @@ fun ChaskiNavHost() {
                     },
                 )
             }
-            composable(ChaskiDestinations.ORDER_PROGRESS) {
+            protectedComposable(access, navController, ChaskiDestinations.ORDER_PROGRESS) {
                 OrderTrackProgressScreen(
                     onNext = {
                         navController.navigate(ChaskiDestinations.ORDER_RATING)
                     },
                 )
             }
-            composable(ChaskiDestinations.ORDER_DELIVERED) {
+            protectedComposable(access, navController, ChaskiDestinations.ORDER_DELIVERED) {
                 OrderDeliveredScreen(
                     onNext = {
                         navController.navigate(ChaskiDestinations.ORDER_RATING)
@@ -636,7 +702,7 @@ fun ChaskiNavHost() {
                     onBack = { navController.popBackStack() },
                 )
             }
-            composable(ChaskiDestinations.ORDER_RATING) {
+            protectedComposable(access, navController, ChaskiDestinations.ORDER_RATING) {
                 OrderRatingScreen(
                     onNext = {
                         navController.popBackStack(ChaskiDestinations.MAIN, inclusive = false)
@@ -644,11 +710,11 @@ fun ChaskiNavHost() {
                     onBack = { navController.popBackStack() },
                 )
             }
-            composable(ChaskiDestinations.PROFILE_PAYMENTS) {
+            protectedComposable(access, navController, ChaskiDestinations.PROFILE_PAYMENTS) {
                 androidx.compose.material3.Scaffold(
                     containerColor = androidx.compose.ui.graphics.Color.White,
                     bottomBar = {
-                        com.chaskifood.app.ui.components.ChaskiFlowBottomBar(
+                        AccessFlowBottomBar(
                             selected = com.chaskifood.app.ui.components.FlowTab.Account,
                             onTabClick = onTabSelected,
                         )
@@ -660,11 +726,11 @@ fun ChaskiNavHost() {
                     )
                 }
             }
-            composable(ChaskiDestinations.REFER_FRIEND) {
+            protectedComposable(access, navController, ChaskiDestinations.REFER_FRIEND) {
                 androidx.compose.material3.Scaffold(
                     containerColor = com.chaskifood.app.ui.theme.ChaskiBackground,
                     bottomBar = {
-                        com.chaskifood.app.ui.components.ChaskiFlowBottomBar(
+                        AccessFlowBottomBar(
                             selected = com.chaskifood.app.ui.components.FlowTab.Account,
                             onTabClick = onTabSelected,
                         )
@@ -676,11 +742,11 @@ fun ChaskiNavHost() {
                     )
                 }
             }
-            composable(ChaskiDestinations.SOCIAL_ACCOUNTS) {
+            protectedComposable(access, navController, ChaskiDestinations.SOCIAL_ACCOUNTS) {
                 androidx.compose.material3.Scaffold(
                     containerColor = com.chaskifood.app.ui.theme.ChaskiBackground,
                     bottomBar = {
-                        com.chaskifood.app.ui.components.ChaskiFlowBottomBar(
+                        AccessFlowBottomBar(
                             selected = com.chaskifood.app.ui.components.FlowTab.Account,
                             onTabClick = onTabSelected,
                         )
@@ -692,11 +758,11 @@ fun ChaskiNavHost() {
                     )
                 }
             }
-            composable(ChaskiDestinations.ADD_LOCATION) {
+            protectedComposable(access, navController, ChaskiDestinations.ADD_LOCATION) {
                 androidx.compose.material3.Scaffold(
                     containerColor = androidx.compose.ui.graphics.Color.White,
                     bottomBar = {
-                        com.chaskifood.app.ui.components.ChaskiFlowBottomBar(
+                        AccessFlowBottomBar(
                             selected = com.chaskifood.app.ui.components.FlowTab.Home,
                             onTabClick = onTabSelected,
                         )
@@ -711,11 +777,11 @@ fun ChaskiNavHost() {
                     )
                 }
             }
-            composable(ChaskiDestinations.LOCATIONS) {
+            protectedComposable(access, navController, ChaskiDestinations.LOCATIONS) {
                 androidx.compose.material3.Scaffold(
                     containerColor = androidx.compose.ui.graphics.Color.White,
                     bottomBar = {
-                        com.chaskifood.app.ui.components.ChaskiFlowBottomBar(
+                        AccessFlowBottomBar(
                             selected = com.chaskifood.app.ui.components.FlowTab.Home,
                             onTabClick = onTabSelected,
                         )
@@ -731,12 +797,18 @@ fun ChaskiNavHost() {
                 }
             }
         }
-        if (backStackEntry?.destination?.route == ChaskiDestinations.PRODUCT_DETAIL ||
-            backStackEntry?.destination?.route == ChaskiDestinations.CART) {
+        if (access.allows(backStackEntry?.destination?.route) && (backStackEntry?.destination?.route == ChaskiDestinations.PRODUCT_DETAIL ||
+            backStackEntry?.destination?.route == ChaskiDestinations.CART)) {
             val mainEntry = remember(backStackEntry) { navController.getBackStackEntry(ChaskiDestinations.MAIN) }
             val cartViewModel: CartViewModel = hiltViewModel(mainEntry)
             val cartState by cartViewModel.uiState.collectAsStateWithLifecycle()
-            CartConfirmationHost(cartState, cartViewModel::confirmStoreChange, cartViewModel::cancelStoreChange)
+            val expected = access.current().origin
+            val frameMatches = !access.enabled || AccessNavigationPolicy.matchesSharedFrame(
+                access.sessionStamp(expected), backStackEntry?.savedStateHandle?.get<String>("hu34_navigation_session"),
+                mainEntry.savedStateHandle.get<String>("hu34_navigation_session"), expected.session?.uid, cartState.cart?.ownerUid)
+            if (frameMatches) CartConfirmationHost(cartState,
+                { token -> access.runIfAllowedFrom(expected, ChaskiDestinations.CART) { cartViewModel.confirmStoreChange(token) } },
+                cartViewModel::cancelStoreChange)
         }
         }
     }
@@ -751,3 +823,20 @@ private val demoDestinations = setOf(
     ChaskiDestinations.ORDER_PLACED, ChaskiDestinations.ORDER_TRACKING, ChaskiDestinations.ORDER_PROGRESS,
     ChaskiDestinations.ORDER_DELIVERED, ChaskiDestinations.ORDER_RATING,
 )
+
+/** Mantiene las opciones de cliente intactas y la navegación comercial también en destinos personales. */
+@Composable
+private fun AccessFlowBottomBar(selected: FlowTab, onTabClick: (FlowTab) -> Unit) {
+    val access = LocalNavigationAccess.current
+    val observed = access?.states?.collectAsStateWithLifecycle()?.value
+    val resolved = access?.current()?.takeIf { it.origin == observed?.origin }?.resolution as? com.chaskifood.app.core.access.domain.AccessResolution.Resolved
+    if (resolved != null && resolved.experience != com.chaskifood.app.core.access.domain.CommercialExperience.CLIENT) {
+        val owner = resolved.experience == com.chaskifood.app.core.access.domain.CommercialExperience.OWNER
+        val count = resolved.capabilities.grants.filter { it.capability == com.chaskifood.app.core.access.domain.AccessCapability.READ_STORE_ORDERS }
+            .map { it.scope }.distinct().size
+        com.chaskifood.app.feature.main.presentation.CommercialBottomNavContent(
+            if (owner) "Mi negocio" else if (count > 1) "Mis locales" else "Mi local", selected == FlowTab.Account) {
+            onTabClick(if (it == ChaskiTab.ACCOUNT) FlowTab.Account else FlowTab.Home)
+        }
+    } else ChaskiFlowBottomBar(selected, onTabClick)
+}

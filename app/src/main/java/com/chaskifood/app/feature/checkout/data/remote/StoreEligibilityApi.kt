@@ -12,6 +12,7 @@ internal data class StoreEligibilityResponse(
     val businessId: String?,
     val decision: String,
     val checkedAt: String,
+    val businessName: String? = null,
 )
 
 internal interface StoreEligibilityApi {

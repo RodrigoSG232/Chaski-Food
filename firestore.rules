@@ -192,6 +192,36 @@ service cloud.firestore {
       );
     }
 
+    // Publicado en chaski-food-9adba y requerido por FirebaseUserProfileStore; conservado literal en la fusión HU34.
+    match /users/{uid} {
+      allow read: if isOwner(uid);
+
+      allow create: if isOwner(uid)
+        && request.resource.data.keys().hasAll([
+          'uid', 'email', 'displayName', 'createdAt', 'updatedAt'
+        ])
+        && request.resource.data.keys().hasOnly([
+          'uid', 'email', 'displayName', 'createdAt', 'updatedAt'
+        ])
+        && request.resource.data.uid == uid
+        && request.resource.data.email is string
+        && request.resource.data.email == request.auth.token.get('email', '')
+        && request.resource.data.displayName is string
+        && request.resource.data.displayName.size() <= 200
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time;
+
+      allow update: if isOwner(uid)
+        && resource.data.uid == uid
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['displayName', 'updatedAt'])
+        && request.resource.data.displayName is string
+        && request.resource.data.displayName.size() <= 200
+        && request.resource.data.updatedAt == request.time;
+
+      allow delete: if false;
+    }
+
     match /users/{uid}/addresses/{addressId} {
       allow read: if isOwner(uid);
 
@@ -282,17 +312,25 @@ service cloud.firestore {
         ).data.status == 'APPROVED';
     }
 
+    function verifiedManagerBinding(data) {
+      let uidPath = /databases/$(database)/documents/commercial_access_index/$("uid_" + request.auth.uid);
+      let identity = get(uidPath).data;
+      return signedIn()
+        && request.auth.token.get('email_verified', false) == true
+        && data.get('bindingState', '') == 'VERIFIED'
+        && data.get('boundUid', '') == request.auth.uid
+        && data.email == request.auth.token.get('email', '').lower()
+        && identity.kind == 'UID'
+        && identity.authEmail == data.email
+        && get(/databases/$(database)/documents/commercial_access_index/$(identity.emailKey)).data.boundUid == request.auth.uid;
+    }
+
     function managerOf(id, businessId) {
       let email = request.auth.token.get('email', '').lower();
-      let assignmentId = businessId + '_' + email;
-
-      return signedIn()
-        && exists(
-          /databases/$(database)/documents/store_managers/$(assignmentId)
-        )
-        && id in get(
-          /databases/$(database)/documents/store_managers/$(assignmentId)
-        ).data.assignedStoreIds;
+      let path = /databases/$(database)/documents/store_managers/$(businessId + '_' + email);
+      return signedIn() && exists(path)
+        && verifiedManagerBinding(get(path).data)
+        && id in get(path).data.assignedStoreIds;
     }
 
     function operational(id, businessId) {
@@ -307,14 +345,10 @@ service cloud.firestore {
     }
 
     function managesBusiness(businessId) {
-      let assignmentId = businessId
-        + '_'
-        + request.auth.token.get('email', '').lower();
-
-      return signedIn()
-        && exists(
-          /databases/$(database)/documents/store_managers/$(assignmentId)
-        );
+      let email = request.auth.token.get('email', '').lower();
+      let path = /databases/$(database)/documents/store_managers/$(businessId + '_' + email);
+      return signedIn() && exists(path) && verifiedManagerBinding(get(path).data)
+        && get(path).data.assignedStoreIds.size() > 0;
     }
 
     function configuresStore(storeId, businessId) {
@@ -397,7 +431,7 @@ service cloud.firestore {
 
       return (
         oldStatus == 'PENDING_REVIEW'
-        && nextStatus in ['APPROVED', 'OBSERVED', 'REJECTED']
+        && nextStatus in ['OBSERVED', 'REJECTED']
       )
         || (
           oldStatus == 'APPROVED'
@@ -440,63 +474,9 @@ service cloud.firestore {
 
       allow list: if admin();
 
-      allow create: if signedIn()
-        && id == request.auth.uid
-        && request.resource.data.ownerUid == request.auth.uid
-        && request.resource.data.status == 'PENDING_REVIEW'
-        && businessData(request.resource.data)
-        && request.resource.data.keys().hasOnly([
-          'ownerUid',
-          'businessName',
-          'ruc',
-          'legalAddress',
-          'phone',
-          'email',
-          'category',
-          'status',
-          'observations',
-          'suspensionReason',
-          'reviewedBy',
-          'reviewedAt',
-          'updatedAt',
-          'createdAt'
-        ])
-        && request.resource.data.observations == null
-        && request.resource.data.suspensionReason == null
-        && request.resource.data.reviewedBy == null
-        && request.resource.data.reviewedAt == null
-        && request.resource.data.createdAt == request.time
-        && request.resource.data.updatedAt == request.time;
-
+      // REGISTER/RESUBMIT/APPROVE se ejecutan exclusivamente mediante Admin SDK de foodApi.
+      allow create: if false;
       allow update: if (
-        signedIn()
-        && id == request.auth.uid
-        && resource.data.ownerUid == request.auth.uid
-        && resource.data.status == 'OBSERVED'
-        && request.resource.data.status == 'PENDING_REVIEW'
-        && businessData(request.resource.data)
-        && request.resource.data.updatedAt == request.time
-        && request.resource.data.observations == null
-        && request.resource.data.suspensionReason == null
-        && request.resource.data.reviewedBy == null
-        && request.resource.data.reviewedAt == null
-        && request.resource.data.diff(resource.data)
-          .affectedKeys()
-          .hasOnly([
-            'businessName',
-            'ruc',
-            'legalAddress',
-            'phone',
-            'email',
-            'category',
-            'status',
-            'observations',
-            'suspensionReason',
-            'reviewedBy',
-            'reviewedAt',
-            'updatedAt'
-          ])
-      ) || (
         admin()
         && businessDecision()
         && auditedBusiness(id)
@@ -614,27 +594,14 @@ service cloud.firestore {
     }
 
     match /store_managers/{id} {
-      allow read: if signedIn();
+      allow read: if signedIn() && (
+        admin() || approvedOwner(resource.data.businessId) || verifiedManagerBinding(resource.data)
+      );
+      allow create, update, delete: if false;
+    }
 
-      allow create: if approvedOwner(
-        request.resource.data.businessId
-      )
-        && id
-          == request.resource.data.businessId
-          + '_'
-          + request.resource.data.email
-        && request.resource.data.email
-          == request.resource.data.email.lower();
-
-      allow update: if approvedOwner(resource.data.businessId)
-        && request.resource.data.businessId
-          == resource.data.businessId
-        && id
-          == request.resource.data.businessId
-          + '_'
-          + request.resource.data.email;
-
-      allow delete: if approvedOwner(resource.data.businessId);
+    match /commercial_access_index/{id} {
+      allow read, write: if false;
     }
 
     match /categories/{id} {
@@ -719,6 +686,32 @@ service cloud.firestore {
             ).data.lastAuditId == id
           )
         );
+    }
+
+    // Publicado en chaski-food-9adba (origen 4ce5618, revertido en el repo en 39b1a13); conservado literal hasta
+    // confirmar su necesidad con el equipo. Solo usa signedIn/admin/ownerUid, sin helpers modificados por HU34.
+    function noticeStore(id) { return /databases/$(database)/documents/stores/$(id); }
+    function noticeBusiness(id) { return /databases/$(database)/documents/business_requests/$(id); }
+    function noticeAudit(id) { return /databases/$(database)/documents/audit_logs/$(id); }
+
+    match /store_notices/{id} {
+      allow read: if signedIn() && resource.data.ownerUid == request.auth.uid;
+      allow create: if admin()
+        && request.resource.data.keys().hasOnly(['ownerUid', 'storeId', 'businessId', 'title', 'message', 'read', 'createdAt', 'auditId'])
+        && request.resource.data.auditId == id && request.resource.data.read == false
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.ownerUid == get(noticeBusiness(request.resource.data.businessId)).data.ownerUid
+        && request.resource.data.businessId == get(noticeStore(request.resource.data.storeId)).data.businessId
+        && request.resource.data.title is string && request.resource.data.title.size() > 0 && request.resource.data.title.size() <= 1000
+        && request.resource.data.message is string && request.resource.data.message.size() <= 10000
+        && !exists(noticeAudit(id))
+        && getAfter(noticeAudit(id)).data.timestamp == request.time
+        && getAfter(noticeAudit(id)).data.adminUid == request.auth.uid
+        && getAfter(noticeAudit(id)).data.targetStoreId == request.resource.data.storeId;
+      allow update: if signedIn() && resource.data.ownerUid == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read'])
+        && request.resource.data.read == true;
+      allow delete: if false;
     }
 
     match /{document=**} {

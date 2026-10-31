@@ -69,9 +69,15 @@ data class BusinessStore(
         currentTime: String = getCurrentFormattedTime(),
         currentDay: DayOfWeekEnum = getCurrentDayOfWeek(),
     ): Boolean {
-        if (status != StoreStatus.ACTIVE) return false
-        if (operationalStatus != OperationalStatus.OPEN) return false
+        if (status != StoreStatus.ACTIVE || operationalStatus != OperationalStatus.OPEN) return false
+        return isWithinOperatingHours(currentTime, currentDay)
+    }
 
+    /** Horario por sí solo: no afirma estado administrativo, apertura manual ni autorización. */
+    fun isWithinOperatingHours(
+        currentTime: String = getCurrentFormattedTime(),
+        currentDay: DayOfWeekEnum = getCurrentDayOfWeek(),
+    ): Boolean {
         val target = timeInMinutes(currentTime) ?: return false
         val today = operatingHours.singleOrNull { it.dayOfWeek == currentDay }
         val previousDay = DayOfWeekEnum.entries[(currentDay.ordinal + 6) % 7]

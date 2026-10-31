@@ -123,7 +123,7 @@ private class TestAuth : AuthRepository {
     override suspend fun verifyPhoneCode(verificationId: String, code: String): ApiResult<Unit> = error("unused")
     override suspend fun sendPasswordResetEmail(email: String): ApiResult<Unit> = error("unused")
     override suspend fun updateProfile(displayName: String): ApiResult<Unit> = error("unused")
-    override suspend fun signOut() { currentUserFlow.value = null }
+    override suspend fun signOut(): Boolean { currentUserFlow.value = null; return true }
 }
 
 private class TestBusinesses : BusinessRepository {
@@ -159,6 +159,7 @@ private class TestStores : StoreRepository {
     }
     override suspend fun createStore(store: BusinessStore) = write(store)
     override suspend fun updateStore(store: BusinessStore) = write(store)
+    override suspend fun revokeManager(businessId: String, email: String): ApiResult<Unit> = error("unused")
     override suspend fun assignManager(manager: StoreManager): ApiResult<StoreManager> = error("unused")
     override fun getStoresForManager(managerEmailOrUid: String): Flow<ApiResult<List<BusinessStore>>> = error("unused")
     override suspend fun updateOperationalStatus(storeId: String, status: OperationalStatus, pauseReason: String?): ApiResult<Unit> = error("unused")

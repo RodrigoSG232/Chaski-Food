@@ -1,5 +1,7 @@
 package com.chaskifood.app.feature.address.presentation
 
+import com.chaskifood.app.core.navigation.LocalProtectedAction
+
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
@@ -83,6 +85,7 @@ import com.chaskifood.app.ui.theme.ChaskiTextTertiary
 
 @Composable
 fun AddressRoute(viewModel: AddressViewModel, onBack: () -> Unit, onSignIn: () -> Unit) {
+    val authorize = LocalProtectedAction.current
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     LaunchedEffect(state.exitRequested) {
         if (state.exitRequested) {
@@ -96,13 +99,13 @@ fun AddressRoute(viewModel: AddressViewModel, onBack: () -> Unit, onSignIn: () -
         key(mapRequest.id) {
             AddressMapRoute(
                 mapRequest, editor.draft.addressText,
-                onCancel = { viewModel.onAction(AddressAction.CloseMap(mapRequest.id)) },
+                onCancel = { authorize { viewModel.onAction(AddressAction.CloseMap(mapRequest.id)) } },
                 onConfirm = { point, suggestedAddress ->
-                    viewModel.onAction(AddressAction.ConfirmMap(mapRequest.id, point, suggestedAddress))
+                    authorize { viewModel.onAction(AddressAction.ConfirmMap(mapRequest.id, point, suggestedAddress)) }
                 },
             )
         }
-    } else AddressScreen(state, viewModel::onAction, onSignIn)
+    } else AddressScreen(state, { action -> authorize { viewModel.onAction(action) } }, onSignIn)
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

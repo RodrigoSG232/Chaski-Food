@@ -29,6 +29,9 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.FirebaseFirestoreException
 import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.Source
+import com.chaskifood.app.feature.checkout.domain.*
+import com.chaskifood.app.feature.orders.domain.*
+import com.chaskifood.app.feature.cart.data.CartSession
 import javax.inject.Inject
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
@@ -42,7 +45,18 @@ internal class FirebaseCheckoutRepository @Inject constructor(
     private val administrativeEligibility: StorePurchaseEligibilityReader,
     private val deliveryQuotes: DeliveryQuoteReader,
     private val clock: CheckoutClock,
+    private val buyers: CheckoutBuyerSnapshotSource? = null,
+    private val orders: CheckoutOrderOperations? = null,
 ) : CheckoutRepository {
+    override suspend fun confirm(context: CheckoutContext, quote: CheckoutQuote) =
+        orders?.confirm(context, quote) ?: CheckoutConfirmation.PurchaseForbidden
+    override suspend fun pending(ownerUid: String, generation: Long, intentId: String?) =
+        orders?.pending(CartSession(ownerUid, generation), intentId) ?: CheckoutConfirmation.None
+    override suspend fun recover(ownerUid: String, generation: Long, intentId: String) =
+        orders?.resolve(CartSession(ownerUid, generation), intentId, false) ?: CheckoutConfirmation.SessionChanged
+    override suspend fun retry(ownerUid: String, generation: Long, intentId: String) =
+        orders?.resolve(CartSession(ownerUid, generation), intentId, true) ?: CheckoutConfirmation.PurchaseForbidden
+
     private val validateProduct = ValidateProductForCart()
     /** Cuenta las lecturas directas del local en las pruebas con Emulator. */
     internal var onStoreGet: (() -> Unit)? = null
@@ -108,6 +122,7 @@ internal class FirebaseCheckoutRepository @Inject constructor(
             offers.openCheckoutReview(candidate, address.location)
         } else null
         val pricedItems = mutableListOf<CheckoutPricedItem>()
+        val orderItems = mutableListOf<OrderItem>()
         val reasons = mutableListOf<String>()
         for (item in cart.items) {
             when (val offer = reviewOffers?.read(item.productId)
@@ -120,6 +135,7 @@ internal class FirebaseCheckoutRepository @Inject constructor(
                             if (current.businessId != item.businessId || current.storeId != item.storeId) {
                                 return CheckoutReviewResult.Error("La oferta ya no corresponde al local del carrito.")
                             }
+                            orderItems += OrderItem(item.productId, offer.product.categoryId, current.productName, item.quantity, current.unitPriceMinor)
                             pricedItems += CheckoutPricedItem(item.productId, current.productName,
                                 item.quantity, item.unitPriceMinor, current.unitPriceMinor)
                         }
@@ -191,7 +207,7 @@ internal class FirebaseCheckoutRepository @Inject constructor(
         }
         val deadline = deliveryQuoteDeadlineOrNull(deliveryQuote, clock)
             ?: return CheckoutReviewResult.Error("La cotización de reparto venció. Vuelve a comprobar la compra.")
-        return CheckoutReviewResult.Ready(buildCheckoutQuote(
+        val reviewed = buildCheckoutQuote(
             ownerUid = uid,
             storeId = storeId,
             storeName = latestCandidate.store.name,
@@ -201,7 +217,20 @@ internal class FirebaseCheckoutRepository @Inject constructor(
             pricedItems = pricedItems,
             deliveryQuote = deliveryQuote,
             deliveryQuoteDeadlineMillis = deadline,
-        ))
+        )
+        // Contact evidence is frozen during review, never re-read after acceptance.
+        // Auth is the existing visible identity; foodApi still compares its authoritative profile.
+        val buyer = buyers?.read(uid, context.sessionGeneration)
+        if (!contexts.isCurrentSession(context)) return CheckoutReviewResult.SignedOut
+        if (!contexts.isCurrent(context)) return CheckoutReviewResult.Error("La compra cambió. Vuelve a comprobarla.")
+        val accepted = if (buyer == null) null else AcceptedPurchase(uid, administrative.businessId, storeId,
+            requireNotNull(administrative.businessName), latestCandidate.store.name,
+            latestDocument.getString("phone")?.takeIf { it.isNotBlank() }, buyer.name, buyer.phone,
+            OrderLocationSnapshot(requireNotNull(latestDocument.getString("address")), deliveryQuote.storeLocation),
+            OrderDeliverySnapshot(address.id, address.label, OrderLocationSnapshot(address.addressText, address.location, address.reference, address.instructions)),
+            orderItems, OrderAmounts(reviewed.subtotalMinor, reviewed.deliveryFeeMinor, reviewed.totalMinor),
+            AcceptedDeliveryQuote(requireNotNull(deliveryQuote.quoteId), deliveryQuote))
+        return CheckoutReviewResult.Ready(reviewed.copy(acceptedPurchase = accepted))
     }
 
     private suspend fun serverStore(storeId: String): DocumentSnapshot {

@@ -21,3 +21,11 @@ export function evaluateEligibility(store: DocumentData | undefined, business: D
   if (business.status !== "APPROVED") return "BUSINESS_NOT_APPROVED";
   return store.status === "ACTIVE" ? "ELIGIBLE" : "STORE_UNAVAILABLE";
 }
+
+/** Proyección pública: nunca devuelve el documento administrativo. */
+export function eligibleBusinessName(decision: Decision, business: DocumentData | undefined): { businessName?: string } {
+  if (decision !== "ELIGIBLE") return {};
+  const name = business?.businessName;
+  // La ausencia de nombre impide preparar el consentimiento; no inventamos uno.
+  return typeof name === "string" && name.trim() ? { businessName: name } : {};
+}

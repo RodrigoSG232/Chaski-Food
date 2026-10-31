@@ -7,10 +7,11 @@
     "node": "22"
   },
   "scripts": {
-    "build": "tsc",
+    "build": "node scripts/build.cjs",
     "test": "node --test lib/test/*.test.js",
     "test:emulator": "node --test lib/test/*.emulator.js",
-    "emulators": "firebase emulators:start --only auth,firestore,functions --project demo-chaski-hu15 --config ../firebase.json"
+    "emulators": "firebase emulators:start --only auth,firestore,functions --project demo-chaski-hu15 --config ../firebase.json",
+    "verify:package": "node scripts/verifyPackage.cjs"
   },
   "dependencies": {
     "@google-cloud/functions-framework": "5.0.5",

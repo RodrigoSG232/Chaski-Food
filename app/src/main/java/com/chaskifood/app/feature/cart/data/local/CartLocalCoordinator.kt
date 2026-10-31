@@ -22,6 +22,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.buffer
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.filterNotNull
@@ -31,6 +32,8 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+
+internal data class VersionedCart(val state: CartState, val revision: Long)
 
 internal data class PendingCartConfirmation(
     val token: String,
@@ -77,17 +80,19 @@ internal class CartLocalCoordinator @Inject constructor(
     }.buffer(0)
 
     /** Lectura puntual para preparar un aumento; la escritura posterior vuelve a leer en Room. */
-    suspend fun currentCart(session: CartSession): CartState {
+    suspend fun currentCart(session: CartSession): CartState = currentSnapshot(session).state
+
+    fun observeRevision(ownerUid: String): Flow<Long> = dao.observeRevision(ownerUid).map { it ?: 0L }.distinctUntilChanged()
+
+    suspend fun currentSnapshot(session: CartSession): VersionedCart {
+        val uid = session.uid ?: return VersionedCart(CartState.SignedOut, 0)
+        if (!sessions.isCurrent(session)) return VersionedCart(CartState.SignedOut, 0)
         return try {
-            val uid = session.uid ?: return CartState.SignedOut
-            if (!sessions.isCurrent(session)) return CartState.SignedOut
-            val cart = dao.getCart(uid)?.toDomain() ?: Cart(uid)
-            if (sessions.isCurrent(session)) CartState.Ready(cart) else CartState.SignedOut
-        } catch (cancelled: CancellationException) {
-            throw cancelled
-        } catch (_: Exception) {
-            CartState.ReadError
-        }
+            val stored = dao.getCart(uid)
+            if (sessions.isCurrent(session)) VersionedCart(CartState.Ready(stored?.toDomain() ?: Cart(uid)), stored?.cart?.revision ?: 0)
+            else VersionedCart(CartState.SignedOut, 0)
+        } catch (cancelled: CancellationException) { throw cancelled }
+        catch (_: Exception) { VersionedCart(CartState.ReadError, 0) }
     }
 
     /** Solo recibe referencias comprobadas por la fuente remota. */

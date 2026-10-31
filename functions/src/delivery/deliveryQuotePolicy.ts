@@ -37,3 +37,12 @@ export function deliveryFeeMinor(distanceMeters: number): number {
   if (fee > MAX_MINOR) throw new InvalidRouteDistance();
   return Number(fee);
 }
+
+export type QuoteErrorCode = "INVALID_REQUEST" | "STORE_UNAVAILABLE" | "BUSINESS_SUSPENDED" | "BUSINESS_NOT_APPROVED" |
+  "ADDRESS_NOT_FOUND" | "INVALID_LOCATION" | "OUTSIDE_COVERAGE" | "NO_ROUTE" |
+  "ROUTING_CREDENTIALS_MISSING" | "ROUTING_CREDENTIALS_INVALID" | "ROUTING_QUOTA_EXCEEDED" |
+  "ROUTING_UNAVAILABLE" | "ROUTING_INVALID_RESPONSE" | "DATA_INCONSISTENT" |
+  "QUOTE_NOT_FOUND" | "QUOTE_EXPIRED" | "QUOTE_INCOMPATIBLE" | "QUOTE_VERSION_INVALID" | "QUOTE_INVALID";
+export class QuoteError extends Error {
+  constructor(readonly code: QuoteErrorCode, readonly status: number) { super(code); }
+}

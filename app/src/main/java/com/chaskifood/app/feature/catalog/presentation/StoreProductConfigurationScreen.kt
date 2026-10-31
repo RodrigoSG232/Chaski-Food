@@ -1,5 +1,8 @@
 package com.chaskifood.app.feature.catalog.presentation
 
+import com.chaskifood.app.ui.components.StoreSelector
+import com.chaskifood.app.core.navigation.LocalProtectedAction
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -35,7 +38,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -75,16 +78,17 @@ fun StoreProductConfigurationScreen(
     modifier: Modifier = Modifier,
     viewModel: StoreProductConfigurationViewModel = hiltViewModel(),
 ) {
-    val state by viewModel.uiState.collectAsState()
-    val operations by viewModel.operations.collectAsState()
+    val authorize = LocalProtectedAction.current
+    val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val operations by viewModel.operations.collectAsStateWithLifecycle()
 
     StoreProductConfigurationContent(
         state = state,
         operations = operations,
         onBack = onBack,
         onRetry = viewModel::retry,
-        onSelectStore = viewModel::selectStore,
-        onSave = viewModel::saveConfiguration,
+        onSelectStore = { id -> authorize { viewModel.selectStore(id) } },
+        onSave = { id, price, availability -> authorize { viewModel.saveConfiguration(id, price, availability) } },
         onClearFeedback = viewModel::clearOperationFeedback,
         modifier = modifier,
     )
@@ -184,52 +188,6 @@ internal fun StoreProductConfigurationContent(
                             item { Spacer(Modifier.height(ChaskiDimens.SpacingLg)) }
                         }
                     }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun StoreSelector(
-    stores: List<BusinessStore>,
-    selectedStoreId: String,
-    onSelectStore: (String) -> Unit,
-) {
-    var expanded by rememberSaveable { mutableStateOf(false) }
-    val selected = stores.firstOrNull { it.id == selectedStoreId }
-    Column {
-        Text(
-            text = "Local",
-            style = MaterialTheme.typography.labelLarge,
-            color = ChaskiTextPrimary,
-        )
-        Spacer(Modifier.height(6.dp))
-        Box(Modifier.fillMaxWidth()) {
-            OutlinedButton(
-                onClick = { expanded = true },
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Icon(Icons.Filled.Storefront, contentDescription = null)
-                Text(
-                    text = selected?.name?.ifBlank { "Local sin nombre" } ?: "Selecciona un local",
-                    modifier = Modifier.weight(1f).padding(horizontal = 10.dp),
-                )
-                Icon(Icons.Filled.ArrowDropDown, contentDescription = "Cambiar local")
-            }
-            DropdownMenu(
-                expanded = expanded,
-                onDismissRequest = { expanded = false },
-                modifier = Modifier.fillMaxWidth(0.9f),
-            ) {
-                stores.forEach { store ->
-                    DropdownMenuItem(
-                        text = { Text(store.name.ifBlank { "Local sin nombre" }) },
-                        onClick = {
-                            expanded = false
-                            onSelectStore(store.id)
-                        },
-                    )
                 }
             }
         }
@@ -410,4 +368,11 @@ private fun businessStatusMessage(status: BusinessStatus): String = when (status
     BusinessStatus.REJECTED -> "La solicitud del negocio fue rechazada."
     BusinessStatus.SUSPENDED -> "El negocio está suspendido y no puede configurar su oferta."
     BusinessStatus.APPROVED -> "No se encontraron locales autorizados."
+}
+
+@androidx.compose.ui.tooling.preview.Preview(showBackground = true, widthDp = 360, heightDp = 800)
+@Composable private fun StoreProductConfigurationPreview() {
+    com.chaskifood.app.ui.theme.ChaskiTheme {
+        StoreProductConfigurationContent(StoreProductConfigurationUiState.NoStores, emptyMap(), {}, {}, {}, { _, _, _ -> }, { _, _ -> })
+    }
 }

@@ -20,6 +20,7 @@ data class CheckoutQuote(
     val currency: CartCurrency = CartCurrency.PEN,
     val deliveryQuote: DeliveryQuote,
     val deliveryQuoteDeadlineMillis: Long,
+    val acceptedPurchase: AcceptedPurchase? = null,
 ) {
     init {
         require(deliveryFeeMinor == deliveryQuote.deliveryFeeMinor && currency == deliveryQuote.currency)
@@ -86,6 +87,7 @@ data class CheckoutContext(
     val sessionGeneration: Long,
     val cart: Cart,
     val selectedAddress: Address?,
+    val cartRevision: Long = 0,
 )
 
 sealed interface CheckoutContextState {
@@ -101,4 +103,8 @@ interface CheckoutRepository {
     /** Comprueba sesión, contexto observado y fuentes locales actuales; no consulta Firestore. */
     suspend fun isContextCurrent(context: CheckoutContext): Boolean
     suspend fun review(context: CheckoutContext): CheckoutReviewResult
+    suspend fun confirm(context: CheckoutContext, quote: CheckoutQuote): CheckoutConfirmation = CheckoutConfirmation.PurchaseForbidden
+    suspend fun pending(ownerUid: String, generation: Long, intentId: String? = null): CheckoutConfirmation = CheckoutConfirmation.None
+    suspend fun recover(ownerUid: String, generation: Long, intentId: String): CheckoutConfirmation = CheckoutConfirmation.SessionChanged
+    suspend fun retry(ownerUid: String, generation: Long, intentId: String): CheckoutConfirmation = CheckoutConfirmation.PurchaseForbidden
 }
