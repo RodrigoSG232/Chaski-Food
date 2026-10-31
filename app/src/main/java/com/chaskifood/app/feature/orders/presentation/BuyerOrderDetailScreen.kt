@@ -24,6 +24,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -192,4 +193,16 @@ private fun AmountRow(label: String, minor: Long, bold: Boolean = false) {
         Text(label, fontWeight = weight, color = if (bold) ChaskiTextPrimary else ChaskiTextSecondary)
         Text(formatCartPrice(minor), fontWeight = weight, color = if (bold) ChaskiTextPrimary else ChaskiTextSecondary)
     }
+}
+
+@Preview(name = "Detalle · historial de estados", showBackground = true, widthDp = 360, heightDp = 1500)
+@Composable
+private fun BuyerOrderDetailPreview() = ChaskiTheme {
+    BuyerOrderDetailContent(BuyerOrderDetailUiState(loading = false, detail = BuyerOrderPreviewData.detail), {}, {})
+}
+
+@Preview(name = "Detalle · no encontrado", showBackground = true, widthDp = 360, heightDp = 640)
+@Composable
+private fun BuyerOrderDetailNotFoundPreview() = ChaskiTheme {
+    BuyerOrderDetailContent(BuyerOrderDetailUiState(loading = false, notFound = true), {}, {})
 }

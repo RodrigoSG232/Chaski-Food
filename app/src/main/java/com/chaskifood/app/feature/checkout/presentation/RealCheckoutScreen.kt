@@ -14,7 +14,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import com.chaskifood.app.feature.checkout.domain.OrderReceipt
+import androidx.compose.ui.tooling.preview.Preview
+import com.chaskifood.app.ui.theme.ChaskiTheme
 import com.chaskifood.app.feature.orders.presentation.BuyerOrderStatusChip
 import com.chaskifood.app.feature.orders.presentation.shortOrderId
 import androidx.compose.foundation.layout.Arrangement
@@ -288,7 +289,8 @@ internal fun CheckoutConfirmationPanel(state: CheckoutConfirmation, onRecover: (
         when (state) {
             CheckoutConfirmation.Working -> { CircularProgressIndicator(); CheckoutMessage("Verificando confirmación. No vuelvas a enviar otra compra.") }
             is CheckoutConfirmation.Success -> {
-                OrderSentPanel(state.receipt, state.cartConsumed, onOpenOrder)
+                OrderSentPanel(state.receipt.orderId, state.receipt.status.name, state.receipt.accepted.storeName,
+                    state.receipt.accepted.amounts.totalMinor, state.cartConsumed, onOpenOrder)
             }
             is CheckoutConfirmation.Pending -> {
                 CheckoutMessage("Resultado pendiente de verificar. Conservamos el intento original y tu carrito.")
@@ -337,7 +339,8 @@ internal fun CheckoutConfirmationPanel(state: CheckoutConfirmation, onRecover: (
 
 /** HU17: confirmación exitosa, igual para la respuesta directa y la recuperada. «Ver mi pedido» usa el ID completo. */
 @Composable
-private fun OrderSentPanel(receipt: OrderReceipt, cartConsumed: Boolean, onOpenOrder: (String) -> Unit) {
+private fun OrderSentPanel(orderId: String, status: String, storeName: String, totalMinor: Long, cartConsumed: Boolean,
+    onOpenOrder: (String) -> Unit) {
     Column(Modifier.fillMaxWidth().semantics { liveRegion = LiveRegionMode.Polite },
         verticalArrangement = Arrangement.spacedBy(ChaskiDimens.SpacingLg)) {
         Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally,
@@ -351,16 +354,16 @@ private fun OrderSentPanel(receipt: OrderReceipt, cartConsumed: Boolean, onOpenO
         }
         Surface(shape = MaterialTheme.shapes.medium, tonalElevation = 1.dp) {
             Column(Modifier.fillMaxWidth().padding(ChaskiDimens.SpacingLg), verticalArrangement = Arrangement.spacedBy(ChaskiDimens.SpacingSm)) {
-                Text("Pedido #${shortOrderId(receipt.orderId)}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                BuyerOrderStatusChip(receipt.status.name, known = true)
-                ReceiptRow("Local", receipt.accepted.storeName)
+                Text("Pedido #${shortOrderId(orderId)}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                BuyerOrderStatusChip(status, known = true)
+                ReceiptRow("Local", storeName)
                 ReceiptRow("Pago", "Efectivo contra entrega")
-                ReceiptRow("Total", formatCartPrice(receipt.accepted.amounts.totalMinor), bold = true)
+                ReceiptRow("Total", formatCartPrice(totalMinor), bold = true)
             }
         }
         if (!cartConsumed) Text("Conservamos tu carrito porque cambió después de la revisión.",
             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        ChaskiButton("Ver mi pedido", onClick = { onOpenOrder(receipt.orderId) }, modifier = Modifier.fillMaxWidth())
+        ChaskiButton("Ver mi pedido", onClick = { onOpenOrder(orderId) }, modifier = Modifier.fillMaxWidth())
     }
 }
 
@@ -374,3 +377,13 @@ private fun ReceiptRow(label: String, value: String, bold: Boolean = false) {
 
 private val OrderSentBg = Color(0xFFE8F5E9)
 private val OrderSentFg = Color(0xFF1B5E20)
+
+@Preview(name = "Checkout · Pedido enviado", showBackground = true, widthDp = 360, heightDp = 640)
+@Composable
+private fun OrderSentPreview() = ChaskiTheme {
+    Scaffold(topBar = { ChaskiAppBar(title = "Pedido enviado", onBackClick = {}) }) { padding ->
+        Column(Modifier.padding(padding).padding(ChaskiDimens.ScreenPadding)) {
+            OrderSentPanel("7f3a9c21" + "0".repeat(56), "PENDING_CONFIRMATION", "Local de ejemplo · Centro", 4600, cartConsumed = true) {}
+        }
+    }
+}

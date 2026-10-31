@@ -27,6 +27,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -197,4 +198,34 @@ internal fun OrdersMessage(icon: ImageVector, title: String, body: String, actio
             }
         }
     }
+}
+
+private val previewHeader: @Composable () -> Unit = {
+    Text("Tus pedidos", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = ChaskiTextPrimary,
+        modifier = Modifier.padding(ChaskiDimens.SpacingLg))
+}
+
+@Composable
+private fun ListPreview(state: BuyerOrdersUiState) = ChaskiTheme {
+    BuyerOrdersContent(state, {}, {}, {}, {}, header = previewHeader)
+}
+
+@Preview(name = "Pedidos · En curso", showBackground = true, widthDp = 360, heightDp = 800)
+@Composable
+private fun BuyerOrdersActivePreview() = ListPreview(BuyerOrderPreviewData.list(BuyerOrderPhase.ACTIVE,
+    BuyerOrdersPhaseState(BuyerOrderPreviewData.active, nextCursor = "c", loaded = true)))
+
+@Preview(name = "Pedidos · Historial", showBackground = true, widthDp = 360, heightDp = 800)
+@Composable
+private fun BuyerOrdersHistoricalPreview() = ListPreview(BuyerOrderPreviewData.list(BuyerOrderPhase.HISTORICAL,
+    BuyerOrdersPhaseState(BuyerOrderPreviewData.historical, loaded = true)))
+
+@Preview(name = "Pedidos · Vacío, búsqueda pendiente y error", showBackground = true, widthDp = 360, heightDp = 840)
+@Composable
+private fun BuyerOrdersStatesPreview() = Column {
+    Box(Modifier.height(260.dp)) { ListPreview(BuyerOrderPreviewData.list(BuyerOrderPhase.ACTIVE, BuyerOrdersPhaseState(loaded = true))) }
+    Box(Modifier.height(260.dp)) { ListPreview(BuyerOrderPreviewData.list(BuyerOrderPhase.HISTORICAL,
+        BuyerOrdersPhaseState(nextCursor = "c", loaded = true))) }
+    Box(Modifier.height(300.dp)) { ListPreview(BuyerOrderPreviewData.list(BuyerOrderPhase.ACTIVE,
+        BuyerOrdersPhaseState(message = "No pudimos cargar tus pedidos. Comprueba la conexión y vuelve a intentarlo."))) }
 }

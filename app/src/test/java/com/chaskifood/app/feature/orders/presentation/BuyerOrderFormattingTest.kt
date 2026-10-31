@@ -41,4 +41,9 @@ class BuyerOrderFormattingTest {
     @Test fun datesUseTheGivenZone() {
         assertEquals("15 ene 2027, 03:00", formatOrderDateTime(1_800_000_000_000, ZoneId.of("America/Lima")))
     }
+
+    @Test fun previewDataIsValidForTheDomainRules() {
+        assertEquals(3, BuyerOrderPreviewData.active.size); assertEquals(4, BuyerOrderPreviewData.detail.statusHistory.size)
+        assertEquals("2× Lomo saltado · 1× Chicha morada 1 L · +1 más", itemPreviewText(BuyerOrderPreviewData.active[0]))
+    }
 }
