@@ -37,6 +37,9 @@ export class OrderEventProcessor {
       if(!order||order.orderId!==event.orderId||order.storeId!==event.storeId||order.businessId!==event.businessId){
         tx.update(ref,{status:"FAILED_PERMANENT",lastError:"ORDER_MISMATCH",updatedAt:Timestamp.fromMillis(time)});return null;
       }
+      if(order.status!=="PENDING_CONFIRMATION"){
+        tx.update(ref,{status:"FAILED_PERMANENT",lastError:"ORDER_NO_LONGER_PENDING",updatedAt:Timestamp.fromMillis(time)});return null;
+      }
       tx.update(ref,{status:"PROCESSING",leaseId,leaseUntil:Timestamp.fromMillis(time+EVENT_LEASE_MS),
         attemptCount:event.attemptCount+1,lastAttemptAt:Timestamp.fromMillis(time),updatedAt:Timestamp.fromMillis(time)});
       return event;
@@ -95,6 +98,8 @@ export class OrderEventProcessor {
     return this.db.runTransaction(async tx=>{
       const eventState=(await tx.get(this.db.doc(`order_events/${eventId}`))).data();
       if(eventState?.leaseId!==leaseId||eventState.leaseUntil.toMillis()<=this.now())throw new RetryOrderEvent();
+      const order=(await tx.get(this.db.doc(`food_orders/${event.orderId}`))).data();
+      if(order?.status!=="PENDING_CONFIRMATION")return false;
       const device=(await tx.get(this.db.doc(`notification_devices/${deviceId}`))).data();
       if(!device?.enabled||device.uid!==uid||device.token!==expected.token)return false;
       try {const scope=await new CommercialAccessService(this.db,this.auth).requireStoreOrderReader(tx,actor,event.storeId);

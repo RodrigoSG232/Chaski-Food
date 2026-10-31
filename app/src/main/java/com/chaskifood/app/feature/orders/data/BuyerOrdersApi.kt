@@ -17,6 +17,7 @@ import retrofit2.http.*
     val delivery: BuyerOrderDeliveryResponse, val items: List<StoreOrderLineResponse>, val subtotalMinor: Long,
     val deliveryFeeMinor: Long, val paymentMethod: String, val statusHistory: List<BuyerOrderStatusResponse>,
     val itemPreview: List<BuyerOrderItemPreviewResponse>, val itemLineCount: Int)
+@Serializable internal data class BuyerOrderCancellationResponse(val contractVersion: Int, val outcome: String, val status: String)
 @Serializable internal data class BuyerOrderDeliveryResponse(val label: String?, val addressText: String, val reference: String?,
     val instructions: String?)
 @Serializable internal data class BuyerOrderStatusResponse(val status: String, val statusKnown: Boolean, val occurredAtEpochMillis: Long)
@@ -27,4 +28,6 @@ internal interface BuyerOrdersApi {
         @Query("cursor") cursor: String?, @Query("pageSize") pageSize: Int = 20): Response<BuyerOrdersResponse>
     @GET("me/orders/{orderId}")
     suspend fun detail(@Header("Authorization") authorization: String, @Path("orderId") orderId: String): Response<BuyerOrderDetailEnvelope>
+    @POST("me/orders/{orderId}/cancel")
+    suspend fun cancel(@Header("Authorization") authorization: String, @Path("orderId") orderId: String): Response<BuyerOrderCancellationResponse>
 }

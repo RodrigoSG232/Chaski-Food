@@ -1,6 +1,7 @@
 import { DeviceRegistry } from "./notifications/deviceRegistry";
 import { StoreOrdersReader } from "./orders/storeOrdersReader";
 import { BuyerOrdersReader } from "./orders/buyerOrdersReader";
+import { OrderCancellationService } from "./orders/orderCancellationService";
 import { OrderService } from "./orders/orderService";
 import { OrderHttpError, parseOrderSubmission } from "./orders/orderRequest";
 import { intentId as validateIntentId } from "./orders/orderModels";
@@ -85,6 +86,23 @@ export function createFoodApiHandler(dependencies: FoodApiDependencies): FoodHtt
       // HU17: own purchases of the authenticated UID, whatever its commercial experience; never a purchase permission.
       const myOrdersPath = /^\/api\/v1\/me\/orders\/?$/.test(request.path);
       const myOrderPath = /^\/api\/v1\/me\/orders\/([^/]+)\/?$/.exec(request.path);
+      const cancelPath = /^\/api\/v1\/me\/orders\/([^/]+)\/cancel\/?$/.exec(request.path);
+      if (cancelPath) {
+        if (request.method !== "POST") { response.status(405).set("Allow","POST").json({error:"METHOD_NOT_ALLOWED"}); return; }
+        try {
+          if (Object.keys(request.query).length || request.body && Object.keys(request.body).length)
+            throw new OrderHttpError("INVALID_REQUEST", 400);
+          const app = dependencies.app(runtime), uid = await verifyBuyerToken(getAuth(app), request.get("authorization"));
+          response.status(200).json(await new OrderCancellationService(getFirestore(app))
+            .buyerCancel(uid, decodeURIComponent(cancelPath[1])));
+        } catch (error) {
+          if (error instanceof AuthenticationRequired) response.status(401).json({error:"AUTHENTICATION_REQUIRED"});
+          else if (error instanceof OrderHttpError) response.status(error.status).json({error:error.code});
+          else if (error instanceof URIError) response.status(404).json({error:"ORDER_NOT_FOUND"});
+          else response.status(503).json({error:"CANCELLATION_UNAVAILABLE"});
+        }
+        return;
+      }
       if (myOrdersPath || myOrderPath) {
         if (request.method !== "GET") { response.status(405).set("Allow","GET").json({error:"METHOD_NOT_ALLOWED"}); return; }
         try {

@@ -84,10 +84,20 @@ sealed interface BuyerOrderDetailResult {
     data object Unavailable : BuyerOrderDetailResult
 }
 
+sealed interface BuyerOrderCancellationResult {
+    data object Cancelled : BuyerOrderCancellationResult
+    data object NotAllowed : BuyerOrderCancellationResult
+    data object NotFound : BuyerOrderCancellationResult
+    data object AuthenticationRequired : BuyerOrderCancellationResult
+    data object StaleSession : BuyerOrderCancellationResult
+    data object Unavailable : BuyerOrderCancellationResult
+}
+
 interface BuyerOrdersRepository {
     /** Sesión Firebase vigente (null sin sesión); cambia también en un nuevo inicio con el mismo UID. */
     fun observeSession(): Flow<BuyerOrdersSession?>
     fun isCurrent(session: BuyerOrdersSession): Boolean
     suspend fun page(session: BuyerOrdersSession, phase: BuyerOrderPhase, cursor: String? = null): BuyerOrdersResult
     suspend fun detail(session: BuyerOrdersSession, orderId: String): BuyerOrderDetailResult
+    suspend fun cancel(session: BuyerOrdersSession, orderId: String): BuyerOrderCancellationResult
 }

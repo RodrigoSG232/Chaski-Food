@@ -53,6 +53,28 @@ internal class HttpBuyerOrdersRepository @Inject constructor(private val api: Bu
             }
         }
 
+    override suspend fun cancel(session: BuyerOrdersSession, orderId: String): BuyerOrderCancellationResult =
+        guarded(BuyerOrderCancellationResult.StaleSession, BuyerOrderCancellationResult.AuthenticationRequired,
+            BuyerOrderCancellationResult.Unavailable, session) { bearer ->
+            if (!orderId.matches(Regex("[0-9a-f]{64}"))) return@guarded BuyerOrderCancellationResult.NotFound
+            val response = api.cancel(bearer, orderId)
+            if (!isCurrent(session)) return@guarded BuyerOrderCancellationResult.StaleSession
+            when (response.code()) {
+                200 -> {
+                    val body = requireNotNull(response.body())
+                    require(body.contractVersion == 1)
+                    when (body.outcome) {
+                        "CANCELLED" -> { require(body.status == "CANCELLED"); BuyerOrderCancellationResult.Cancelled }
+                        else -> BuyerOrderCancellationResult.Unavailable
+                    }
+                }
+                409 -> BuyerOrderCancellationResult.NotAllowed
+                404 -> BuyerOrderCancellationResult.NotFound
+                401 -> BuyerOrderCancellationResult.AuthenticationRequired
+                else -> BuyerOrderCancellationResult.Unavailable
+            }
+        }
+
     /** Token por sesión, timeout y traducción de fallos; un contrato inesperado nunca se presenta como dato válido. */
     private suspend fun <T> guarded(stale: T, auth: T, unavailable: T, session: BuyerOrdersSession, call: suspend (String) -> T): T {
         if (!isCurrent(session)) return stale

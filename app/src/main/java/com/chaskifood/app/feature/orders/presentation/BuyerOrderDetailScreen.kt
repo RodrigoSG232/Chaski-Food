@@ -17,6 +17,9 @@ import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -32,6 +35,7 @@ import com.chaskifood.app.feature.cart.presentation.formatCartPrice
 import com.chaskifood.app.feature.orders.domain.BuyerOrderDetail
 import com.chaskifood.app.ui.components.ChaskiAppBar
 import com.chaskifood.app.ui.components.ChaskiButtonVariant
+import com.chaskifood.app.ui.components.ChaskiButton
 import com.chaskifood.app.ui.theme.*
 
 /** Detalle histórico de una compra propia (HU17). Se actualiza al abrir, al volver a la app y al deslizar hacia abajo. */
@@ -39,13 +43,20 @@ import com.chaskifood.app.ui.theme.*
 fun BuyerOrderDetailScreen(onBack: () -> Unit, viewModel: BuyerOrderDetailViewModel = hiltViewModel()) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     LifecycleResumeEffect(viewModel) { viewModel.refresh(); onPauseOrDispose { } }
-    BuyerOrderDetailContent(state, onBack, onRefresh = viewModel::refresh)
+    BuyerOrderDetailContent(state, onBack, onRefresh = viewModel::refresh, onCancel = viewModel::cancel)
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-internal fun BuyerOrderDetailContent(state: BuyerOrderDetailUiState, onBack: () -> Unit, onRefresh: () -> Unit) {
+internal fun BuyerOrderDetailContent(state: BuyerOrderDetailUiState, onBack: () -> Unit, onRefresh: () -> Unit,
+    onCancel: () -> Unit = {}) {
     val detail = state.detail
+    var confirmCancellation by remember { mutableStateOf(false) }
+    if (confirmCancellation) AlertDialog(onDismissRequest = { confirmCancellation = false },
+        title = { Text("Cancelar pedido") },
+        text = { Text("¿Confirmas que deseas cancelar este pedido?") },
+        confirmButton = { TextButton(onClick = { confirmCancellation = false; onCancel() }) { Text("Confirmar") } },
+        dismissButton = { TextButton(onClick = { confirmCancellation = false }) { Text("Volver") } })
     Scaffold(containerColor = ChaskiBackground, topBar = {
         ChaskiAppBar(title = detail?.let { "Pedido #${shortOrderId(it.summary.orderId)}" } ?: "Detalle del pedido", onBackClick = onBack)
     }) { padding ->
@@ -56,7 +67,8 @@ internal fun BuyerOrderDetailContent(state: BuyerOrderDetailUiState, onBack: () 
                     "Por seguridad, cerramos la vista al cambiar de cuenta o cerrar sesión.")
                 state.notFound -> OrdersMessage(Icons.Filled.SearchOff, "No encontramos este pedido",
                     "Puede que no exista o que no pertenezca a esta cuenta.", "Volver a mis pedidos", ChaskiButtonVariant.Outlined, onBack)
-                detail != null -> DetailBody(detail, state.message, onRefresh)
+                detail != null -> DetailBody(detail, state.message, state.notice, state.cancelling, onRefresh,
+                    { confirmCancellation = true })
                 state.message != null -> OrdersMessage(Icons.Filled.WifiOff, "No pudimos cargar el pedido", state.message,
                     "Reintentar", ChaskiButtonVariant.Primary, onRefresh)
                 else -> OrdersLoading("Cargando el pedido…")
@@ -66,7 +78,8 @@ internal fun BuyerOrderDetailContent(state: BuyerOrderDetailUiState, onBack: () 
 }
 
 @Composable
-private fun DetailBody(detail: BuyerOrderDetail, message: String?, onRetry: () -> Unit) {
+private fun DetailBody(detail: BuyerOrderDetail, message: String?, notice: String?, cancelling: Boolean,
+    onRetry: () -> Unit, onCancel: () -> Unit) {
     val summary = detail.summary
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(ChaskiDimens.SpacingLg),
         verticalArrangement = Arrangement.spacedBy(ChaskiDimens.SpacingMd)) {
@@ -84,6 +97,12 @@ private fun DetailBody(detail: BuyerOrderDetail, message: String?, onRetry: () -
                     style = MaterialTheme.typography.bodySmall, color = ChaskiTextTertiary)
             }
         }
+        if (notice != null) item("notice") { DetailCard { Text(notice, color = ChaskiTextPrimary) } }
+        if (summary.status == "PENDING_CONFIRMATION")
+            item("cancel-action") {
+                ChaskiButton("Cancelar pedido", onClick = onCancel, enabled = !cancelling,
+                    variant = ChaskiButtonVariant.Outlined)
+            }
         item("history") {
             Section("HISTORIAL DE ESTADOS")
             DetailCard(spacing = 0.dp) {
