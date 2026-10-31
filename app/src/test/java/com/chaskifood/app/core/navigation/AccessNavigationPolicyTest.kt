@@ -147,4 +147,19 @@ class AccessNavigationPolicyTest {
             assertFalse(AccessNavigationPolicy.allows(access, "$base?storeId={storeId}", "business", "foreign"))
             assertFalse(AccessNavigationPolicy.allows(access, "$base?storeId={storeId}", "foreign", "two"))
         }
+    }
+
+    @Test fun `HU17 compras propias en cualquier experiencia sin conceder compras nuevas`() {
+        val personal = listOf(ChaskiDestinations.MY_ORDERS, ChaskiDestinations.ORDER_DETAIL)
+        for (access in listOf(resolved(), resolved(owner()), resolved(owner(AccessBusinessStatus.SUSPENDED)),
+            resolved(stores = listOf("one"), manager = true), resolved(admin = true))) {
+            for (route in personal) assertTrue(route, AccessNavigationPolicy.allows(access, route))
+        }
+        for (access in listOf(resolved(owner()), resolved(stores = listOf("one"), manager = true)))
+            assertFalse(AccessNavigationPolicy.allows(access, ChaskiDestinations.CHECKOUT))
+        for (route in personal) {
+            assertFalse(AccessNavigationPolicy.allows(AccessResolution.SignedOut, route))
+            assertFalse(AccessNavigationPolicy.allows(resolved(), route, businessId = "business"))
+            assertFalse(AccessNavigationPolicy.allows(resolved(), route, storeId = "one"))
+        }
     }}
