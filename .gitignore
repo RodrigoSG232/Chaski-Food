@@ -59,6 +59,12 @@ app/google-services.json
 # Carpetas y revisión excluidas del repositorio
 /firebase/
 /Export/
-/docs/
+# docs/: solo se versiona la documentación definitiva; lo demás (HU04_PLAN, borradores) queda local.
+/docs/*
+!/docs/ARCHITECTURE.md
+!/docs/GUIA_DESARROLLO.md
+!/docs/ESTADO_IMPLEMENTACION.md
+!/docs/HU16_DECISIONES_Y_REQUISITOS.md
+!/docs/HU34_DECISIONES_Y_REQUISITOS.md
 /contexto/
 /revision-ux.md

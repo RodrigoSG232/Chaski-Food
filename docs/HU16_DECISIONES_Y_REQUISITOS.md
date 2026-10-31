@@ -1,5 +1,7 @@
 # HU16 — Confirmar pedido: decisiones y requisitos
 
+> **Registro histórico de decisiones (HU16).** Conserva el porqué de cada decisión y la cronología de implementación y publicación. El estado vigente, la arquitectura y los pendientes están en [ESTADO_IMPLEMENTACION](ESTADO_IMPLEMENTACION.md) y [ARCHITECTURE](ARCHITECTURE.md); ante cualquier diferencia prevalecen esos documentos y el código. Las menciones a «docs ignorado» o a `checkoutApi` intacta son históricas: hoy este archivo está versionado y `checkoutApi` fue eliminada (31-10-2026).
+
 > Estado de implementación y evidencia vigente: sección 17 (HU16-8). Las secciones 1–16 conservan el antecedente de decisiones/diseño.
 
 Actualización: 2026-10-29 (America/Lima). Base verificada: ramaDante, `bc71bcc638cb2859f8047b6b943b2026254bd044`. Antecedente documental: 1e9d45b9960b71f9a86510c962949d72a1ebd416.
@@ -12,7 +14,7 @@ Estados: **APROBADO** = acuerdo explícito de Etapa 2; **EXISTENTE** = comprobad
 
 **APROBADO.** Como cliente, quiero confirmar una compra validada para generar formalmente mi pedido y enviarlo al establecimiento correspondiente.
 Backend principal foodApi. Confirmación autoritativa, recuperación, snapshots, carrito protegido, bandeja persistente, aviso interno y FCM de nuevo pedido. CASH_ON_DELIVERY y PEN; disponibilidad AVAILABLE/OUT_OF_STOCK. Sin inventario cuantitativo, reservas ni límites comerciales arbitrarios. Controles técnicos de tipos, tamaños razonables y desbordamiento por concretar.
-Fuentes: [CSV](../contexto/Copia%20de%20Planificacion_Chaski_Food_CE.xlsm%20-%20PLANIFICACION%20%281%29.csv), HU16 registros lógicos 87–92; [caso original](../contexto/Copia%20de%20Caso_Chaski_Food.pdf), páginas 2–4; [contexto HU15](HU15_CONTEXTO_TECNICO_IA.md), [guía HU15](HU15_GUIA_RAPIDA_EQUIPO.md), [README](../README.md), [arquitectura](ARCHITECTURE.md), [AGENTS](../AGENTS.md), [HU34](HU34_DECISIONES_Y_REQUISITOS.md). Informe de Etapa 1 en la conversación, sin ruta de archivo inventada. ARCHITECTURE/ESTADO conservan base anterior a HU15: no son evidencia vigente de ausencia de Checkout ni se actualizan aquí.
+Fuentes: CSV de planificación original (local, `contexto/`), HU16 registros lógicos 87–92; caso original (PDF local, `contexto/`), páginas 2–4; contexto y guía HU15 (integrados en [arquitectura](ARCHITECTURE.md) y [guía de desarrollo](GUIA_DESARROLLO.md)), [README](../README.md), [arquitectura](ARCHITECTURE.md), [AGENTS](../AGENTS.md), [HU34](HU34_DECISIONES_Y_REQUISITOS.md). Informe de Etapa 1 en la conversación, sin ruta de archivo inventada. ARCHITECTURE/ESTADO conservan base anterior a HU15: no son evidencia vigente de ausencia de Checkout ni se actualizan aquí.
 
 ## 2. CA01–CA06 originales
 
