@@ -1,101 +1,33 @@
-# Chasqui Food: desarrollo local y Checkout HU15
+# Chasqui Food
 
-Esta guía usa el backend `foodApi` de `functions/`. `checkoutApi` es otro despliegue y no forma parte de este paquete.
+App Android de delivery (Kotlin + Jetpack Compose) con backend `foodApi` en Firebase Cloud Functions v2 (TypeScript). Clientes descubren locales y piden con pago contra entrega; propietarios gestionan negocios y catálogo; responsables de local reciben pedidos; el administrador de Chasqui aprueba y supervisa.
 
-## Requisitos
+**Estado (31-10-2026):** HU15 (revisión de compra), HU16 (confirmar pedido con avisos) y HU34 (acceso según permisos) publicadas y validadas en el proyecto Firebase `chaski-food-9adba`. Siguen HU17–HU22.
 
-- JDK 21, Android SDK con plataforma 37 y Android Emulator o un dispositivo con ADB.
-- Node.js 22 y pnpm 11.25.0 (`node --version` y `pnpm --version`). El Firebase CLI está en las dependencias de desarrollo de `functions/`.
-- Gradle Wrapper incluido en el repositorio; no hace falta instalar Gradle globalmente.
+## Qué leer primero
+| Orden | Documento | Para qué |
+|---|---|---|
+| 1 | [docs/ESTADO_IMPLEMENTACION.md](docs/ESTADO_IMPLEMENTACION.md) | Qué está hecho, estado de Cloud y **todos los pendientes** (§4). |
+| 2 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Cómo funciona: Android, foodApi, Firestore, reglas, avisos y entornos LOCAL/CONECTADO. |
+| 3 | [docs/GUIA_DESARROLLO.md](docs/GUIA_DESARROLLO.md) | Comandos, pruebas, metodología para nuevas historias, despliegues autorizados, Git e interfaces. |
+| 4 | [docs/DECISIONES.md](docs/DECISIONES.md) | Decisiones aprobadas que siguen vigentes (pedidos, avisos, roles, responsables, interfaz). |
 
-Desde `functions/`, `pnpm install --frozen-lockfile` instala las dependencias y `pnpm run build` genera `lib/`. El código de `src/`, las pruebas de `test/`, `package.json`, el lockfile, `pnpm-workspace.yaml` y `tsconfig.json` están versionados. `lib/`, `node_modules/` y `.secret.local` son locales. `firebase.json` define `source: functions`, `codebase: food-local` y los emuladores.
+Las instrucciones para asistentes de IA (`AGENTS.md` y `CLAUDE.md`) se comparten internamente en el equipo y no se versionan.
 
-## Elegir Firebase para Debug
-
-El plugin Google Services usa `app/src/debug/google-services.json` antes que `app/google-services.json`. Ambos nombres están ignorados por Git. La plantilla versionada `app/src/debug/google-services.demo.json` no se usa hasta copiarla con el nombre activo. Gradle comprueba el proyecto y el paquete antes de compilar Debug; nunca cambia un JSON personal.
-
-- **LOCAL:** usa la plantilla demo en `app/src/debug/google-services.json` y compila con `-PchaskiFirebaseMode=LOCAL` (valor predeterminado). Si ya tienes un JSON activo, respáldalo fuera del repositorio antes de cambiarlo. En un clon nuevo sin archivo activo:
-
-  ```powershell
-  Copy-Item app/src/debug/google-services.demo.json app/src/debug/google-services.json
-  ```
-
-- **CONECTADO:** coloca en la misma ruta el JSON legítimo del proyecto `chaski-food-9adba`, para el paquete `com.chaskifood.app`. Solicítalo por el canal interno del equipo; no lo publiques en Git ni sustituyas el de otra persona. Necesitas una cuenta de prueba habilitada y datos de prueba autorizados en ese proyecto. Comprueba el modo al compilar: instalar un APK LOCAL con JSON real provoca un cierre al inicio.
-
-Si existe también `app/google-services.json`, Debug prefiere el de `app/src/debug/`; cuando falta el de Debug, usa el de la raíz de `app/`. Conserva un solo archivo activo conocido para evitar confusiones. Release sigue con URLs no configuradas y no está preparado para distribución.
-
-## LOCAL con Firebase Emulator
-
-Desde `functions/`:
-
+## Inicio rápido
 ```powershell
-pnpm install --frozen-lockfile
-pnpm run build
-$env:CHASKI_ROUTE_FIXTURE = 'enabled'
-pnpm run emulators
+# LOCAL (emuladores, proyecto demo-chaski-hu15) — detalles en docs/GUIA_DESARROLLO.md §2.1
+Copy-Item app/src/debug/google-services.demo.json app/src/debug/google-services.json   # solo si no tienes uno propio
+pnpm --dir functions install --frozen-lockfile; pnpm --dir functions run build
+$env:CHASKI_ROUTE_FIXTURE = 'enabled'; pnpm --dir functions run emulators
+.\gradlew.bat :app:assembleDebug -PchaskiFirebaseMode=LOCAL
+
+# CONECTADO (Firebase real; requiere el google-services.json legítimo, nunca en Git)
+.\gradlew.bat :app:assembleDebug "-PchaskiFirebaseMode=CONECTADO" "-PchaskiConnectedProjectId=chaski-food-9adba" "-PchaskiCheckoutApiBaseUrl=https://foodapi-u65lcqarqa-tl.a.run.app/api/v1/"
 ```
 
-El último comando usa **solo** `demo-chaski-hu15`: Auth en `127.0.0.1:9099`, Firestore en `127.0.0.1:8089` y Functions en `127.0.0.1:5001`. Antes de iniciarlo, crea `functions/.secret.local` con un valor **ficticio** `HEIGIT_API_KEY=local-fixture-only` si todavía no existe; nunca sobrescribas un secreto local de otra persona. La opción `CHASKI_ROUTE_FIXTURE=enabled` produce rutas SIMULATED sin llamar a HeiGIT. El archivo de secreto no se versiona. No utilices el proyecto Firebase real para estas pruebas.
-
-En otra terminal, desde la raíz del repositorio:
-
-```powershell
-.\gradlew.bat assembleDebug -PchaskiFirebaseMode=LOCAL
-adb install -r app/build/outputs/apk/debug/app-debug.apk
-```
-
-En Android Emulator, `10.0.2.2` apunta al equipo que ejecuta los emuladores. En un teléfono físico, `127.0.0.1` apunta al propio teléfono; para usar los emuladores del equipo con ADB, ejecuta `adb reverse tcp:9099 tcp:9099`, `adb reverse tcp:8089 tcp:8089` y `adb reverse tcp:5001 tcp:5001`, y compila también con `-PchaskiEmulatorHost=127.0.0.1`. Estas redirecciones requieren que el teléfono siga conectado. El laboratorio HU15 no inicia Storage; las imágenes u otras funciones de Storage no forman parte de esta prueba.
-
-Las pruebas de `functions/test/*.emulator.ts` y `CheckoutEmulatorFixture` crean datos ficticios para sus casos y los aíslan en el proyecto demo. No existe todavía un cargador de datos para recorrer manualmente toda la aplicación LOCAL: Checkout también necesita un carrito en Room y una dirección seleccionada, además de documentos y una cuenta ficticia. No reutilices datos reales para prepararlo.
-
-## CONECTADO con `foodApi` publicada
-
-Con el JSON Debug legítimo seleccionado, compila desde la raíz:
-
-```powershell
-.\gradlew.bat assembleDebug `
-  -PchaskiFirebaseMode=CONECTADO `
-  -PchaskiConnectedProjectId=chaski-food-9adba `
-  -PchaskiCheckoutApiBaseUrl=https://foodapi-u65lcqarqa-tl.a.run.app/api/v1/
-adb install -r app/build/outputs/apk/debug/app-debug.apk
-```
-
-En este modo Auth y Firestore usan Firebase real, y Checkout envía el Firebase ID Token a los endpoints HTTPS de `foodApi`. No se necesita una clave HeiGIT en Android. Usa únicamente cuentas y datos de prueba autorizados; revisar Checkout no crea pedidos; la confirmación HU16 sí crea un pedido y solo debe probarse con autorización y datos de prueba. En un dispositivo físico no se necesita `adb reverse` para CONECTADO. Al alternar APKs LOCAL/CONECTADO con el mismo `applicationId`, `adb install -r` conserva los datos locales: verifica la sesión, dirección y carrito antes de probar; no borres datos de otra persona.
-
-## Pruebas y nuevas rutas del backend
-
-```powershell
-cd functions
-pnpm run build
-pnpm test
-# Con los tres emuladores LOCAL ya iniciados en otra terminal:
-pnpm run test:emulator
-```
-
-Las pruebas JVM Android se ejecutan desde la raíz con `.\gradlew.bat :app:testDebugUnitTest` y las propiedades del modo elegido. Las instrumentadas requieren un dispositivo o Android Emulator; `FirebaseCheckoutRepositoryEmulatorTest` utiliza el proyecto demo y los tres emuladores. Las pruebas HTTP usan datos ficticios y no deben apuntar a producción.
-
-Para agregar un endpoint, conserva `foodApi` como entrada HTTP en `functions/src/index.ts`, separa validación, política y acceso a datos en `functions/src/`, exige identidad cuando corresponda y añade pruebas en `functions/test/`. Compila y prueba con el proyecto demo antes de proponer un despliegue. El despliegue selectivo del **codebase `food-local`**, previa revisión y autorización del equipo, se prepara desde `functions/` con:
-
-```powershell
-pnpm exec firebase deploy --config ../firebase.json --only functions:food-local --project chaski-food-9adba
-```
-
-Ese comando es una referencia para una futura operación autorizada; no uses `--force` y revisa cualquier propuesta de eliminación del CLI. `checkoutApi` pertenece a otro codebase y no debe modificarse.
-
-
-## Verificación local del paquete Functions antes de publicar
-
-Con Node 22 y pnpm 11.25.0, `pnpm --dir functions run build` limpia únicamente el directorio generado `functions/lib/` y recompila TypeScript. `pnpm --dir functions run verify:package` enumera los archivos con el mismo mecanismo del Firebase CLI fijado, exige el entrypoint y los manifiestos, y rechaza archivos inesperados. No consulta Cloud, no lee valores secretos y no genera un archivo de subida.
-
-Los hooks `predeploy` de `food-local` ejecutan ambas comprobaciones en ese orden y detienen la operación si fallan. Las exclusiones explícitas de `firebase.json` protegen configuraciones privadas, secretos locales, dependencias, logs y pruebas; `.gitignore` por sí solo no protege el paquete. Se conserva `scripts/build.cjs` para que una compilación del paquete en Cloud Build siga funcionando. No se modifican los permisos de scripts de pnpm ni el lockfile.
-
-Estas comprobaciones no autorizan un despliegue. HU34/HU16 todavía requieren habilitación coordinada del backend, Android CONECTADO y FCM real. `checkoutApi` permanece intacta; su retirada definitiva se hará únicamente después de verificar el reemplazo por `foodApi` y la ausencia de consumidores dependientes, con autorización específica.
-
-
-## HU34/HU16: preparación CONECTADO (B1)
-
-El código local de `foodApi` admite acceso comercial, confirmación/recuperación y bandeja con los mismos servicios de identidad, autorización y transacciones de LOCAL. CLOUD exige señales del runtime, `FUNCTION_TARGET=foodApi`, proyecto `chaski-food-9adba` y ausencia de emuladores/fixtures. Android exige el proyecto y la URL HTTPS autorizados; las guardas HU34 permanecen activas incluso si la configuración falla. No existe fallback entre entornos. Release continúa cerrado.
-
-Esto no acredita la versión efectivamente publicada. Antes de probar en Cloud se requiere inspección/despliegue autorizados, reconciliar reglas/índices y verificar compatibilidad de datos. Los tests de política CLOUD usan adaptadores demo explícitos: no ejecutan servicios Cloud. Para las suites HTTP con datos compartidos usa `node --test --test-concurrency=1 lib/test/*.emulator.js` desde `functions/`, en un laboratorio demo limpio; las invitaciones ficticias fijas pueden conservar revisiones entre campañas.
-
-B2 sigue pendiente: no se habilitaron FCM real, tokens reales, el registro de dispositivos en CLOUD ni el notifier Cloud. La bandeja HTTP es independiente del push. `checkoutApi` y sus datos históricos permanecen intactos; su retirada futura requiere verificar reemplazo y ausencia de consumidores y una autorización específica.
+## Reglas básicas
+- Probar en LOCAL antes de CONECTADO. **Ningún cambio en Cloud** (Functions, reglas, índices, datos, IAM, secretos) sin autorización humana explícita.
+- La autorización la decide el backend (foodApi + reglas de Firestore), nunca la app.
+- `checkoutApi` fue eliminada: todo el backend es `foodApi` (`functions/`).
+- No subir credenciales, `google-services.json`, `.secret.local`, tokens ni datos personales.
