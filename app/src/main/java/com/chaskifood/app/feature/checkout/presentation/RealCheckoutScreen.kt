@@ -3,7 +3,12 @@ package com.chaskifood.app.feature.checkout.presentation
 import com.chaskifood.app.core.navigation.LocalProtectedAction
 import com.chaskifood.app.core.navigation.LocalNavigationAccess
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.shape.RoundedCornerShape
+import com.chaskifood.app.ui.theme.ChaskiBorder
+import com.chaskifood.app.ui.theme.ChaskiSurface
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
@@ -70,10 +75,13 @@ fun RealCheckoutScreen(
     viewModel: CheckoutViewModel = hiltViewModel(),
     recoveryOnly: Boolean = false,
     onOpenOrder: (String) -> Unit = {},
+    onPurchaseFinished: () -> Unit = onBack,
 ) {
     val authorize = LocalProtectedAction.current
     val origin = LocalNavigationAccess.current?.current()?.origin
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val purchased = state.confirmation is CheckoutConfirmation.Success
+    BackHandler(enabled = purchased, onBack = onPurchaseFinished)
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner, viewModel, origin, recoveryOnly) {
         val observer = LifecycleEventObserver { _, event ->
@@ -88,8 +96,10 @@ fun RealCheckoutScreen(
         modifier = modifier,
         containerColor = ChaskiBackground,
         // «Revisar compra» antes de confirmar; tras una confirmación exitosa (directa o recuperada), «Pedido enviado».
-        topBar = { ChaskiAppBar(title = if (state.confirmation is CheckoutConfirmation.Success) "Pedido enviado" else "Revisar compra",
-            onBackClick = onBack) },
+        // «Confirmar pedido» antes de enviar; tras el éxito (directo o recuperado), «Pedido enviado» y una compra ya
+        // terminada no vuelve a la revisión: Atrás sale a la pantalla principal.
+        topBar = { ChaskiAppBar(title = when { purchased -> "Pedido enviado"; recoveryOnly -> "Recuperar compra"; else -> "Confirmar pedido" },
+            onBackClick = if (purchased) onPurchaseFinished else onBack) },
     ) { innerPadding ->
         LazyColumn(
             modifier = Modifier.fillMaxSize().padding(innerPadding),
@@ -352,14 +362,15 @@ private fun OrderSentPanel(orderId: String, status: String, storeName: String, t
             Text("El local revisará tu pedido. Puedes consultar su estado cuando quieras.", textAlign = TextAlign.Center,
                 style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-        Surface(shape = MaterialTheme.shapes.medium, tonalElevation = 1.dp) {
-            Column(Modifier.fillMaxWidth().padding(ChaskiDimens.SpacingLg), verticalArrangement = Arrangement.spacedBy(ChaskiDimens.SpacingSm)) {
+        // Frame 06 aprobado: tarjeta blanca con borde (sin tinte tonal de Material).
+        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(ChaskiSurface)
+            .border(1.dp, ChaskiBorder, RoundedCornerShape(12.dp)).padding(ChaskiDimens.SpacingLg),
+            verticalArrangement = Arrangement.spacedBy(ChaskiDimens.SpacingSm)) {
                 Text("Pedido #${shortOrderId(orderId)}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                 BuyerOrderStatusChip(status, known = true)
                 ReceiptRow("Local", storeName)
                 ReceiptRow("Pago", "Efectivo contra entrega")
                 ReceiptRow("Total", formatCartPrice(totalMinor), bold = true)
-            }
         }
         if (!cartConsumed) Text("Conservamos tu carrito porque cambió después de la revisión.",
             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)

@@ -132,7 +132,7 @@ class CheckoutOrderHttpEmulatorTest {
                 compose.onNode(hasScrollAction()).performScrollToNode(hasText("Efectivo al recibir"))
                 compose.onNode(SemanticsMatcher.expectValue(SemanticsProperties.Role,Role.RadioButton)).performClick()
                 compose.onNode(hasScrollAction()).performScrollToNode(hasText("Confirmar pedido"))
-                compose.onNodeWithText("Confirmar pedido").performClick()
+                compose.onNode(hasText("Confirmar pedido") and hasClickAction()).performClick()
                 if(loseResponse){
                     compose.waitUntil(25000){model.uiState.value.confirmation is CheckoutConfirmation.Pending}
                     assertFalse(room.cartDao().getCart(user.uid)!!.items.isEmpty())

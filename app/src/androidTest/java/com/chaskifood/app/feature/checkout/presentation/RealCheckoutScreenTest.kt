@@ -2,6 +2,7 @@ package com.chaskifood.app.feature.checkout.presentation
 
 import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -134,7 +135,7 @@ class RealCheckoutScreenTest {
         compose.onNodeWithText("Aceptar precios actualizados").performScrollTo().performClick()
         compose.onNode(SemanticsMatcher.expectValue(SemanticsProperties.Role,Role.RadioButton)).performScrollTo().performClick()
         compose.onNode(hasScrollAction()).performScrollToNode(hasText("Confirmar pedido"))
-        compose.onNodeWithText("Confirmar pedido").performClick()
+        compose.onNode(hasText("Confirmar pedido") and hasClickAction()).performClick()
         compose.runOnIdle { model.confirm();assertEquals(1,repository.confirms) }
         compose.onNodeWithText("Verificando confirmación. No vuelvas a enviar otra compra.").assertIsDisplayed()
         compose.runOnIdle { repository.confirmGate!!.complete(Unit) }
@@ -159,7 +160,7 @@ class RealCheckoutScreenTest {
         compose.setContent { ChaskiTheme { RealCheckoutScreen({}, {}, {}, viewModel=model,recoveryOnly=true) } }
         compose.onNodeWithText("Consultar resultado").assertIsDisplayed()
         compose.onNodeWithText("Reintentar intento original").assertDoesNotExist()
-        compose.onNodeWithText("Confirmar pedido").assertDoesNotExist()
+        compose.onNode(hasText("Confirmar pedido") and hasClickAction()).assertDoesNotExist()
         compose.runOnIdle { assertEquals(0,repository.reviews);assertEquals(0,repository.confirms) }
     }
 
