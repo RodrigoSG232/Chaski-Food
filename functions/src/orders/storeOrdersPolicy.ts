@@ -5,12 +5,15 @@ import { validId, digest } from "../access/commercialAccessPolicy";
 
 export const DEFAULT_INBOX_PAGE_SIZE = 20;
 export const MAX_INBOX_PAGE_SIZE = 50; // Transport bound, never a business/order limit.
-export type InboxCursor = Readonly<{v:1;subject:string;storeId:string;anchorId:string}>;
-export function encodeInboxCursor(uid:string,storeId:string,anchorId:string):string {
-  return Buffer.from(JSON.stringify({v:1,subject:digest(["inbox-cursor-v1",uid]),storeId,anchorId})).toString("base64url");
+export type StoreOrderStatus = "PENDING_CONFIRMATION"|"PREPARING";
+export type InboxCursor = Readonly<{v:1;subject:string;storeId:string;status:StoreOrderStatus;anchorId:string}>;
+export function encodeInboxCursor(uid:string,storeId:string,anchorId:string,status:StoreOrderStatus="PENDING_CONFIRMATION"):string {
+  return Buffer.from(JSON.stringify({v:1,subject:digest(["inbox-cursor-v1",uid]),storeId,status,anchorId})).toString("base64url");
 }
-export function parseInboxQuery(query:Record<string,unknown>,uid:string,storeId:string):{pageSize:number;cursor:InboxCursor|null} {
-  if(!validId(storeId)||Object.keys(query).some(k=>!["pageSize","cursor"].includes(k)))throw new OrderHttpError("INVALID_REQUEST",400);
+export function parseInboxQuery(query:Record<string,unknown>,uid:string,storeId:string):{pageSize:number;cursor:InboxCursor|null;status:StoreOrderStatus} {
+  if(!validId(storeId)||Object.keys(query).some(k=>!["pageSize","cursor","status"].includes(k)))throw new OrderHttpError("INVALID_REQUEST",400);
+  const status=query.status??"PENDING_CONFIRMATION";
+  if(status!=="PENDING_CONFIRMATION"&&status!=="PREPARING")throw new OrderHttpError("INVALID_REQUEST",400);
   const size=query.pageSize;
   if(size!==undefined && (typeof size!=="string"||!/^[1-9][0-9]?$/.test(size)||Number(size)>MAX_INBOX_PAGE_SIZE))
     throw new OrderHttpError("INVALID_REQUEST",400);
@@ -19,13 +22,13 @@ export function parseInboxQuery(query:Record<string,unknown>,uid:string,storeId:
     try {
       if(typeof query.cursor!=="string"||query.cursor.length>1024||!/^[A-Za-z0-9_-]+$/.test(query.cursor))throw new Error();
       const raw=JSON.parse(Buffer.from(query.cursor,"base64url").toString("utf8"));
-      if(!raw||Array.isArray(raw)||Object.keys(raw).sort().join(",")!=="anchorId,storeId,subject,v"||raw.v!==1||raw.subject!==digest(["inbox-cursor-v1",uid])||
-        raw.storeId!==storeId||typeof raw.anchorId!=="string"||!/^[0-9a-f]{64}$/.test(raw.anchorId)||
-        encodeInboxCursor(uid,storeId,raw.anchorId)!==query.cursor)throw new Error();
+      if(!raw||Array.isArray(raw)||Object.keys(raw).sort().join(",")!=="anchorId,status,storeId,subject,v"||raw.v!==1||raw.subject!==digest(["inbox-cursor-v1",uid])||
+        raw.storeId!==storeId||raw.status!==status||typeof raw.anchorId!=="string"||!/^[0-9a-f]{64}$/.test(raw.anchorId)||
+        encodeInboxCursor(uid,storeId,raw.anchorId,status)!==query.cursor)throw new Error();
       cursor=Object.freeze(raw);
     }catch{throw new OrderHttpError("INVALID_CURSOR",400);}
   }
-  return {pageSize:size===undefined?DEFAULT_INBOX_PAGE_SIZE:Number(size),cursor};
+  return {pageSize:size===undefined?DEFAULT_INBOX_PAGE_SIZE:Number(size),cursor,status};
 }
 /** Shared order-document validation (HU16 inbox and HU17 buyer reads). Throws on any inconsistency; callers map it to 503. */
 export function validatedOrderCore(id:string,data:Record<string,any>) {
@@ -56,5 +59,17 @@ export function projectPendingOrder(id:string,data:Record<string,any>) {
     return {orderId:id,createdAtEpochMillis:core.createdAtEpochMillis,status:"PENDING_CONFIRMATION" as const,items:core.items,
       subtotalMinor:core.subtotalMinor,deliveryFeeMinor:core.deliveryFeeMinor,totalMinor:core.totalMinor,
       currency:core.currency,paymentMethod:core.paymentMethod};
+  }catch{throw new OrderHttpError("DATA_INCONSISTENT",503,true);}
+}
+export function projectStoreOrder(id:string,data:Record<string,any>,status:StoreOrderStatus) {
+  if(status==="PENDING_CONFIRMATION")return projectPendingOrder(id,data);
+  try {
+    if(data.status!=="PREPARING"||!(data.estimatedReadyAt instanceof Timestamp)||
+      !Number.isInteger(data.estimatedPreparationMinutes)||data.estimatedPreparationMinutes<5||data.estimatedPreparationMinutes>180)throw new Error();
+    const core=validatedOrderCore(id,data);
+    return {orderId:id,createdAtEpochMillis:core.createdAtEpochMillis,status:"PREPARING" as const,items:core.items,
+      subtotalMinor:core.subtotalMinor,deliveryFeeMinor:core.deliveryFeeMinor,totalMinor:core.totalMinor,currency:core.currency,
+      paymentMethod:core.paymentMethod,estimatedPreparationMinutes:data.estimatedPreparationMinutes,
+      estimatedReadyAtEpochMillis:data.estimatedReadyAt.toMillis()};
   }catch{throw new OrderHttpError("DATA_INCONSISTENT",503,true);}
 }
