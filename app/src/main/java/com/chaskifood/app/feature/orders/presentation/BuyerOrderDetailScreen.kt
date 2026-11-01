@@ -100,7 +100,7 @@ private fun DetailBody(detail: BuyerOrderDetail, message: String?, notice: Strin
         if (notice != null) item("notice") { DetailCard { Text(notice, color = ChaskiTextPrimary) } }
         if (summary.status == "PENDING_CONFIRMATION")
             item("cancel-action") {
-                ChaskiButton("Cancelar pedido", onClick = onCancel, enabled = !cancelling,
+                ChaskiButton(if (cancelling) "Cancelando…" else "Cancelar pedido", onClick = onCancel, enabled = !cancelling,
                     variant = ChaskiButtonVariant.Outlined)
             }
         item("history") {
