@@ -26,6 +26,7 @@ class StoreOrdersViewModelTest {
         override fun observeAuthorization(target:StoreOrdersTarget):Flow<StoreOrdersAuthorization> = auth
         override fun isCurrent(context:StoreOrdersContext)=current && auth.value==StoreOrdersAuthorization.Allowed(context)
         override suspend fun page(context:StoreOrdersContext,cursor:String?):StoreOrdersResult {calls++;cursors+=cursor;return block()}
+        override suspend fun respond(context:StoreOrdersContext,orderId:String,decision:StoreOrderDecision)=StoreOrderDecisionResult.Unavailable
     }
     private fun vm(repo:Repo,store:String="store")=StoreOrdersViewModel(repo,SavedStateHandle(mapOf("businessId" to "business","storeId" to store)))
     @Test fun firstLoadRefreshAndPagingUseExistingContextWithoutDuplicateCalls()=runTest {

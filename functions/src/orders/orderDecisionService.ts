@@ -43,7 +43,7 @@ export class OrderDecisionService {
       if (existing) return existing;
       if (!orderCanBeResponded(order.status)) throw new OrderHttpError("ORDER_STATE_CHANGED", 409);
       if (decision.action === "ACCEPT" && (business.status !== "APPROVED" || store.status !== "ACTIVE"))
-        throw new OrderHttpError("ACCEPTANCE_SUSPENDED", 409);
+        throw new OrderHttpError("ACCEPTANCE_SUSPENDED", 423);
       const previous = order.updatedAt instanceof Timestamp ? order.updatedAt.toMillis() : 0;
       const at = Timestamp.fromMillis(Math.max(this.now(), previous + 1));
       const historyRef = orderRef.collection("status_history").doc("manager_decision");

@@ -5,11 +5,47 @@ import com.chaskifood.app.feature.orders.domain.*
 import javax.inject.Inject
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 
 internal class HttpStoreOrdersRepository @Inject constructor(private val api:StoreOrdersApi,
     private val tokens:BuyerTokenSource,private val access:StoreOrdersAccessSource):StoreOrdersRepository {
     override fun observeAuthorization(target:StoreOrdersTarget)=access.observe(target)
     override fun isCurrent(context:StoreOrdersContext)=access.current(context.target)==StoreOrdersAuthorization.Allowed(context)
+    override suspend fun respond(context:StoreOrdersContext,orderId:String,decision:StoreOrderDecision):StoreOrderDecisionResult {
+        if(!isCurrent(context))return StoreOrderDecisionResult.StaleContext
+        if(!orderId.matches(Regex("[0-9a-f]{64}")))return StoreOrderDecisionResult.NotFound
+        return try {
+            withTimeoutOrNull(15_000) {
+                val token=tokens.token(context.ownerUid,context.sessionGeneration)
+                if(!isCurrent(context))return@withTimeoutOrNull StoreOrderDecisionResult.StaleContext
+                val body=buildJsonObject { when(decision) {
+                    is StoreOrderDecision.Accept->{put("action","ACCEPT");put("estimatedPreparationMinutes",decision.estimatedPreparationMinutes)}
+                    is StoreOrderDecision.Reject->{put("action","REJECT");put("reason",decision.reason.name);decision.explanation?.let{put("explanation",it.trim())}}
+                }}
+                val response=api.respond(context.target.storeId,orderId,"Bearer $token",body)
+                if(!isCurrent(context)||!tokens.isCurrent(context.ownerUid,context.sessionGeneration))
+                    return@withTimeoutOrNull StoreOrderDecisionResult.StaleContext
+                when(response.code()) {
+                    200->{val value=requireNotNull(response.body());require(value.contractVersion==1)
+                        when(value.outcome){
+                            "ACCEPTED"->{require(value.status=="PREPARING" && value.estimatedReadyAtEpochMillis!=null)
+                                StoreOrderDecisionResult.Accepted(value.estimatedReadyAtEpochMillis)}
+                            "REJECTED"->{require(value.status=="REJECTED" && value.estimatedReadyAtEpochMillis==null);StoreOrderDecisionResult.Rejected}
+                            else->StoreOrderDecisionResult.Unavailable}}
+                    401->StoreOrderDecisionResult.AuthenticationRequired
+                    403->StoreOrderDecisionResult.AccessDenied
+                    404->StoreOrderDecisionResult.NotFound
+                    409->StoreOrderDecisionResult.StateChanged
+                    423->StoreOrderDecisionResult.AcceptanceSuspended
+                    else->StoreOrderDecisionResult.Unavailable
+                }
+            }?:StoreOrderDecisionResult.Unavailable
+        }catch(cancelled:CancellationException){throw cancelled}
+         catch(_:BuyerSessionChanged){StoreOrderDecisionResult.StaleContext}
+         catch(_:BuyerAuthenticationRequired){StoreOrderDecisionResult.AuthenticationRequired}
+         catch(_:Exception){StoreOrderDecisionResult.Unavailable}
+    }
     override suspend fun page(context:StoreOrdersContext,cursor:String?):StoreOrdersResult {
         if(!isCurrent(context))return StoreOrdersResult.StaleContext
         return try {

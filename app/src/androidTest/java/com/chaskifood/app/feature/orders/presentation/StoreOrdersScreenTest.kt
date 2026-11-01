@@ -65,6 +65,7 @@ class StoreOrdersScreenTest {
         val repo=object:StoreOrdersRepository {
             override fun observeAuthorization(target:StoreOrdersTarget):Flow<StoreOrdersAuthorization> = auth
             override fun isCurrent(context:StoreOrdersContext)=auth.value==StoreOrdersAuthorization.Allowed(context)
+            override suspend fun respond(context:StoreOrdersContext,orderId:String,decision:StoreOrderDecision)=StoreOrderDecisionResult.Unavailable
             override suspend fun page(context:StoreOrdersContext,cursor:String?):StoreOrdersResult {
                 reads++;return StoreOrdersResult.Loaded(StoreOrdersPage("store","Local",listOf(order()),null))
             }
