@@ -95,6 +95,7 @@ private fun DetailBody(detail: BuyerOrderDetail, message: String?, notice: Strin
                     color = ChaskiTextSecondary)
                 Text("Se actualiza al abrir esta pantalla, al volver a la app o al deslizar hacia abajo.",
                     style = MaterialTheme.typography.bodySmall, color = ChaskiTextTertiary)
+                detail.estimatedPreparationMinutes?.let { Text("Tiempo estimado: $it minutos",fontWeight=FontWeight.Bold) }
             }
         }
         if (notice != null) item("notice") { DetailCard { Text(notice, color = ChaskiTextPrimary) } }

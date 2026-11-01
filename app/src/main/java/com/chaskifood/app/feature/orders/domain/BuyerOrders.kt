@@ -45,6 +45,7 @@ data class BuyerOrderStatusEntry(val status: String, val statusKnown: Boolean, v
 class BuyerOrderDetail(
     val summary: BuyerOrderSummary, val storePhone: String?, val pickupAddressText: String, val delivery: BuyerOrderDelivery,
     items: List<StoreOrderLine>, val amounts: OrderAmounts, val paymentMethod: OrderPaymentMethod, statusHistory: List<BuyerOrderStatusEntry>,
+    val estimatedPreparationMinutes:Int?=null,val estimatedReadyAtEpochMillis:Long?=null,
 ) {
     val items: List<StoreOrderLine> = frozenOrderList(items)
     val statusHistory: List<BuyerOrderStatusEntry> = frozenOrderList(statusHistory)
@@ -56,6 +57,9 @@ class BuyerOrderDetail(
         require(summary.itemLineCount == this.items.size && summary.itemPreview ==
             this.items.take(BuyerOrderSummary.MAX_ITEM_PREVIEW).map { BuyerOrderItemPreview(it.name, it.quantity) })
         require(this.statusHistory.isNotEmpty() && this.statusHistory.zipWithNext().all { (a, b) -> a.occurredAtEpochMillis <= b.occurredAtEpochMillis })
+        if(estimatedPreparationMinutes!=null||estimatedReadyAtEpochMillis!=null)require(summary.status=="PREPARING"&&
+            estimatedPreparationMinutes!=null&&estimatedPreparationMinutes in 5..180&&estimatedReadyAtEpochMillis!=null&&
+            estimatedReadyAtEpochMillis in 1..MAX_ORDER_EPOCH_MILLIS)
     }
 }
 

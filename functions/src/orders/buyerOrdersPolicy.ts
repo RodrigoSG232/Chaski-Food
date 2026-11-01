@@ -71,11 +71,16 @@ export function projectBuyerOrderDetail(id: string, data: Record<string, any>, u
       return { status: state.status, statusKnown: state.known, occurredAtEpochMillis };
     }).sort((a, b) => a.occurredAtEpochMillis - b.occurredAtEpochMillis);
     if (statusHistory.length === 0) throw new Error();
+    const estimatedReadyAtEpochMillis = summary.status === "PREPARING" ?
+      (data.estimatedReadyAt instanceof Timestamp ? data.estimatedReadyAt.toMillis() : (()=>{throw new Error();})()) : null;
+    const estimatedPreparationMinutes = summary.status === "PREPARING" && Number.isInteger(data.estimatedPreparationMinutes) &&
+      data.estimatedPreparationMinutes >= 5 && data.estimatedPreparationMinutes <= 180 ? data.estimatedPreparationMinutes : null;
+    if(summary.status === "PREPARING" && estimatedPreparationMinutes === null)throw new Error();
     return { ...summary, storePhone: optionalText(store.phone), pickupAddressText: orderText(pickup.addressText),
       delivery: { label: optionalText(dropoff.label), addressText: orderText(dropoff.addressText),
         reference: optionalText(dropoff.reference), instructions: optionalText(dropoff.instructions) },
       items: core.items, subtotalMinor: core.subtotalMinor, deliveryFeeMinor: core.deliveryFeeMinor,
-      paymentMethod: core.paymentMethod, statusHistory };
+      paymentMethod: core.paymentMethod, statusHistory, estimatedPreparationMinutes, estimatedReadyAtEpochMillis };
   } catch (error) {
     if (error instanceof OrderHttpError) throw error;
     return inconsistent();
