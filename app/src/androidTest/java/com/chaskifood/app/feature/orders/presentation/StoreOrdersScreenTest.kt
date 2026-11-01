@@ -43,6 +43,16 @@ class StoreOrdersScreenTest {
         compose.onNodeWithText("Red no disponible").assertIsDisplayed()
         compose.onNodeWithText("No hay pedidos pendientes en este local.").assertDoesNotExist()
     }
+    @Test fun preparingQueueShowsEstimateUpdateInsteadOfDecisionActions() {
+        val preparing=StoreOrderSummary("3".repeat(64),1800000000000,listOf(StoreOrderLine("p","Plato",1,1000,1000)),
+            OrderAmounts(1000,300,1300),OrderStatus.PREPARING,estimatedPreparationMinutes=25,estimatedReadyAtEpochMillis=1800001500000)
+        compose.setContent{ChaskiTheme{StoreOrdersContent(StoreOrdersUiState(context,loading=false,storeName="Local",
+            orders=listOf(preparing),selectedStatus=OrderStatus.PREPARING))}}
+        compose.onNodeWithText("Ver detalle").performClick()
+        compose.onNodeWithText("Estimación: 25 minutos").assertIsDisplayed()
+        compose.onNodeWithText("Actualizar estimación").assertIsDisplayed()
+        compose.onNodeWithText("Aceptar pedido").assertDoesNotExist()
+    }
     @Test fun moreResultsAndCollapsedDetailsDoNotAddBusinessActions() {
         var more=0
         val state=mutableStateOf(StoreOrdersUiState(context,loading=false,orders=listOf(order()),nextCursor="next"))

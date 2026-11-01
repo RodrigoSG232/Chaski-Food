@@ -23,6 +23,7 @@ class StoreOrdersViewModelTest {
         val auth=MutableStateFlow(initial);var current=true;var calls=0;val cursors=mutableListOf<String?>()
         var next:StoreOrdersResult=StoreOrdersResult.Loaded(StoreOrdersPage("store","Local",emptyList(),null))
         var decision:StoreOrderDecisionResult=StoreOrderDecisionResult.Unavailable
+        var estimate:PreparationEstimateResult=PreparationEstimateResult.Unavailable
         val decisions=mutableListOf<Pair<String,StoreOrderDecision>>()
         var block:suspend()->StoreOrdersResult={next}
         override fun observeAuthorization(target:StoreOrdersTarget):Flow<StoreOrdersAuthorization> = auth
@@ -31,7 +32,7 @@ class StoreOrdersViewModelTest {
         override suspend fun respond(context:StoreOrdersContext,orderId:String,decision:StoreOrderDecision):StoreOrderDecisionResult {
             decisions+=orderId to decision;return this.decision
         }
-        override suspend fun updateEstimate(context:StoreOrdersContext,orderId:String,minutes:Int)=PreparationEstimateResult.Unavailable
+        override suspend fun updateEstimate(context:StoreOrdersContext,orderId:String,minutes:Int)=estimate
     }
     private fun vm(repo:Repo,store:String="store")=StoreOrdersViewModel(repo,SavedStateHandle(mapOf("businessId" to "business","storeId" to store)))
     @Test fun firstLoadRefreshAndPagingUseExistingContextWithoutDuplicateCalls()=runTest {
@@ -56,6 +57,12 @@ class StoreOrdersViewModelTest {
         repo.decision=StoreOrderDecisionResult.AcceptanceSuspended;vm.accept("order",20);runCurrent()
         assertEquals(listOf("order"),vm.state.value.orders.map{it.orderId});assertTrue(vm.state.value.message!!.contains("suspendido"))
         assertNull(vm.state.value.respondingOrderId)
+    }
+    @Test fun estimateUpdateChangesVisiblePreparingOrder()=runTest {
+        val repo=Repo(StoreOrdersAuthorization.Allowed(context()));repo.next=loaded();val vm=vm(repo);runCurrent()
+        repo.estimate=PreparationEstimateResult.Updated(1800002400000);vm.updateEstimate("order",40);runCurrent()
+        assertEquals(40,vm.state.value.orders.single().estimatedPreparationMinutes)
+        assertEquals(1800002400000,vm.state.value.orders.single().estimatedReadyAtEpochMillis)
     }
     @Test fun uidGenerationAndRevocationClearDataAndIgnoreUncooperativeLateResponses()=runTest {
         for(next in listOf(StoreOrdersAuthorization.Denied,StoreOrdersAuthorization.SignedOut,
