@@ -50,8 +50,32 @@ sealed interface StoreOrdersResult {
     data object InvalidCursor:StoreOrdersResult
     data object Unavailable:StoreOrdersResult
 }
+enum class StoreOrderRejectionReason { STORE_BUSY, PRODUCT_UNAVAILABLE, CLOSING_SOON, OTHER }
+sealed interface StoreOrderDecision {
+    data class Accept(val estimatedPreparationMinutes:Int):StoreOrderDecision {
+        init { require(estimatedPreparationMinutes in 5..180) }
+    }
+    data class Reject(val reason:StoreOrderRejectionReason,val explanation:String?=null):StoreOrderDecision {
+        init {
+            if(reason==StoreOrderRejectionReason.OTHER)require(!explanation.isNullOrBlank() && explanation.trim().length in 3..300)
+            else require(explanation==null)
+        }
+    }
+}
+sealed interface StoreOrderDecisionResult {
+    data class Accepted(val estimatedReadyAtEpochMillis:Long):StoreOrderDecisionResult
+    data object Rejected:StoreOrderDecisionResult
+    data object StateChanged:StoreOrderDecisionResult
+    data object AcceptanceSuspended:StoreOrderDecisionResult
+    data object AccessDenied:StoreOrderDecisionResult
+    data object AuthenticationRequired:StoreOrderDecisionResult
+    data object NotFound:StoreOrderDecisionResult
+    data object StaleContext:StoreOrderDecisionResult
+    data object Unavailable:StoreOrderDecisionResult
+}
 interface StoreOrdersRepository {
     fun observeAuthorization(target:StoreOrdersTarget):Flow<StoreOrdersAuthorization>
     fun isCurrent(context:StoreOrdersContext):Boolean
     suspend fun page(context:StoreOrdersContext,cursor:String?=null):StoreOrdersResult
+    suspend fun respond(context:StoreOrdersContext,orderId:String,decision:StoreOrderDecision):StoreOrderDecisionResult
 }
