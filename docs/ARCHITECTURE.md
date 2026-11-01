@@ -87,6 +87,7 @@ Estructura: `foodApiHandler.ts` (enrutado HTTP y traducción de errores) → ser
 | `GET stores/{storeId}/orders` | HU16 | Bandeja paginada del responsable VERIFIED del local. |
 | `GET me/orders?phase=ACTIVE\|HISTORICAL` y `GET me/orders/{orderId}` | HU17 | Compras propias por `buyerUid` (cualquier experiencia); cursor ligado a UID y fase; ajeno = 404. Ver [DECISIONES](DECISIONES.md#consultas-propias-hu17). |
 | `POST me/orders/{orderId}/cancel` | HU18 | Cancelación idempotente del comprador únicamente desde `PENDING_CONFIRMATION`; transición e historial en una transacción. Ajeno = 404, estado no permitido = 409. |
+| `POST stores/{storeId}/orders/{orderId}/decision` | HU19 | Responsable asignado acepta con estimación (`PREPARING`) o rechaza con motivo (`REJECTED`). Compite atómicamente con HU18; suspensión bloquea aceptar, no consultar/rechazar. |
 | `PUT` / `DELETE devices/{installationId}` | HU16 | Registro/retirada del dispositivo FCM (PUT solo responsables con local asignado). |
 | `GET access/facts` | HU34 | Hechos de acceso de la cuenta (propiedad, asignaciones, locales). |
 | `GET access/revision`, `POST access/assignment-revision` | HU34 | Revisiones del índice para control de concurrencia. |
