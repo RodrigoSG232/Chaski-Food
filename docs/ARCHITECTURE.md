@@ -46,7 +46,7 @@ Dirección: Presentation → Domain ← Data. `core/` contiene infraestructura c
 | `feature/discover`, `search`, `home`, `restaurants` | Descubrimiento de locales por dirección/horario/cobertura, búsqueda y detalle de ofertas. |
 | `feature/cart` | **HU14**: carrito por UID en Room con validación remota de oferta. |
 | `feature/checkout` | **HU15/HU16**: revisión de compra (`FirebaseCheckoutRepository`), cotización y elegibilidad (foodApi), confirmación idempotente y recuperación (`CheckoutOrderOperations`, intenciones en Room). |
-| `feature/orders` | Bandeja del responsable (`StoreOrdersScreen`, `HttpStoreOrdersRepository`), compras propias HU17 y cancelación HU18 (`BuyerOrdersScreen`, `BuyerOrderDetailScreen`, `HttpBuyerOrdersRepository`). Las pantallas de seguimiento/valoración siguen siendo **demostrativas**. |
+| `feature/orders` | Bandeja del responsable (`StoreOrdersScreen`, `HttpStoreOrdersRepository`), respuesta HU19, estimación HU20, compras propias HU17 y cancelación HU18 (`BuyerOrdersScreen`, `BuyerOrderDetailScreen`, `HttpBuyerOrdersRepository`). Las pantallas de seguimiento/valoración siguen siendo **demostrativas**. |
 | `feature/menu`, `main` | Contenedor principal y piezas de ejemplo. |
 
 Módulos Hilt (todos en `SingletonComponent`): `AccessDataModule`, `DatabaseModule`, `FirebaseModule`, `NetworkModule`, `NotificationsModule`, `AddressDataModule`, `AuthDataModule`, `BusinessDataModule`, `CartDataModule`, `CatalogDataModule`, `CheckoutDataModule`, `DiscoverDataModule`, `StoreOrdersDataModule`, `SearchDataModule`.
@@ -88,6 +88,7 @@ Estructura: `foodApiHandler.ts` (enrutado HTTP y traducción de errores) → ser
 | `GET me/orders?phase=ACTIVE\|HISTORICAL` y `GET me/orders/{orderId}` | HU17 | Compras propias por `buyerUid` (cualquier experiencia); cursor ligado a UID y fase; ajeno = 404. Ver [DECISIONES](DECISIONES.md#consultas-propias-hu17). |
 | `POST me/orders/{orderId}/cancel` | HU18 | Cancelación idempotente del comprador únicamente desde `PENDING_CONFIRMATION`; transición e historial en una transacción. Ajeno = 404, estado no permitido = 409. |
 | `POST stores/{storeId}/orders/{orderId}/decision` | HU19 | Responsable asignado acepta con estimación (`PREPARING`) o rechaza con motivo (`REJECTED`). Compite atómicamente con HU18; suspensión bloquea aceptar, no consultar/rechazar. |
+| `PUT stores/{storeId}/orders/{orderId}/preparation-estimate` | HU20 | Responsable asignado actualiza la estimación de 5–180 minutos únicamente en `PREPARING`; registra historial e informa mediante outbox a una entrega existente. |
 | `PUT` / `DELETE devices/{installationId}` | HU16 | Registro/retirada del dispositivo FCM (PUT solo responsables con local asignado). |
 | `GET access/facts` | HU34 | Hechos de acceso de la cuenta (propiedad, asignaciones, locales). |
 | `GET access/revision`, `POST access/assignment-revision` | HU34 | Revisiones del índice para control de concurrencia. |
@@ -114,7 +115,7 @@ Estructura: `foodApiHandler.ts` (enrutado HTTP y traducción de errores) → ser
 | `commercial_access_index/{uid_*|email_*}` | Índice privado UID↔correo con revisión | **Solo foodApi**; ningún cliente lo lee |
 | `stores`, `categories`, `products`, `store_product_configs` | Locales, catálogo y precio/disponibilidad por local | Propietario aprobado / responsable VERIFIED según reglas; admin para suspensión |
 | `audit_logs` | Auditoría administrativa y comercial | Admin (reglas) y foodApi |
-| `delivery_quotes`, `order_attempts`, `food_orders` (+`status_history`), `order_events` (+`deliveries`), `notification_devices` | HU15/HU16 | **Solo foodApi**; cerradas a clientes |
+| `delivery_quotes`, `order_attempts`, `food_orders` (+`status_history`, +`estimate_history`), `order_events` (+`deliveries`), `rider_events`, `notification_devices` | HU15–HU20 | **Solo foodApi**; cerradas a clientes |
 | `store_notices` | Bloque de reglas heredado sin datos ni código que lo use (ver pendientes) | — |
 
 Las imágenes de locales/productos se guardan en Storage bajo `businesses/{businessId}/stores|products/...`; Firestore guarda la URL.
