@@ -22,11 +22,15 @@ class StoreOrdersViewModelTest {
     private class Repo(initial:StoreOrdersAuthorization):StoreOrdersRepository {
         val auth=MutableStateFlow(initial);var current=true;var calls=0;val cursors=mutableListOf<String?>()
         var next:StoreOrdersResult=StoreOrdersResult.Loaded(StoreOrdersPage("store","Local",emptyList(),null))
+        var decision:StoreOrderDecisionResult=StoreOrderDecisionResult.Unavailable
+        val decisions=mutableListOf<Pair<String,StoreOrderDecision>>()
         var block:suspend()->StoreOrdersResult={next}
         override fun observeAuthorization(target:StoreOrdersTarget):Flow<StoreOrdersAuthorization> = auth
         override fun isCurrent(context:StoreOrdersContext)=current && auth.value==StoreOrdersAuthorization.Allowed(context)
         override suspend fun page(context:StoreOrdersContext,cursor:String?):StoreOrdersResult {calls++;cursors+=cursor;return block()}
-        override suspend fun respond(context:StoreOrdersContext,orderId:String,decision:StoreOrderDecision)=StoreOrderDecisionResult.Unavailable
+        override suspend fun respond(context:StoreOrdersContext,orderId:String,decision:StoreOrderDecision):StoreOrderDecisionResult {
+            decisions+=orderId to decision;return this.decision
+        }
     }
     private fun vm(repo:Repo,store:String="store")=StoreOrdersViewModel(repo,SavedStateHandle(mapOf("businessId" to "business","storeId" to store)))
     @Test fun firstLoadRefreshAndPagingUseExistingContextWithoutDuplicateCalls()=runTest {
@@ -35,6 +39,22 @@ class StoreOrdersViewModelTest {
         repo.next=loaded("second");vm.loadMore();vm.loadMore();runCurrent()
         assertEquals(listOf(null,"next"),repo.cursors);assertEquals(2,vm.state.value.orders.size)
         repo.next=loaded("new");vm.refresh();runCurrent();assertEquals(listOf("new"),vm.state.value.orders.map{it.orderId})
+    }
+    @Test fun acceptAndRejectRemoveAnsweredOrdersAndExposeConcreteFeedback()=runTest {
+        val repo=Repo(StoreOrdersAuthorization.Allowed(context()));repo.next=loaded();val vm=vm(repo);runCurrent()
+        repo.decision=StoreOrderDecisionResult.Accepted(1_800_000_300_000);vm.accept("order",30);runCurrent()
+        assertTrue(vm.state.value.orders.isEmpty());assertTrue(vm.state.value.message!!.contains("aceptado"))
+        assertEquals(StoreOrderDecision.Accept(30),repo.decisions.single().second)
+
+        repo.next=loaded("other");vm.refresh();runCurrent();repo.decision=StoreOrderDecisionResult.Rejected
+        vm.reject("other",StoreOrderRejectionReason.OTHER,"Sin insumos");runCurrent()
+        assertTrue(vm.state.value.orders.isEmpty());assertTrue(vm.state.value.message!!.contains("rechazado"))
+    }
+    @Test fun suspendedAcceptanceKeepsOrderAvailableForRejection()=runTest {
+        val repo=Repo(StoreOrdersAuthorization.Allowed(context()));repo.next=loaded();val vm=vm(repo);runCurrent()
+        repo.decision=StoreOrderDecisionResult.AcceptanceSuspended;vm.accept("order",20);runCurrent()
+        assertEquals(listOf("order"),vm.state.value.orders.map{it.orderId});assertTrue(vm.state.value.message!!.contains("suspendido"))
+        assertNull(vm.state.value.respondingOrderId)
     }
     @Test fun uidGenerationAndRevocationClearDataAndIgnoreUncooperativeLateResponses()=runTest {
         for(next in listOf(StoreOrdersAuthorization.Denied,StoreOrdersAuthorization.SignedOut,

@@ -9,7 +9,7 @@ import kotlinx.coroutines.flow.*
 
 data class StoreOrdersUiState(val context:StoreOrdersContext?=null,val loading:Boolean=true,val loadingMore:Boolean=false,
     val storeName:String="",val orders:List<StoreOrderSummary> = emptyList(),val nextCursor:String?=null,
-    val message:String?=null,val accessDenied:Boolean=false)
+    val message:String?=null,val accessDenied:Boolean=false,val respondingOrderId:String?=null)
 
 @HiltViewModel
 class StoreOrdersViewModel @Inject constructor(private val repository:StoreOrdersRepository,savedState:SavedStateHandle):ViewModel() {
@@ -18,6 +18,7 @@ class StoreOrdersViewModel @Inject constructor(private val repository:StoreOrder
     private var context:StoreOrdersContext?=null
     private var request=0L
     private var job:Job?=null
+    private var decisionJob:Job?=null
     private val target=runCatching {StoreOrdersTarget(requireNotNull(savedState["businessId"]),requireNotNull(savedState["storeId"]))}.getOrNull()
     init {
         if(target==null)mutable.value=StoreOrdersUiState(loading=false,accessDenied=true,message="El local no es válido.")
@@ -26,7 +27,7 @@ class StoreOrdersViewModel @Inject constructor(private val repository:StoreOrder
                 val checked=if(auth is StoreOrdersAuthorization.Allowed && auth.context.target!=target) StoreOrdersAuthorization.Denied else auth
                 val next=(checked as? StoreOrdersAuthorization.Allowed)?.context
                 if(next!=null && next==context)return@collect
-                job?.cancel();request++;context=next
+                job?.cancel();decisionJob?.cancel();request++;context=next
                 mutable.value=when(checked){
                     is StoreOrdersAuthorization.Allowed->StoreOrdersUiState(context=checked.context)
                     StoreOrdersAuthorization.Verifying->StoreOrdersUiState()
@@ -53,6 +54,37 @@ class StoreOrdersViewModel @Inject constructor(private val repository:StoreOrder
         val c=usableContext()?:return
         val cursor=mutable.value.nextCursor?:return
         fetch(c,cursor)
+    }
+    fun accept(orderId:String,estimatedPreparationMinutes:Int)=respond(orderId,StoreOrderDecision.Accept(estimatedPreparationMinutes))
+    fun reject(orderId:String,reason:StoreOrderRejectionReason,explanation:String?=null)=
+        respond(orderId,StoreOrderDecision.Reject(reason,explanation?.trim()))
+    private fun respond(orderId:String,decision:StoreOrderDecision) {
+        val expected=usableContext()?:return
+        if(decisionJob?.isActive==true || mutable.value.respondingOrderId!=null || mutable.value.orders.none{it.orderId==orderId})return
+        val ticket=request
+        mutable.update{it.copy(respondingOrderId=orderId,message=null)}
+        decisionJob=viewModelScope.launch {
+            val result=try{repository.respond(expected,orderId,decision)}catch(e:CancellationException){throw e}
+                catch(_:Exception){StoreOrderDecisionResult.Unavailable}
+            currentCoroutineContext().ensureActive()
+            if(ticket!=request || context!=expected)return@launch
+            when(result) {
+                is StoreOrderDecisionResult.Accepted->mutable.update{it.copy(orders=it.orders.filterNot{o->o.orderId==orderId},
+                    respondingOrderId=null,message="Pedido aceptado. Ya está en preparación.")}
+                StoreOrderDecisionResult.Rejected->mutable.update{it.copy(orders=it.orders.filterNot{o->o.orderId==orderId},
+                    respondingOrderId=null,message="Pedido rechazado y motivo registrado.")}
+                StoreOrderDecisionResult.StateChanged->mutable.update{it.copy(orders=it.orders.filterNot{o->o.orderId==orderId},
+                    respondingOrderId=null,message="El pedido cambió y ya no está pendiente.")}
+                StoreOrderDecisionResult.AcceptanceSuspended->mutable.update{it.copy(respondingOrderId=null,
+                    message="El negocio o local está suspendido. Puedes rechazar el pedido, pero no aceptarlo.")}
+                StoreOrderDecisionResult.AccessDenied,StoreOrderDecisionResult.AuthenticationRequired,StoreOrderDecisionResult.StaleContext->{
+                    context=null;mutable.value=StoreOrdersUiState(loading=false,accessDenied=true,message="Tu autorización cambió.")}
+                StoreOrderDecisionResult.NotFound->mutable.update{it.copy(orders=it.orders.filterNot{o->o.orderId==orderId},
+                    respondingOrderId=null,message="El pedido ya no está disponible.")}
+                StoreOrderDecisionResult.Unavailable->mutable.update{it.copy(respondingOrderId=null,
+                    message="No pudimos responder el pedido. Comprueba la conexión e inténtalo nuevamente.")}
+            }
+        }
     }
     private fun fetch(expected:StoreOrdersContext,cursor:String?){
         val ticket=++request
