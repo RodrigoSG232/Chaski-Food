@@ -1,5 +1,7 @@
 import { DeviceRegistry } from "./notifications/deviceRegistry";
 import { StoreOrdersReader } from "./orders/storeOrdersReader";
+import { OrderDecisionService } from "./orders/orderDecisionService";
+import { parseOrderDecision } from "./orders/orderDecisionPolicy";
 import { BuyerOrdersReader } from "./orders/buyerOrdersReader";
 import { OrderCancellationService } from "./orders/orderCancellationService";
 import { OrderService } from "./orders/orderService";
@@ -61,6 +63,27 @@ export function createFoodApiHandler(dependencies: FoodApiDependencies): FoodHtt
           }
           else if(error instanceof URIError)response.status(400).json({error:"INVALID_REQUEST"});
           else response.status(503).json({error:"DEVICE_REGISTRY_UNAVAILABLE"});
+        }
+        return;
+      }
+      const decisionPath = /^\/api\/v1\/stores\/([^/]+)\/orders\/([^/]+)\/decision\/?$/.exec(request.path);
+      if (decisionPath) {
+        if (request.method !== "POST") { response.status(405).set("Allow", "POST").json({ error: "METHOD_NOT_ALLOWED" }); return; }
+        try {
+          if (Object.keys(request.query).length) throw new OrderHttpError("INVALID_REQUEST", 400);
+          const app = dependencies.app(runtime), auth = getAuth(app);
+          const actor = await verifyCommercialIdentity(auth, request.get("authorization"));
+          const result = await new OrderDecisionService(getFirestore(app), auth).respond(actor,
+            decodeURIComponent(decisionPath[1]), decodeURIComponent(decisionPath[2]), parseOrderDecision(request.body));
+          response.status(200).json(result);
+        } catch (error) {
+          if (error instanceof AuthenticationRequired) response.status(401).json({ error: "AUTHENTICATION_REQUIRED" });
+          else if (error instanceof OrderHttpError) response.status(error.status).json({ error: error.code });
+          else if (error instanceof CommercialAccessError) {
+            const denied = ["FORBIDDEN", "EMAIL_VERIFICATION_REQUIRED", "AUTHORIZATION_CONFLICT"].includes(error.code);
+            response.status(denied ? 403 : 503).json({ error: denied ? "ACCESS_DENIED" : "AUTHORIZATION_UNAVAILABLE" });
+          } else if (error instanceof URIError) response.status(404).json({ error: "ORDER_NOT_FOUND" });
+          else response.status(503).json({ error: "ORDER_DECISION_UNAVAILABLE" });
         }
         return;
       }
