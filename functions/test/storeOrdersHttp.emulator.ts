@@ -54,6 +54,10 @@ async function page(a:Actor|undefined,store:string,query="") {
 async function decide(a:Actor,store:string,orderId:string,body:Record<string,unknown>) {
   return connectedHttp(app)(a.token,`/stores/${store}/orders/${orderId}/decision`,body,"POST");
 }
+async function updateEstimate(a:Actor,store:string,orderId:string,minutes:unknown) {
+  return connectedHttp(app)(a.token,`/stores/${store}/orders/${orderId}/preparation-estimate`,
+    {estimatedPreparationMinutes:minutes},"PUT");
+}
 before(async()=>{admin=await actor(true,true);await prepare(admin);});
 after(async()=>{await db.terminate();await deleteApp(app);});
 
@@ -75,6 +79,39 @@ test("manager accepts a pending order with an estimate and the transition is ide
   assert.equal(order.estimatedPreparationMinutes,25);assert.equal(order.acceptedByUid,f.manager.uid);
   const history=await db.doc(`food_orders/${id}/status_history/manager_decision`).get();
   assert.equal(history.get("fromStatus"),"PENDING_CONFIRMATION");assert.equal(history.get("toStatus"),"PREPARING");
+});
+test("manager updates a preparing estimate and the preparing inbox exposes the latest value",async()=>{
+  const f=await fixture(),id="ae".repeat(32);await seedOrder(f.store,f.owner.uid,id);
+  await decide(f.manager,f.store,id,{action:"ACCEPT",estimatedPreparationMinutes:25});
+  const updated=await updateEstimate(f.manager,f.store,id,40);
+  assert.equal(updated.status,200);assert.equal(updated.body.outcome,"UPDATED");
+  const order=(await db.doc(`food_orders/${id}`).get()).data()!;
+  assert.equal(order.status,"PREPARING");assert.equal(order.estimatedPreparationMinutes,40);
+  assert.equal(order.estimateRevision,1);assert.equal(order.estimateUpdatedByUid,f.manager.uid);
+  const history=await db.doc(`food_orders/${id}/estimate_history/0000000001`).get();
+  assert.equal(history.get("minutes"),40);assert.equal(history.get("actorUid"),f.manager.uid);
+  const preparing=await page(f.manager,f.store,"?status=PREPARING");
+  assert.equal(preparing.status,200);assert.equal(preparing.body.orders[0].orderId,id);
+  assert.equal(preparing.body.orders[0].estimatedPreparationMinutes,40);
+});
+test("equal estimates are idempotent and delivery synchronization is recorded once",async()=>{
+  const f=await fixture(),id="af".repeat(32);await seedOrder(f.store,f.owner.uid,id);
+  await decide(f.manager,f.store,id,{action:"ACCEPT",estimatedPreparationMinutes:20});
+  await db.doc(`food_orders/${id}`).update({deliveryId:"delivery-1"});
+  const first=await updateEstimate(f.manager,f.store,id,35),repeated=await updateEstimate(f.manager,f.store,id,35);
+  assert.equal(first.body.outcome,"UPDATED");assert.equal(repeated.body.outcome,"UNCHANGED");
+  assert.equal(first.body.estimatedReadyAtEpochMillis,repeated.body.estimatedReadyAtEpochMillis);
+  assert.equal((await db.doc(`food_orders/${id}`).get()).get("estimateRevision"),1);
+  assert.equal((await db.doc(`rider_events/estimate_${id}_1`).get()).get("status"),"PENDING");
+  assert.equal((await db.collection(`food_orders/${id}/estimate_history`).get()).size,1);
+});
+test("preparation estimate endpoint validates input, state and store authorization",async()=>{
+  const f=await fixture(),id="a0".repeat(32);await seedOrder(f.store,f.owner.uid,id);
+  assert.equal((await updateEstimate(f.manager,f.store,id,4)).status,400);
+  assert.equal((await updateEstimate(f.manager,f.store,id,20)).status,409);
+  await decide(f.manager,f.store,id,{action:"ACCEPT",estimatedPreparationMinutes:20});
+  assert.equal((await updateEstimate(f.manager,f.other,id,30)).status,403);
+  assert.equal((await updateEstimate(f.buyer,f.store,id,30)).status,403);
 });
 test("rejection records a required reason and removes the order from the pending inbox",async()=>{
   const f=await fixture(),id="bd".repeat(32);await seedOrder(f.store,f.owner.uid,id);
