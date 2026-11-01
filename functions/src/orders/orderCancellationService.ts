@@ -1,6 +1,7 @@
 import { Firestore, Timestamp } from "firebase-admin/firestore";
 import { buyerOrderId } from "./buyerOrdersPolicy";
 import { OrderHttpError } from "./orderRequest";
+import { orderEventIdFor } from "./orderService";
 
 function nextTimestamp(order: Record<string, any>): Timestamp {
   const previous = order.updatedAt instanceof Timestamp ? order.updatedAt.toMillis() : 0;
@@ -36,9 +37,14 @@ export class OrderCancellationService {
       // Delivery se implementa en HU22; nunca se cancela silenciosamente una logística ya vinculada.
       if (decision === "LOGISTICS_REQUIRED") throw new OrderHttpError("LOGISTICS_CANCELLATION_REQUIRED", 409);
       const at = nextTimestamp(order);
+      const eventRef = this.db.doc(`order_events/${orderEventIdFor(id)}`);
+      const event = (await tx.get(eventRef)).data();
       tx.update(ref, { status: "CANCELLED", updatedAt: at, cancelledAt: at, cancelledByUid: uid });
       tx.create(ref.collection("status_history").doc("buyer_cancelled"),
         { schemaVersion: 1, fromStatus: "PENDING_CONFIRMATION", toStatus: "CANCELLED", actorUid: uid, occurredAt: at });
+      if (event && !["SENT", "FAILED_PERMANENT", "EXHAUSTED", "NO_RECIPIENTS"].includes(event.status))
+        tx.update(eventRef, { status: "FAILED_PERMANENT", lastError: "ORDER_CANCELLED_BY_BUYER", leaseId: null,
+          leaseUntil: null, updatedAt: at });
       return { contractVersion: 1, outcome: "CANCELLED", status: "CANCELLED" };
     });
   }

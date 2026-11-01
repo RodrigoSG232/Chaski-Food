@@ -34,12 +34,15 @@ async function seed(key: string, buyerUid: string, status: string) {
     subtotalMinor: 1000, deliveryFeeMinor: 300, totalMinor: 1300, currency: "PEN", paymentMethod: "CASH_ON_DELIVERY" });
   await ref.collection("status_history").doc("initial").set({ schemaVersion: 1, fromStatus: null,
     toStatus: "PENDING_CONFIRMATION", actorUid: buyerUid, occurredAt: at });
-  return { orderId, ref };
+  const eventRef = db.doc(`order_events/new_order_${orderId}`);
+  await eventRef.set({ schemaVersion: 1, type: "NEW_ORDER", orderId, storeId: "store", businessId: "business",
+    status: "PENDING", attemptCount: 0, createdAt: at, updatedAt: at });
+  return { orderId, ref, eventRef };
 }
 after(async () => { await db.terminate(); await deleteApp(app); });
 
 test("only the buyer cancels PENDING_CONFIRMATION; repeated calls keep one historical event", async () => {
-  const buyer = await actor(), other = await actor(), { orderId, ref } = await seed("direct", buyer.uid, "PENDING_CONFIRMATION");
+  const buyer = await actor(), other = await actor(), { orderId, ref, eventRef } = await seed("direct", buyer.uid, "PENDING_CONFIRMATION");
   const path = `/me/orders/${orderId}/cancel`;
   assert.equal((await http(other.token, path, {}, "POST")).status, 404);
   const first = await http(buyer.token, path, {}, "POST");
@@ -48,17 +51,20 @@ test("only the buyer cancels PENDING_CONFIRMATION; repeated calls keep one histo
   assert.equal(first.body.outcome, "CANCELLED"); assert.equal((await ref.get()).get("status"), "CANCELLED");
   const history = await ref.collection("status_history").get();
   assert.equal(history.size, 2); assert.equal(history.docs.find(d => d.id === "buyer_cancelled")?.get("toStatus"), "CANCELLED");
+  assert.equal((await eventRef.get()).get("status"), "FAILED_PERMANENT");
+  assert.equal((await eventRef.get()).get("lastError"), "ORDER_CANCELLED_BY_BUYER");
   assert.equal((await http(buyer.token, `/me/orders/${orderId}`, undefined, "GET")).body.order.status, "CANCELLED");
 });
 
 test("PREPARING and every later stage reject cancellation without creating requests or history", async () => {
   const buyer = await actor();
   for (const status of ["PREPARING", "READY_FOR_PICKUP", "PICKED_UP", "IN_DELIVERY", "COMPLETED"]) {
-    const { orderId, ref } = await seed(status, buyer.uid, status);
+    const { orderId, ref, eventRef } = await seed(status, buyer.uid, status);
     const response = await http(buyer.token, `/me/orders/${orderId}/cancel`, {}, "POST");
     assert.equal(response.status, 409); assert.equal(response.body.error, "CANCELLATION_NOT_ALLOWED");
     assert.equal((await ref.get()).get("status"), status);
     assert.equal((await ref.collection("status_history").get()).size, 1);
+    assert.equal((await eventRef.get()).get("status"), "PENDING");
     assert.equal((await db.doc(`order_cancellation_requests/${orderId}`).get()).exists, false);
   }
   const linked = await seed("linked", buyer.uid, "PENDING_CONFIRMATION");
