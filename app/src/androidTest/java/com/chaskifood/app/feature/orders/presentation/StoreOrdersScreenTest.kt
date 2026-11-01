@@ -29,7 +29,8 @@ class StoreOrdersScreenTest {
         compose.onNodeWithText("2 × Plato de prueba").assertIsDisplayed()
         compose.onNodeWithText("Ver detalle").performScrollTo().performClick()
         compose.onNodeWithText("Efectivo al recibir · PEN").performScrollTo().assertIsDisplayed()
-        for(action in listOf("Aceptar pedido","Rechazar pedido","Preparar","Cancelar pedido"))compose.onNodeWithText(action).assertDoesNotExist()
+        for(action in listOf("Aceptar pedido","Rechazar pedido"))compose.onNodeWithText(action).assertIsDisplayed()
+        for(action in listOf("Preparar","Cancelar pedido"))compose.onNodeWithText(action).assertDoesNotExist()
         compose.onNodeWithText("Teléfono del comprador").assertDoesNotExist()
     }
     @Test fun emptyErrorAndManualRefreshHaveConcreteCallbacks() {
