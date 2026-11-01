@@ -2,7 +2,7 @@
 
 App Android de delivery (Kotlin + Jetpack Compose) con backend `foodApi` en Firebase Cloud Functions v2 (TypeScript). Clientes descubren locales y piden con pago contra entrega; propietarios gestionan negocios y catálogo; responsables de local reciben pedidos; el administrador de Chasqui aprueba y supervisa.
 
-**Estado (31-10-2026):** HU15 (revisión de compra), HU16 (confirmar pedido con avisos) y HU34 (acceso según permisos) publicadas y validadas en el proyecto Firebase `chaski-food-9adba`. Siguen HU17–HU22.
+**Estado (31-10-2026):** HU15, HU16, HU17 y HU34 están publicadas y validadas en el proyecto Firebase `chaski-food-9adba`. HU18 está implementada en rama y pendiente de validación/integración; siguen HU19–HU22.
 
 ## Qué leer primero
 | Orden | Documento | Para qué |

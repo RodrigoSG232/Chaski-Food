@@ -46,7 +46,7 @@ Dirección: Presentation → Domain ← Data. `core/` contiene infraestructura c
 | `feature/discover`, `search`, `home`, `restaurants` | Descubrimiento de locales por dirección/horario/cobertura, búsqueda y detalle de ofertas. |
 | `feature/cart` | **HU14**: carrito por UID en Room con validación remota de oferta. |
 | `feature/checkout` | **HU15/HU16**: revisión de compra (`FirebaseCheckoutRepository`), cotización y elegibilidad (foodApi), confirmación idempotente y recuperación (`CheckoutOrderOperations`, intenciones en Room). |
-| `feature/orders` | Bandeja del responsable (`StoreOrdersScreen`, `HttpStoreOrdersRepository`) y compras propias HU17 (`BuyerOrdersScreen` compartida por la pestaña Pedidos y «Mis compras», `BuyerOrderDetailScreen`, `HttpBuyerOrdersRepository`). Las pantallas de seguimiento/valoración siguen siendo **demostrativas**. |
+| `feature/orders` | Bandeja del responsable (`StoreOrdersScreen`, `HttpStoreOrdersRepository`), compras propias HU17 y cancelación HU18 (`BuyerOrdersScreen`, `BuyerOrderDetailScreen`, `HttpBuyerOrdersRepository`). Las pantallas de seguimiento/valoración siguen siendo **demostrativas**. |
 | `feature/menu`, `main` | Contenedor principal y piezas de ejemplo. |
 
 Módulos Hilt (todos en `SingletonComponent`): `AccessDataModule`, `DatabaseModule`, `FirebaseModule`, `NetworkModule`, `NotificationsModule`, `AddressDataModule`, `AuthDataModule`, `BusinessDataModule`, `CartDataModule`, `CatalogDataModule`, `CheckoutDataModule`, `DiscoverDataModule`, `StoreOrdersDataModule`, `SearchDataModule`.
@@ -86,6 +86,7 @@ Estructura: `foodApiHandler.ts` (enrutado HTTP y traducción de errores) → ser
 | `GET order-attempts/{intentId}` | HU16 | Recuperación del resultado de una confirmación incierta. |
 | `GET stores/{storeId}/orders` | HU16 | Bandeja paginada del responsable VERIFIED del local. |
 | `GET me/orders?phase=ACTIVE\|HISTORICAL` y `GET me/orders/{orderId}` | HU17 | Compras propias por `buyerUid` (cualquier experiencia); cursor ligado a UID y fase; ajeno = 404. Ver [DECISIONES](DECISIONES.md#consultas-propias-hu17). |
+| `POST me/orders/{orderId}/cancel` | HU18 | Cancelación idempotente del comprador únicamente desde `PENDING_CONFIRMATION`; transición e historial en una transacción. Ajeno = 404, estado no permitido = 409. |
 | `PUT` / `DELETE devices/{installationId}` | HU16 | Registro/retirada del dispositivo FCM (PUT solo responsables con local asignado). |
 | `GET access/facts` | HU34 | Hechos de acceso de la cuenta (propiedad, asignaciones, locales). |
 | `GET access/revision`, `POST access/assignment-revision` | HU34 | Revisiones del índice para control de concurrencia. |

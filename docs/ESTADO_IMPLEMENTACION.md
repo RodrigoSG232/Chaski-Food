@@ -1,6 +1,6 @@
 # Estado de implementación de Chasqui Food
 
-Última revisión: **31-10-2026**. Código de referencia: `ramaDante` (HU17 en commits `c80c178`…`66e2d6c` más documentación, pendientes de push/PR; `main` en PR #4/#5). Cómo funciona: [ARCHITECTURE](ARCHITECTURE.md). Cómo trabajar: [GUIA_DESARROLLO](GUIA_DESARROLLO.md).
+Última revisión: **31-10-2026**. Código de referencia integrado: `main` hasta HU17. HU18 está en `hu18-max`, basada en `origin/Rodrigo`, pendiente de validación completa, PR y publicación. Cómo funciona: [ARCHITECTURE](ARCHITECTURE.md). Cómo trabajar: [GUIA_DESARROLLO](GUIA_DESARROLLO.md).
 
 Vocabulario: **implementado** = código integrado; **verificado** = hay evidencia de ejecución; **validado en Cloud** = probado con el APK CONECTADO contra `chaski-food-9adba`. Una pantalla o un commit no cierran una historia por sí solos.
 
@@ -18,7 +18,8 @@ Vocabulario: **implementado** = código integrado; **verificado** = hay evidenci
 | **HU16** confirmar pedido | **Validado en Cloud (31-10)** | Pedido idempotente, outbox, `newOrderNotifier` con FCM real y bandeja del responsable. Pedido de prueba `PENDING_CONFIRMATION`, evento `SENT`. |
 | **HU34** acceso según permisos | **Validado en Cloud** | Coordinador comercial en foodApi, índice privado, reglas publicadas, vinculación VERIFIED, cliente implícito, lease renovable y paneles con cierre de sesión. Comprador, propietario, responsable y administrador comprobados. |
 | **HU17** pedidos propios | **Completada y validada en Cloud (31-10)** | Lista En curso/Historial, detalle histórico, «Mis compras» en Cuenta (propietario/responsable) y «Ver mi pedido» en Checkout. Índice y `foodApi` (`foodapi-00003-vab`) publicados. |
-| HU18–HU22 | **Siguiente trabajo** | Ver §4.1. |
+| **HU18** cancelar pedido | **Implementada en rama; pendiente de validación e integración** | El comprador cancela directamente solo en `PENDING_CONFIRMATION`; `PREPARING` y posteriores rechazan la cancelación. Operación transaccional, idempotente, con historial y cierre del evento de nuevo pedido. Delivery queda reservado para HU22. |
+| HU19–HU22 | **Siguiente trabajo** | Ver §4.1. |
 | HU23–HU33, EN04 | No iniciadas | Hay pantallas de ejemplo (seguimiento, pago, valoración) que **no** son funcionalidad productiva. Release sin configurar. |
 
 HU34 no figura en la planificación original del curso: es una historia acordada por el equipo (sus decisiones vigentes están en [DECISIONES](DECISIONES.md)).
@@ -46,7 +47,7 @@ Fuente única de pendientes. Cada elemento indica por qué se postergó, dónde 
 ### 4.1 Próximas historias (planificación original)
 | HU | Título | Notas ya decididas |
 |---|---|---|
-| HU18 | Cancelar pedido | Según estado (p. ej. `PENDING_CONFIRMATION`). |
+| HU18 | Cancelar pedido | **Aprobado:** cancelación directa únicamente en `PENDING_CONFIRMATION`; desde `PREPARING` no se permite. Si ya existe `deliveryId`, no se cancela silenciosamente y se reserva la coordinación para HU22. |
 | HU19 | Recibir y responder pedidos | **Aprobado:** aceptar pasa directo `PENDING_CONFIRMATION → PREPARING` (sin `CONFIRMED`). Debe precisar acciones durante suspensión. El pedido de prueba sirve para probarla. |
 | HU20 | Gestionar tiempo de preparación | — |
 | HU21 | Finalizar preparación y validar recojo | `READY_FOR_PICKUP`. |
