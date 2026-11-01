@@ -25,8 +25,8 @@ class HttpStoreOrdersRepositoryTest {
         override suspend fun token(uid:String,generation:Long):String {assertEquals("manager",uid);assertEquals(3L,generation);return "fixture-token"}
         override fun isCurrent(uid:String,generation:Long)=true
     }
-    private fun api(block:suspend(String?)->Response<StoreOrdersResponse>,
-        decision:suspend(String,JsonObject)->Response<StoreOrderDecisionResponse>={_,_->Response.error(503,"{}".toResponseBody())})=object:StoreOrdersApi {
+    private fun api(decision:suspend (String,JsonObject)->Response<StoreOrderDecisionResponse> =
+        { _, _ -> Response.error(503,"{}".toResponseBody())},block:suspend(String?)->Response<StoreOrdersResponse>)=object:StoreOrdersApi {
         override suspend fun page(storeId:String,authorization:String,cursor:String?,pageSize:Int):Response<StoreOrdersResponse> {
             assertEquals("store",storeId);assertEquals("Bearer fixture-token",authorization);assertEquals(20,pageSize);return block(cursor)
         }
@@ -42,20 +42,20 @@ class HttpStoreOrdersRepositoryTest {
     }
     @Test fun decisionsUseStrictPayloadsAndMapStateOrSuspension()=runTest {
         val id="a".repeat(64)
-        val accepted=HttpStoreOrdersRepository(api({Response.success(valid())}) {order,body->
+        val accepted=HttpStoreOrdersRepository(api(decision={order,body->
             assertEquals(id,order);assertEquals("ACCEPT",body["action"]?.toString()?.trim('"'))
             assertEquals("30",body["estimatedPreparationMinutes"].toString())
-            Response.success(StoreOrderDecisionResponse(1,"ACCEPTED","PREPARING",1_800_000_300_000))},tokens,source)
+            Response.success(StoreOrderDecisionResponse(1,"ACCEPTED","PREPARING",1_800_000_300_000))}){Response.success(valid())},tokens,source)
             .respond(context,id,StoreOrderDecision.Accept(30))
         assertEquals(StoreOrderDecisionResult.Accepted(1_800_000_300_000),accepted)
-        val rejected=HttpStoreOrdersRepository(api({Response.success(valid())}) {_,body->
+        val rejected=HttpStoreOrdersRepository(api(decision={_,body->
             assertEquals("OTHER",body["reason"]?.toString()?.trim('"'));assertEquals("Sin insumos",body["explanation"]?.toString()?.trim('"'))
-            Response.success(StoreOrderDecisionResponse(1,"REJECTED","REJECTED"))},tokens,source)
+            Response.success(StoreOrderDecisionResponse(1,"REJECTED","REJECTED"))}){Response.success(valid())},tokens,source)
             .respond(context,id,StoreOrderDecision.Reject(StoreOrderRejectionReason.OTHER," Sin insumos "))
         assertEquals(StoreOrderDecisionResult.Rejected,rejected)
         for((code,expected) in listOf(409 to StoreOrderDecisionResult.StateChanged,423 to StoreOrderDecisionResult.AcceptanceSuspended,
             403 to StoreOrderDecisionResult.AccessDenied,404 to StoreOrderDecisionResult.NotFound))
-            assertEquals(expected,HttpStoreOrdersRepository(api({Response.success(valid())}) {_,_->Response.error(code,"{}".toResponseBody())},tokens,source)
+            assertEquals(expected,HttpStoreOrdersRepository(api(decision={_,_->Response.error(code,"{}".toResponseBody())}){Response.success(valid())},tokens,source)
                 .respond(context,id,StoreOrderDecision.Accept(20)))
     }
     @Test fun malformedSourceNeverBecomesAValidOrderOrWrongStorePage()=runTest {
