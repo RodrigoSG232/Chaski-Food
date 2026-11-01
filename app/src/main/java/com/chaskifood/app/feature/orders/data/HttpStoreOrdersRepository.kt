@@ -12,6 +12,22 @@ internal class HttpStoreOrdersRepository @Inject constructor(private val api:Sto
     private val tokens:BuyerTokenSource,private val access:StoreOrdersAccessSource):StoreOrdersRepository {
     override fun observeAuthorization(target:StoreOrdersTarget)=access.observe(target)
     override fun isCurrent(context:StoreOrdersContext)=access.current(context.target)==StoreOrdersAuthorization.Allowed(context)
+    override suspend fun updateEstimate(context:StoreOrdersContext,orderId:String,minutes:Int):PreparationEstimateResult {
+        if(!isCurrent(context))return PreparationEstimateResult.StaleContext
+        if(!orderId.matches(Regex("[0-9a-f]{64}"))||minutes !in 5..180)return PreparationEstimateResult.NotFound
+        return try { withTimeoutOrNull(15_000) {
+            val token=tokens.token(context.ownerUid,context.sessionGeneration)
+            val response=api.updateEstimate(context.target.storeId,orderId,"Bearer $token",buildJsonObject{put("estimatedPreparationMinutes",minutes)})
+            if(!isCurrent(context)||!tokens.isCurrent(context.ownerUid,context.sessionGeneration))return@withTimeoutOrNull PreparationEstimateResult.StaleContext
+            when(response.code()){
+                200->{val body=requireNotNull(response.body());require(body.contractVersion==1&&body.status=="PREPARING"&&body.estimatedReadyAtEpochMillis!=null)
+                    PreparationEstimateResult.Updated(body.estimatedReadyAtEpochMillis)}
+                401->PreparationEstimateResult.AuthenticationRequired;403->PreparationEstimateResult.AccessDenied
+                404->PreparationEstimateResult.NotFound;409->PreparationEstimateResult.StateChanged
+                else->PreparationEstimateResult.Unavailable
+            }
+        }?:PreparationEstimateResult.Unavailable }catch(e:CancellationException){throw e}catch(_:Exception){PreparationEstimateResult.Unavailable}
+    }
     override suspend fun respond(context:StoreOrdersContext,orderId:String,decision:StoreOrderDecision):StoreOrderDecisionResult {
         if(!isCurrent(context))return StoreOrderDecisionResult.StaleContext
         if(!orderId.matches(Regex("[0-9a-f]{64}")))return StoreOrderDecisionResult.NotFound
@@ -46,13 +62,13 @@ internal class HttpStoreOrdersRepository @Inject constructor(private val api:Sto
          catch(_:BuyerAuthenticationRequired){StoreOrderDecisionResult.AuthenticationRequired}
          catch(_:Exception){StoreOrderDecisionResult.Unavailable}
     }
-    override suspend fun page(context:StoreOrdersContext,cursor:String?):StoreOrdersResult {
+    override suspend fun page(context:StoreOrdersContext,cursor:String?,status:OrderStatus):StoreOrdersResult {
         if(!isCurrent(context))return StoreOrdersResult.StaleContext
         return try {
             withTimeoutOrNull(15_000) {
                 val token=tokens.token(context.ownerUid,context.sessionGeneration)
                 if(!isCurrent(context))return@withTimeoutOrNull StoreOrdersResult.StaleContext
-                val response=api.page(context.target.storeId,"Bearer $token",cursor)
+                val response=api.page(context.target.storeId,"Bearer $token",cursor,status.name)
                 if(!isCurrent(context)||!tokens.isCurrent(context.ownerUid,context.sessionGeneration))
                     return@withTimeoutOrNull StoreOrdersResult.StaleContext
                 when(response.code()) {
@@ -64,10 +80,11 @@ internal class HttpStoreOrdersRepository @Inject constructor(private val api:Sto
                         val body=requireNotNull(response.body())
                         require(body.contractVersion==1 && body.storeId==context.target.storeId && body.orders.size<=20)
                         val orders=body.orders.map { o->
-                            require(o.status=="PENDING_CONFIRMATION" && o.currency=="PEN" && o.paymentMethod=="CASH_ON_DELIVERY")
+                            require(o.status==status.name && o.currency=="PEN" && o.paymentMethod=="CASH_ON_DELIVERY")
                             StoreOrderSummary(o.orderId,o.createdAtEpochMillis,o.items.map {i->
                                 StoreOrderLine(i.productId,i.name,i.quantity,i.unitPriceMinor,i.lineTotalMinor)},
-                                OrderAmounts(o.subtotalMinor,o.deliveryFeeMinor,o.totalMinor))
+                                OrderAmounts(o.subtotalMinor,o.deliveryFeeMinor,o.totalMinor),status,
+                                estimatedPreparationMinutes=o.estimatedPreparationMinutes,estimatedReadyAtEpochMillis=o.estimatedReadyAtEpochMillis)
                         }
                         require(cursor==null || body.nextCursor!=cursor)
                         StoreOrdersResult.Loaded(StoreOrdersPage(body.storeId,body.storeName,orders,body.nextCursor))

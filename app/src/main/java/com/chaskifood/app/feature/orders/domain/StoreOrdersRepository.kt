@@ -24,12 +24,16 @@ data class StoreOrderLine(val productId:String,val name:String,val quantity:Int,
     }
 }
 class StoreOrderSummary(val orderId:String,val createdAtEpochMillis:Long,items:List<StoreOrderLine>,val amounts:OrderAmounts,
-    val status:OrderStatus=OrderStatus.PENDING_CONFIRMATION,val paymentMethod:OrderPaymentMethod=OrderPaymentMethod.CASH_ON_DELIVERY) {
+    val status:OrderStatus=OrderStatus.PENDING_CONFIRMATION,val paymentMethod:OrderPaymentMethod=OrderPaymentMethod.CASH_ON_DELIVERY,
+    val estimatedPreparationMinutes:Int?=null,val estimatedReadyAtEpochMillis:Long?=null) {
     val items:List<StoreOrderLine> = frozenOrderList(items)
     init {
         orderId(orderId);require(createdAtEpochMillis in 1..MAX_ORDER_EPOCH_MILLIS)
         require(this.items.isNotEmpty() && this.items.map{it.productId}.distinct().size==this.items.size)
         require(this.items.fold(0L){sum,i->orderMinor(Math.addExact(sum,i.lineTotalMinor))}==amounts.subtotalMinor)
+        if(status==OrderStatus.PREPARING)require(estimatedPreparationMinutes!=null&&estimatedPreparationMinutes in 5..180 &&
+            estimatedReadyAtEpochMillis!=null&&estimatedReadyAtEpochMillis in 1..MAX_ORDER_EPOCH_MILLIS)
+        else require(estimatedPreparationMinutes==null&&estimatedReadyAtEpochMillis==null)
     }
 }
 class StoreOrdersPage(val storeId:String,val storeName:String,orders:List<StoreOrderSummary>,val nextCursor:String?) {
@@ -73,9 +77,19 @@ sealed interface StoreOrderDecisionResult {
     data object StaleContext:StoreOrderDecisionResult
     data object Unavailable:StoreOrderDecisionResult
 }
+sealed interface PreparationEstimateResult {
+    data class Updated(val estimatedReadyAtEpochMillis:Long):PreparationEstimateResult
+    data object StateChanged:PreparationEstimateResult
+    data object AccessDenied:PreparationEstimateResult
+    data object AuthenticationRequired:PreparationEstimateResult
+    data object NotFound:PreparationEstimateResult
+    data object StaleContext:PreparationEstimateResult
+    data object Unavailable:PreparationEstimateResult
+}
 interface StoreOrdersRepository {
     fun observeAuthorization(target:StoreOrdersTarget):Flow<StoreOrdersAuthorization>
     fun isCurrent(context:StoreOrdersContext):Boolean
-    suspend fun page(context:StoreOrdersContext,cursor:String?=null):StoreOrdersResult
+    suspend fun page(context:StoreOrdersContext,cursor:String?=null,status:OrderStatus=OrderStatus.PENDING_CONFIRMATION):StoreOrdersResult
     suspend fun respond(context:StoreOrdersContext,orderId:String,decision:StoreOrderDecision):StoreOrderDecisionResult
+    suspend fun updateEstimate(context:StoreOrdersContext,orderId:String,minutes:Int):PreparationEstimateResult
 }

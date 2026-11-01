@@ -27,12 +27,14 @@ class HttpStoreOrdersRepositoryTest {
     }
     private fun api(decision:suspend (String,JsonObject)->Response<StoreOrderDecisionResponse> =
         { _, _ -> Response.error(503,"{}".toResponseBody())},block:suspend(String?)->Response<StoreOrdersResponse>)=object:StoreOrdersApi {
-        override suspend fun page(storeId:String,authorization:String,cursor:String?,pageSize:Int):Response<StoreOrdersResponse> {
+        override suspend fun page(storeId:String,authorization:String,cursor:String?,status:String,pageSize:Int):Response<StoreOrdersResponse> {
             assertEquals("store",storeId);assertEquals("Bearer fixture-token",authorization);assertEquals(20,pageSize);return block(cursor)
         }
         override suspend fun respond(storeId:String,orderId:String,authorization:String,body:JsonObject):Response<StoreOrderDecisionResponse> {
             assertEquals("store",storeId);assertEquals("Bearer fixture-token",authorization);return decision(orderId,body)
         }
+        override suspend fun updateEstimate(storeId:String,orderId:String,authorization:String,body:JsonObject)=
+            Response.error<StoreOrderDecisionResponse>(503,"{}".toResponseBody())
     }
     private fun valid()=StoreOrdersResponse(1,"store","Local",listOf(StoreOrderResponse("order",1800000000000,"PENDING_CONFIRMATION",
         listOf(StoreOrderLineResponse("p","Plato",2,1000,2000)),2000,300,2300,"PEN","CASH_ON_DELIVERY")),null)

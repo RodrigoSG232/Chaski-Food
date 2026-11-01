@@ -67,7 +67,8 @@ class StoreOrdersScreenTest {
             override fun observeAuthorization(target:StoreOrdersTarget):Flow<StoreOrdersAuthorization> = auth
             override fun isCurrent(context:StoreOrdersContext)=auth.value==StoreOrdersAuthorization.Allowed(context)
             override suspend fun respond(context:StoreOrdersContext,orderId:String,decision:StoreOrderDecision)=StoreOrderDecisionResult.Unavailable
-            override suspend fun page(context:StoreOrdersContext,cursor:String?):StoreOrdersResult {
+            override suspend fun updateEstimate(context:StoreOrdersContext,orderId:String,minutes:Int)=PreparationEstimateResult.Unavailable
+            override suspend fun page(context:StoreOrdersContext,cursor:String?,status:OrderStatus):StoreOrdersResult {
                 reads++;return StoreOrdersResult.Loaded(StoreOrdersPage("store","Local",listOf(order()),null))
             }
         }
