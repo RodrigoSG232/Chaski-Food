@@ -7,6 +7,16 @@ function nextTimestamp(order: Record<string, any>): Timestamp {
   return Timestamp.fromMillis(Math.max(Date.now(), previous + 1));
 }
 
+export type BuyerCancellationDecision = "CANCEL" | "ALREADY_CANCELLED" | "NOT_ALLOWED" | "LOGISTICS_REQUIRED";
+
+/** HU18: la cancelación directa termina al salir de PENDING_CONFIRMATION. */
+export function buyerCancellationDecision(order: Record<string, any>, uid: string): BuyerCancellationDecision {
+  if (order.status === "CANCELLED" && order.cancelledByUid === uid) return "ALREADY_CANCELLED";
+  if (order.status !== "PENDING_CONFIRMATION") return "NOT_ALLOWED";
+  if (order.deliveryId != null) return "LOGISTICS_REQUIRED";
+  return "CANCEL";
+}
+
 /** Only the buyer may cancel, and only while the live order is awaiting confirmation. */
 export class OrderCancellationService {
   constructor(private readonly db: Firestore) {}
@@ -19,11 +29,12 @@ export class OrderCancellationService {
       const order = (await tx.get(ref)).data();
       if (!order || order.buyerUid !== uid || order.orderId !== id || order.schemaVersion !== 1)
         throw new OrderHttpError("ORDER_NOT_FOUND", 404);
-      if (order.status === "CANCELLED" && order.cancelledByUid === uid)
+      const decision = buyerCancellationDecision(order, uid);
+      if (decision === "ALREADY_CANCELLED")
         return { contractVersion: 1, outcome: "CANCELLED", status: "CANCELLED" };
-      if (order.status !== "PENDING_CONFIRMATION") throw new OrderHttpError("CANCELLATION_NOT_ALLOWED", 409);
-      // Delivery is not implemented yet. Never silently cancel an order linked to logistics.
-      if (order.deliveryId != null) throw new OrderHttpError("LOGISTICS_CANCELLATION_REQUIRED", 409);
+      if (decision === "NOT_ALLOWED") throw new OrderHttpError("CANCELLATION_NOT_ALLOWED", 409);
+      // Delivery se implementa en HU22; nunca se cancela silenciosamente una logística ya vinculada.
+      if (decision === "LOGISTICS_REQUIRED") throw new OrderHttpError("LOGISTICS_CANCELLATION_REQUIRED", 409);
       const at = nextTimestamp(order);
       tx.update(ref, { status: "CANCELLED", updatedAt: at, cancelledAt: at, cancelledByUid: uid });
       tx.create(ref.collection("status_history").doc("buyer_cancelled"),
