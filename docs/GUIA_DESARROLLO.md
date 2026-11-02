@@ -30,7 +30,35 @@ Regla de oro: **todo cambio se prueba primero en LOCAL**. CONECTADO usa Firebase
    adb install -r app/build/outputs/apk/debug/app-debug.apk
    ```
    En AVD el host es `10.0.2.2`. En teléfono físico: `adb reverse tcp:9099 tcp:9099`, `adb reverse tcp:8089 tcp:8089`, `adb reverse tcp:5001 tcp:5001` y compilar con `-PchaskiEmulatorHost=127.0.0.1`.
-4. Datos: las pruebas automáticas crean sus propios datos ficticios. **No hay** un cargador de datos para recorrer toda la app manualmente en LOCAL; prepara solo datos ficticios y nunca copies datos reales.
+4. Datos: las pruebas automáticas crean sus propios datos ficticios. Para recorridos manuales usa el laboratorio automatizado siguiente; nunca copies datos reales.
+
+#### Laboratorio automatizado para pruebas manuales
+
+El repositorio incluye un sembrador idempotente exclusivo de `demo-chaski-hu15`. Se bloquea si Auth y Firestore no apuntan exactamente a `127.0.0.1:9099` y `127.0.0.1:8089`; su código está bajo `functions/test/` y no forma parte del paquete de Cloud.
+
+1. Levanta los emuladores y deja la terminal abierta:
+   ```bash
+   cd functions
+   CHASKI_ROUTE_FIXTURE=enabled pnpm run emulators
+   ```
+2. Desde otra terminal, compila y crea el escenario deseado:
+   ```bash
+   pnpm --dir functions run build
+   pnpm --dir functions run lab:seed -- hu20
+   ```
+   Repetir el comando reinicia únicamente los documentos y cuentas fijos del laboratorio. Para retirarlos: `pnpm --dir functions run lab:reset`.
+3. Cuentas creadas (todas usan `emulator-password`):
+
+   | Experiencia | Correo |
+   |---|---|
+   | Administrador | `admin@chaski.test` |
+   | Propietario | `owner@chaski.test` |
+   | Responsable | `manager@chaski.test` |
+   | Cliente | `buyer@chaski.test` |
+
+El escenario `hu20` crea dos locales, catálogo mínimo, una asignación VERIFIED, un pedido pendiente y dos pedidos `PREPARING` (25 y 35 minutos; el segundo con `deliveryId`). El responsable usa **Local Central Lab → En preparación**; el cliente consulta los mismos pedidos en **Pedidos**. Los emuladores conservan estos datos mientras sigan encendidos.
+
+En teléfono físico ejecuta antes `adb reverse` para los tres puertos y compila con `-PchaskiFirebaseMode=LOCAL -PchaskiEmulatorHost=127.0.0.1`. El JSON activo debe ser `app/src/debug/google-services.demo.json`, copiado como `app/src/debug/google-services.json`; ninguna propiedad CONECTADO debe permanecer en el `gradle.properties` personal.
 
 ### 2.2 Pruebas
 | Qué | Comando |
