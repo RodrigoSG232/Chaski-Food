@@ -11,6 +11,8 @@
     "test": "node --test lib/test/*.test.js",
     "test:emulator": "node --test lib/test/*.emulator.js",
     "emulators": "firebase emulators:start --only auth,firestore,functions --project demo-chaski-hu15 --config ../firebase.json",
+    "lab:seed": "GCLOUD_PROJECT=demo-chaski-hu15 FIRESTORE_EMULATOR_HOST=127.0.0.1:8089 FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099 node lib/test/lab/seed.js",
+    "lab:reset": "GCLOUD_PROJECT=demo-chaski-hu15 FIRESTORE_EMULATOR_HOST=127.0.0.1:8089 FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099 node lib/test/lab/reset.js",
     "verify:package": "node scripts/verifyPackage.cjs"
   },
   "dependencies": {

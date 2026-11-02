@@ -50,6 +50,7 @@ Thumbs.db
 
 # Assistant artifacts
 .artifacts/
+.firebase-lab/
 
 # Firebase / Credenciales
 google-services.json
