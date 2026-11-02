@@ -2,7 +2,7 @@ import { closeLab, openLab } from "./labEnvironment";
 import { seedBase, seedHu20 } from "./labData";
 
 async function main(): Promise<void> {
-  const scenario = process.argv[2] ?? "base";
+  const scenario = process.argv.slice(2).find(argument => argument !== "--") ?? "base";
   if (scenario !== "base" && scenario !== "hu20") throw new Error(`UNKNOWN_LAB_SCENARIO: ${scenario}`);
   const context = openLab("chaski-lab-seed");
   try {
