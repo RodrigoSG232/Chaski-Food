@@ -1,13 +1,14 @@
 import { closeLab, openLab } from "./labEnvironment";
-import { seedBase } from "./labData";
+import { seedBase, seedHu20 } from "./labData";
 
 async function main(): Promise<void> {
   const scenario = process.argv[2] ?? "base";
-  if (scenario !== "base") throw new Error(`UNKNOWN_LAB_SCENARIO: ${scenario}`);
+  if (scenario !== "base" && scenario !== "hu20") throw new Error(`UNKNOWN_LAB_SCENARIO: ${scenario}`);
   const context = openLab("chaski-lab-seed");
   try {
-    await seedBase(context.db, context.auth);
-    console.log("LAB_READY scenario=base");
+    if (scenario === "hu20") await seedHu20(context.db, context.auth);
+    else await seedBase(context.db, context.auth);
+    console.log(`LAB_READY scenario=${scenario}`);
   } finally {
     await closeLab(context);
   }

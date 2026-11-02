@@ -14,6 +14,11 @@ export const LAB = Object.freeze({
   stores: ["lab-store-central", "lab-store-north"],
   categoryId: "lab-category-main",
   products: ["lab-product-one", "lab-product-two"],
+  orders: {
+    pending: digest("lab-order-pending"),
+    preparing: digest("lab-order-preparing"),
+    preparingWithDelivery: digest("lab-order-preparing-delivery"),
+  },
 });
 
 const actors = [LAB.admin, LAB.owner, LAB.manager, LAB.buyer];
@@ -99,4 +104,50 @@ export async function seedBase(db: Firestore, auth: Auth): Promise<void> {
   await access.execute(owner, { action: "ASSIGN", operationId: assignmentOperation, businessId: LAB.businessId,
     email: LAB.manager.email, expectedRevision: revisions.get(LAB.manager.uid)!, storeIds: LAB.stores,
     fullName: "Responsable laboratorio", phone: "900000004" });
+}
+
+function orderData(orderId: string, status: "PENDING_CONFIRMATION" | "PREPARING", createdAt: Timestamp,
+    minutes?: number, deliveryId?: string) {
+  const subtotalMinor = 2000, deliveryFeeMinor = 300, totalMinor = 2300;
+  const updatedAt = Timestamp.fromMillis(createdAt.toMillis() + (status === "PREPARING" ? 60_000 : 0));
+  return { schemaVersion: 1, orderId, intentId: `lab-intent-${orderId.slice(0, 12)}`,
+    requestHash: digest(["lab-request", orderId]), buyerUid: LAB.buyer.uid, businessId: LAB.businessId,
+    storeId: LAB.stores[0], status, createdAt, updatedAt, labScenario: true,
+    buyerSnapshot: { uid: LAB.buyer.uid, displayName: "Cliente laboratorio", phone: "900000005" },
+    businessSnapshot: { id: LAB.businessId, name: "Chaski Lab Food" },
+    storeSnapshot: { id: LAB.stores[0], name: "Local Central Lab", phone: "900000002" },
+    pickupSnapshot: { addressText: "Dirección laboratorio 1", location: { lat: -12.0464, lng: -77.0428 } },
+    dropoffSnapshot: { sourceAddressId: "lab-address", label: "Casa Lab", addressText: "Parque de laboratorio, Lima",
+      location: { lat: -12.05, lng: -77.04 }, reference: "Puerta principal", instructions: "Llamar al llegar" },
+    items: [{ productId: LAB.products[0], categoryId: LAB.categoryId, name: "Plato de prueba",
+      quantity: 2, unitPriceMinor: 1000, lineTotalMinor: subtotalMinor }],
+    subtotalMinor, deliveryFeeMinor, totalMinor, currency: "PEN", paymentMethod: "CASH_ON_DELIVERY", paymentStatus: "PENDING",
+    quoteSnapshot: { quoteId: `lab-quote-${orderId.slice(0, 12)}`, distanceMeters: 1500,
+      tariffVersion: "lima-driving-car-v1", quotedAt: createdAt, expiresAt: Timestamp.fromMillis(createdAt.toMillis() + 300_000) },
+    ...(status === "PREPARING" ? { acceptedByUid: LAB.manager.uid, acceptedAt: updatedAt,
+      estimatedPreparationMinutes: minutes, estimatedReadyAt: Timestamp.fromMillis(updatedAt.toMillis() + minutes! * 60_000),
+      estimateRevision: 0 } : {}),
+    ...(deliveryId ? { deliveryId } : {}),
+  };
+}
+
+export async function seedHu20(db: Firestore, auth: Auth): Promise<void> {
+  await seedBase(db, auth);
+  const base = Date.now() - 5 * 60_000;
+  const scenarios = [
+    { id: LAB.orders.pending, status: "PENDING_CONFIRMATION" as const, offset: 0 },
+    { id: LAB.orders.preparing, status: "PREPARING" as const, offset: 1, minutes: 25 },
+    { id: LAB.orders.preparingWithDelivery, status: "PREPARING" as const, offset: 2, minutes: 35, deliveryId: "lab-delivery-1" },
+  ];
+  for (const scenario of scenarios) {
+    const createdAt = Timestamp.fromMillis(base + scenario.offset * 1_000);
+    const ref = db.doc(`food_orders/${scenario.id}`);
+    const data = orderData(scenario.id, scenario.status, createdAt, scenario.minutes, scenario.deliveryId);
+    await ref.set(data);
+    await ref.collection("status_history").doc("initial").set({ schemaVersion: 1, fromStatus: null,
+      toStatus: "PENDING_CONFIRMATION", actorUid: LAB.buyer.uid, occurredAt: createdAt, labScenario: true });
+    if (scenario.status === "PREPARING") await ref.collection("status_history").doc("manager_decision").set({
+      schemaVersion: 1, fromStatus: "PENDING_CONFIRMATION", toStatus: "PREPARING", actorUid: LAB.manager.uid,
+      occurredAt: data.updatedAt, labScenario: true });
+  }
 }
