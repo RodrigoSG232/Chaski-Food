@@ -21,7 +21,7 @@ Regla de oro: **todo cambio se prueba primero en LOCAL**. CONECTADO usa Firebase
    pnpm install --frozen-lockfile
    pnpm run build
    $env:CHASKI_ROUTE_FIXTURE = 'enabled'
-   pnpm run emulators        # Auth 9099, Firestore 8089, Functions 5001 en demo-chaski-hu15
+   pnpm run emulators        # Auth 9099, Firestore 8089, Storage 9199 y Functions 5001
    ```
    Se detiene con `Ctrl+C` en esa terminal.
 3. App (otra terminal, desde la raíz):
@@ -29,7 +29,7 @@ Regla de oro: **todo cambio se prueba primero en LOCAL**. CONECTADO usa Firebase
    .\gradlew.bat :app:assembleDebug -PchaskiFirebaseMode=LOCAL
    adb install -r app/build/outputs/apk/debug/app-debug.apk
    ```
-   En AVD el host es `10.0.2.2`. En teléfono físico: `adb reverse tcp:9099 tcp:9099`, `adb reverse tcp:8089 tcp:8089`, `adb reverse tcp:5001 tcp:5001` y compilar con `-PchaskiEmulatorHost=127.0.0.1`.
+   En AVD el host es `10.0.2.2`. En teléfono físico: `adb reverse tcp:9099 tcp:9099`, `adb reverse tcp:8089 tcp:8089`, `adb reverse tcp:9199 tcp:9199`, `adb reverse tcp:5001 tcp:5001` y compilar con `-PchaskiEmulatorHost=127.0.0.1`.
 4. Datos: las pruebas automáticas crean sus propios datos ficticios. Para recorridos manuales usa el laboratorio automatizado siguiente; nunca copies datos reales.
 
 #### Laboratorio automatizado para pruebas manuales
@@ -58,7 +58,29 @@ El repositorio incluye un sembrador idempotente exclusivo de `demo-chaski-hu15`.
 
 El escenario `hu20` crea dos locales, catálogo mínimo, una asignación VERIFIED, un pedido pendiente y dos pedidos `PREPARING` (25 y 35 minutos; el segundo con `deliveryId`). El responsable usa **Local Central Lab → En preparación**; el cliente consulta los mismos pedidos en **Pedidos**. Los emuladores conservan estos datos mientras sigan encendidos.
 
-En teléfono físico ejecuta antes `adb reverse` para los tres puertos y compila con `-PchaskiFirebaseMode=LOCAL -PchaskiEmulatorHost=127.0.0.1`. El JSON activo debe ser `app/src/debug/google-services.demo.json`, copiado como `app/src/debug/google-services.json`; ninguna propiedad CONECTADO debe permanecer en el `gradle.properties` personal.
+En teléfono físico ejecuta antes `adb reverse` para los cuatro puertos y compila con `-PchaskiFirebaseMode=LOCAL -PchaskiEmulatorHost=127.0.0.1`. El JSON activo debe ser `app/src/debug/google-services.demo.json`, copiado como `app/src/debug/google-services.json`; ninguna propiedad CONECTADO debe permanecer en el `gradle.properties` personal.
+
+#### Marketplace preestablecido con imágenes
+
+Para explorar catálogos sin crear manualmente negocios y productos, con los cuatro emuladores levantados ejecuta:
+
+```bash
+pnpm --dir functions run build
+pnpm --dir functions run marketplace:seed
+```
+
+El comando es idempotente y solo acepta el proyecto local `demo-chaski-hu15`. Crea dos negocios aprobados, tres locales por negocio, ocho categorías, veinte productos y configuraciones distintas por local. Las 26 imágenes JPEG se cargan como objetos en Storage; Firestore guarda solamente sus URL. No crea clientes ni repartidores.
+
+Las cuatro cuentas usan la contraseña `emulator-password` y ya tienen teléfono y correo verificado en Auth:
+
+| Perfil | Correo | Local asignado |
+|---|---|---|
+| Propietario Chicken | `owner.chicken@chaski.test` | Todos los de Chicken House |
+| Responsable Centro Chicken | `manager.chicken.centro@chaski.test` | Chicken House Centro |
+| Propietario Burger | `owner.burger@chaski.test` | Todos los de Burger Station |
+| Responsable Este Burger | `manager.burger.este@chaski.test` | Burger Station Este |
+
+Para retirarlos usa `pnpm --dir functions run marketplace:reset`. Los archivos fuente están en `functions/test/marketplace/assets/`, quedan excluidos del paquete de Cloud y no se publican con Functions.
 
 ### 2.2 Pruebas
 | Qué | Comando |
