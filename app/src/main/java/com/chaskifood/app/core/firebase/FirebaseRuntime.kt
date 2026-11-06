@@ -18,7 +18,7 @@ internal object FirebaseRuntime {
                 check(host == "10.0.2.2" || host == "127.0.0.1") { "Host local no permitido." }
                 FirebaseAuth.getInstance(app).useEmulator(host, 9099)
                 FirebaseFirestore.getInstance(app).useEmulator(host, 8089)
-                // Storage no forma parte del laboratorio HU15; fallará cerrado si se usa sin su Emulator.
+                // Las imágenes de catálogo LOCAL se aíslan en Storage Emulator.
                 FirebaseStorage.getInstance(app).useEmulator(host, 9199)
             }
             "CONECTADO" -> {

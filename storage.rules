@@ -1,0 +1,38 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function approvedOwner(businessId) {
+      return signedIn()
+        && firestore.exists(/databases/(default)/documents/business_requests/$(businessId))
+        && firestore.get(/databases/(default)/documents/business_requests/$(businessId)).data.ownerUid == request.auth.uid
+        && firestore.get(/databases/(default)/documents/business_requests/$(businessId)).data.status == 'APPROVED';
+    }
+
+    function validJpeg() {
+      return request.resource.size > 0
+        && request.resource.size <= 5 * 1024 * 1024
+        && request.resource.contentType == 'image/jpeg';
+    }
+
+    match /businesses/{businessId}/stores/{storeId}/{fileName} {
+      allow read: if signedIn();
+      allow create, update: if approvedOwner(businessId) && validJpeg();
+      allow delete: if approvedOwner(businessId);
+    }
+
+    match /businesses/{businessId}/products/{productId}/{fileName} {
+      allow read: if signedIn();
+      allow create, update: if approvedOwner(businessId) && validJpeg();
+      allow delete: if approvedOwner(businessId);
+    }
+
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}
