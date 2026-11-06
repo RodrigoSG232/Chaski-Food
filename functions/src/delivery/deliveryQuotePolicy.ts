@@ -1,7 +1,6 @@
-export const TARIFF_VERSION = "lima-driving-car-v1";
+export const TARIFF_VERSION = "lima-driving-car-v2";
 export const QUOTE_TTL_MS = 5 * 60 * 1000;
-const BASE_MINOR = 150n;
-const PER_KILOMETER_MINOR = 120n;
+const PER_KILOMETER_MINOR = 90n;
 const MILLIMETERS_PER_KILOMETER = 1_000_000n;
 const MAX_MINOR = BigInt(Number.MAX_SAFE_INTEGER);
 
@@ -32,8 +31,7 @@ export function metersToMillimeters(meters: number): bigint {
 /** Round once, at the final cent, with half-cent ties upward. */
 export function deliveryFeeMinor(distanceMeters: number): number {
   const distanceMm = metersToMillimeters(distanceMeters);
-  const fee = BASE_MINOR +
-    (PER_KILOMETER_MINOR * distanceMm + MILLIMETERS_PER_KILOMETER / 2n) / MILLIMETERS_PER_KILOMETER;
+  const fee = (PER_KILOMETER_MINOR * distanceMm + MILLIMETERS_PER_KILOMETER / 2n) / MILLIMETERS_PER_KILOMETER;
   if (fee > MAX_MINOR) throw new InvalidRouteDistance();
   return Number(fee);
 }

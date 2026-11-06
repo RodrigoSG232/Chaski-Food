@@ -5,6 +5,8 @@ import com.chaskifood.app.feature.cart.domain.Cart
 import com.chaskifood.app.feature.address.domain.model.Address
 import kotlinx.coroutines.flow.Flow
 
+const val MINIMUM_ORDER_SUBTOTAL_MINOR = 2_500L
+
 /** Una revisión temporal de la compra; HU16 deberá calcularla otra vez en el servidor. */
 data class CheckoutQuote(
     val ownerUid: String,

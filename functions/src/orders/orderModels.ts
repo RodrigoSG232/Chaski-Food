@@ -2,6 +2,7 @@ import { validCoordinates } from "../delivery/routeReader";
 
 /** HU16 v1: pure contracts, not an HTTP handler or persistence adapter. */
 export const MAX_ORDER_MINOR = Number.MAX_SAFE_INTEGER;
+export const MINIMUM_ORDER_SUBTOTAL_MINOR = 2_500;
 export const MAX_ORDER_EPOCH_MILLIS = 253_402_300_799_999;
 export type OrderStatus = "PENDING_CONFIRMATION";
 export type OrderItem = Readonly<{ productId: string; categoryId: string; name: string; quantity: number; unitPriceMinor: number }>;
@@ -20,7 +21,7 @@ export type OrderIntent = Readonly<{ intentId: string; accepted: AcceptedPurchas
 export type OrderReceipt = Readonly<{ orderId: string; intentId: string; accepted: AcceptedPurchase;
   createdAtEpochMillis: number; status: OrderStatus }>;
 export type OrderRejection = "REVIEW_REQUIRED" | "QUOTE_EXPIRED" | "PURCHASE_FORBIDDEN" | "BUSINESS_UNAVAILABLE" |
-  "STORE_UNAVAILABLE" | "NO_RESPONSIBLE" | "INVALID_LOCATION" | "OUTSIDE_COVERAGE";
+  "STORE_UNAVAILABLE" | "NO_RESPONSIBLE" | "INVALID_LOCATION" | "OUTSIDE_COVERAGE" | "MINIMUM_NOT_MET";
 export type OrderAttemptResult = Readonly<{ outcome: "SUCCEEDED"; receipt: OrderReceipt }> |
   Readonly<{ outcome: "REJECTED_FINAL"; reason: OrderRejection }> |
   Readonly<{ outcome: "UNKNOWN"; reason: "NOT_OBSERVED" | "TIMEOUT" | "CONNECTIVITY" | "SERVER_UNAVAILABLE" }>;

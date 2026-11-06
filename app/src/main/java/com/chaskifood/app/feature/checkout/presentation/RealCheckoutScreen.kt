@@ -321,6 +321,7 @@ internal fun CheckoutConfirmationPanel(state: CheckoutConfirmation, onRecover: (
                     OrderRejection.NO_RESPONSIBLE -> "El local no tiene un responsable asignado."
                     OrderRejection.INVALID_LOCATION -> "La ubicación ya no es válida."
                     OrderRejection.OUTSIDE_COVERAGE -> "La dirección está fuera de cobertura."
+                    OrderRejection.MINIMUM_NOT_MET -> "El pedido mínimo de productos es S/ 25.00."
                 }
                 CheckoutMessage("$reason Tu carrito se conserva.")
                 if (onReview != null) ChaskiButton("Revisar nuevamente", onClick = onReview)

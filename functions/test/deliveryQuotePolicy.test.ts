@@ -2,23 +2,23 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { deliveryFeeMinor, InvalidRouteDistance, metersToMillimeters, quoteTtlMs } from "../src/delivery/deliveryQuotePolicy";
 
-test("tarifa base, kilómetros y metros fraccionarios", () => {
-  assert.equal(deliveryFeeMinor(0), 150);
-  assert.equal(deliveryFeeMinor(100), 162);
-  assert.equal(deliveryFeeMinor(1_250), 300);
+test("tarifa proporcional de noventa céntimos por kilómetro", () => {
+  assert.equal(deliveryFeeMinor(0), 0);
+  assert.equal(deliveryFeeMinor(100), 9);
+  assert.equal(deliveryFeeMinor(1_250), 113);
   assert.equal(metersToMillimeters(1_837.5), 1_837_500n);
-  assert.equal(deliveryFeeMinor(1_837.5), 371);
+  assert.equal(deliveryFeeMinor(1_837.5), 165);
 });
 
 test("empates y lados del umbral se redondean una vez al céntimo", () => {
-  assert.equal(deliveryFeeMinor(4.166), 150);
-  assert.equal(deliveryFeeMinor(4.167), 151);
-  assert.equal(deliveryFeeMinor(12.5), 152);
-  assert.equal(deliveryFeeMinor(12.499), 151);
+  assert.equal(deliveryFeeMinor(5.555), 0);
+  assert.equal(deliveryFeeMinor(5.556), 1);
+  assert.equal(deliveryFeeMinor(16.667), 2);
+  assert.equal(deliveryFeeMinor(16.666), 1);
 });
 
 test("distancias inválidas, no finitas y desbordadas se rechazan", () => {
-  for (const value of [-1, NaN, Infinity, -Infinity, 1e17]) {
+  for (const value of [-1, NaN, Infinity, -Infinity, 2e17]) {
     assert.throws(() => deliveryFeeMinor(value), InvalidRouteDistance);
   }
 });

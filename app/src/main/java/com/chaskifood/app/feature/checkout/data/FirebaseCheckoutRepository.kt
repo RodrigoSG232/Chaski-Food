@@ -156,6 +156,14 @@ internal class FirebaseCheckoutRepository @Inject constructor(
             }
         }
         if (reasons.isNotEmpty()) return CheckoutReviewResult.Blocked(reasons)
+        val reviewedSubtotal = pricedItems.fold(0L) { total, item ->
+            Math.addExact(total, Math.multiplyExact(item.unitPriceMinor, item.quantity.toLong()))
+        }
+        if (reviewedSubtotal < MINIMUM_ORDER_SUBTOTAL_MINOR) {
+            return CheckoutReviewResult.Blocked(listOf(
+                "El pedido mínimo de productos es S/ 25.00. Agrega productos antes de continuar.",
+            ))
+        }
         val latestDocument = serverStore(storeId)
         if (latestDocument.metadata.isFromCache || latestDocument.metadata.hasPendingWrites()) {
             return CheckoutReviewResult.Error("No pudimos volver a verificar el local en el servidor.")

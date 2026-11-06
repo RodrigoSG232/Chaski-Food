@@ -12,7 +12,7 @@ const now = new Date("2026-10-29T12:00:00.000Z");
 const data = () => quoteDocument(context, 1250.5, now);
 test("stored quote uses private identity, exact tariff and server timestamps", () => {
   const stored = data(), response = readStoredQuote("quote", stored, context, now);
-  assert.equal(response.deliveryFeeMinor, 300); assert.equal(response.quoteId, "quote");
+  assert.equal(response.deliveryFeeMinor, 113); assert.equal(response.quoteId, "quote");
   assert.ok(stored.quotedAt instanceof Timestamp);
   assert.equal(Date.parse(response.expiresAt) - Date.parse(response.quotedAt), 300000);
   assert.ok(!("customerUid" in response));
