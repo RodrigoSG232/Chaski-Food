@@ -94,7 +94,7 @@ export class OrderService {
         const qc:QuoteContext={uid,storeId:expected.storeId,addressId:expected.delivery.addressId,businessId,origin,destination,
           logisticsHash:logisticsContextHash(uid,expected.storeId,expected.delivery.addressId,origin,destination)};
         const quote=readStoredQuote(expected.deliveryQuote.quoteId,quoteData,qc,decisionAt);
-        const amounts=orderAmounts(items,quote.deliveryFeeMinor);
+        const amounts=orderAmounts(items,quote.deliveryFeeMinor,expected.amounts.tipMinor);
         if(amounts.subtotalMinor<MINIMUM_ORDER_SUBTOTAL_MINOR)throw new OrderRejected("MINIMUM_NOT_MET","MINIMUM_NOT_MET",409);
         const actual:AcceptedPurchase=parseAcceptedPurchase({ownerUid:uid,businessId,storeId:expected.storeId,businessName:trustedText(business!.businessName),
           storeName:trustedText(store.name),storePhone:optionalStorePhone(store.phone),buyerName:trustedText(profile?.displayName || user.displayName),

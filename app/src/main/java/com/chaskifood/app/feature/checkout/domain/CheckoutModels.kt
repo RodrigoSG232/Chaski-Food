@@ -3,6 +3,8 @@ package com.chaskifood.app.feature.checkout.domain
 import com.chaskifood.app.feature.cart.domain.CartCurrency
 import com.chaskifood.app.feature.cart.domain.Cart
 import com.chaskifood.app.feature.address.domain.model.Address
+import com.chaskifood.app.feature.orders.domain.OrderAmounts
+import com.chaskifood.app.feature.orders.domain.orderMinor
 import kotlinx.coroutines.flow.Flow
 
 const val MINIMUM_ORDER_SUBTOTAL_MINOR = 2_500L
@@ -23,13 +25,23 @@ data class CheckoutQuote(
     val deliveryQuote: DeliveryQuote,
     val deliveryQuoteDeadlineMillis: Long,
     val acceptedPurchase: AcceptedPurchase? = null,
+    val tipMinor:Long=0,
 ) {
     init {
         require(deliveryFeeMinor == deliveryQuote.deliveryFeeMinor && currency == deliveryQuote.currency)
-        require(subtotalMinor >= 0 && totalMinor == Math.addExact(subtotalMinor, deliveryFeeMinor))
+        require(subtotalMinor >= 0 && tipMinor>=0 && totalMinor == Math.addExact(Math.addExact(subtotalMinor, deliveryFeeMinor),tipMinor))
         require(deliveryQuoteDeadlineMillis > 0)
     }
     val hasPriceChanges: Boolean get() = lines.any { it.previousUnitPriceMinor != it.unitPriceMinor }
+}
+
+fun CheckoutQuote.withTip(tipMinor:Long):CheckoutQuote {
+    orderMinor(tipMinor)
+    val total=Math.addExact(Math.addExact(subtotalMinor,deliveryFeeMinor),tipMinor)
+    val accepted=acceptedPurchase?.let{a->AcceptedPurchase(a.ownerUid,a.businessId,a.storeId,a.businessName,a.storeName,
+        a.storePhone,a.buyerName,a.buyerPhone,a.pickup,a.delivery,a.items,
+        OrderAmounts(a.amounts.subtotalMinor,a.amounts.deliveryFeeMinor,total,tipMinor),a.deliveryQuote,a.currency,a.paymentMethod)}
+    return copy(totalMinor=total,acceptedPurchase=accepted,tipMinor=tipMinor)
 }
 
 data class CheckoutLine(

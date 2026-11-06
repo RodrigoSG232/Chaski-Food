@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { effectivePriceMinor, withinStoreHours } from "../src/orders/orderValidation";
 import { parseOrderSubmission } from "../src/orders/orderRequest";
-import { MINIMUM_ORDER_SUBTOTAL_MINOR, parseAcceptedPurchase } from "../src/orders/orderModels";
+import { MINIMUM_ORDER_SUBTOTAL_MINOR,orderAmounts, parseAcceptedPurchase } from "../src/orders/orderModels";
 const vectors=JSON.parse(readFileSync(resolve(__dirname,"../../../app/src/test/resources/hu16/confirmation-v1.json"),"utf8"));
 const purchase=()=>structuredClone(vectors.validCases[0].purchase);
 const days=["MONDAY","TUESDAY","WEDNESDAY","THURSDAY","FRIDAY","SATURDAY","SUNDAY"];
@@ -36,6 +36,10 @@ test("tampered amounts and technical payload oversize cannot become a valid subm
 });
 test("el subtotal mínimo exigido es veinticinco soles",()=>{
   assert.equal(MINIMUM_ORDER_SUBTOTAL_MINOR,2_500);
+});
+test("la propina se conserva separada y forma parte del total",()=>{
+  assert.deepEqual(orderAmounts([{productId:"p",categoryId:"c",name:"Plato",quantity:2,unitPriceMinor:1250}],180,300),
+    {subtotalMinor:2500,deliveryFeeMinor:180,tipMinor:300,totalMinor:2980});
 });
 test("Lima hours support start inclusive, end exclusive and previous weekday overnight",()=>{
   const hours=days.map(dayOfWeek=>({dayOfWeek,enabled:dayOfWeek==="MONDAY",openTime:"22:00",closeTime:"02:00"}));

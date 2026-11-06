@@ -168,6 +168,7 @@ private fun DetailBody(detail: BuyerOrderDetail, message: String?, notice: Strin
             DetailCard {
                 AmountRow("Subtotal", detail.amounts.subtotalMinor)
                 AmountRow("Costo de reparto", detail.amounts.deliveryFeeMinor)
+                AmountRow("Propina",detail.amounts.tipMinor)
                 HorizontalDivider(color = ChaskiBorder)
                 AmountRow("Total", detail.amounts.totalMinor, bold = true)
             }

@@ -6,7 +6,7 @@ export const MINIMUM_ORDER_SUBTOTAL_MINOR = 2_500;
 export const MAX_ORDER_EPOCH_MILLIS = 253_402_300_799_999;
 export type OrderStatus = "PENDING_CONFIRMATION";
 export type OrderItem = Readonly<{ productId: string; categoryId: string; name: string; quantity: number; unitPriceMinor: number }>;
-export type OrderAmounts = Readonly<{ subtotalMinor: number; deliveryFeeMinor: number; totalMinor: number }>;
+export type OrderAmounts = Readonly<{ subtotalMinor: number; deliveryFeeMinor: number; tipMinor:number; totalMinor: number }>;
 export type OrderCoordinates = Readonly<{ latitude: number; longitude: number }>;
 export type OrderLocation = Readonly<{ addressText: string; location: OrderCoordinates; reference: string | null; instructions: string | null }>;
 export type AcceptedPurchase = Readonly<{
@@ -37,15 +37,15 @@ export function orderMinor(value: unknown): number {
 export function minorFromBigInt(value: bigint): number {
   check(value >= 0n && value <= BigInt(MAX_ORDER_MINOR)); return Number(value);
 }
-export function orderAmounts(items: readonly OrderItem[], deliveryFeeMinor: number): OrderAmounts {
+export function orderAmounts(items: readonly OrderItem[],deliveryFeeMinor:number,tipMinor=0): OrderAmounts {
   check(items.length > 0);
   const subtotal = items.reduce((sum, item) => {
     check(Number.isInteger(item.quantity) && item.quantity > 0 && item.quantity <= 2_147_483_647);
     check(orderMinor(item.unitPriceMinor) > 0);
     return sum + BigInt(item.quantity) * BigInt(item.unitPriceMinor);
   }, 0n);
-  return Object.freeze({ subtotalMinor: minorFromBigInt(subtotal), deliveryFeeMinor: orderMinor(deliveryFeeMinor),
-    totalMinor: minorFromBigInt(subtotal + BigInt(deliveryFeeMinor)) });
+  return Object.freeze({subtotalMinor:minorFromBigInt(subtotal),deliveryFeeMinor:orderMinor(deliveryFeeMinor),tipMinor:orderMinor(tipMinor),
+    totalMinor:minorFromBigInt(subtotal+BigInt(deliveryFeeMinor)+BigInt(tipMinor))});
 }
 function record(value: unknown, keys: string[]): Record<string, unknown> {
   check(value !== null && typeof value === "object" && !Array.isArray(value));
@@ -98,8 +98,11 @@ export function parseAcceptedPurchase(value: unknown): AcceptedPurchase {
   check(typeof q.distanceMeters === "number" && Number.isFinite(q.distanceMeters) && q.distanceMeters >= 0);
   const quotedAt = orderMinor(q.quotedAtEpochMillis), expiresAt = orderMinor(q.expiresAtEpochMillis);
   check(quotedAt > 0 && expiresAt > quotedAt && expiresAt <= MAX_ORDER_EPOCH_MILLIS);
-  const a = record(v.amounts, ["subtotalMinor", "deliveryFeeMinor", "totalMinor"]);
-  const amounts = orderAmounts(items, orderMinor(a.deliveryFeeMinor));
+  const amountValue=v.amounts as Record<string,unknown>;
+  const amountKeys=amountValue&&typeof amountValue==="object"&&"tipMinor" in amountValue?
+    ["subtotalMinor","deliveryFeeMinor","tipMinor","totalMinor"]:["subtotalMinor","deliveryFeeMinor","totalMinor"];
+  const a=record(v.amounts,amountKeys);
+  const amounts=orderAmounts(items,orderMinor(a.deliveryFeeMinor),orderMinor(a.tipMinor??0));
   check(orderMinor(a.subtotalMinor) === amounts.subtotalMinor && orderMinor(a.totalMinor) === amounts.totalMinor);
   const d = record(v.delivery, ["addressId", "label", "destination"]);
   return Object.freeze({ ownerUid: orderId(v.ownerUid), businessId: orderId(v.businessId), storeId: orderId(v.storeId),

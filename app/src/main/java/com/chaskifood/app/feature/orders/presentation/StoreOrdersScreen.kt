@@ -94,6 +94,7 @@ internal fun StoreOrdersContent(state:StoreOrdersUiState,onBack:()->Unit={},onRe
                 order.items.forEach{Text("${it.name}: ${formatCartPrice(it.unitPriceMinor)} × ${it.quantity} = ${formatCartPrice(it.lineTotalMinor)}")}
                 Text("Subtotal: ${formatCartPrice(order.amounts.subtotalMinor)}")
                 Text("Reparto: ${formatCartPrice(order.amounts.deliveryFeeMinor)}")
+                Text("Propina: ${formatCartPrice(order.amounts.tipMinor)}")
                 Text("Efectivo al recibir · PEN")
                 order.pickupCode?.let{Text("Código de recojo: $it",style=MaterialTheme.typography.titleMedium,fontWeight=FontWeight.Bold)}
                 if(order.status==OrderStatus.PENDING_CONFIRMATION)Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(ChaskiDimens.SpacingSm)) {

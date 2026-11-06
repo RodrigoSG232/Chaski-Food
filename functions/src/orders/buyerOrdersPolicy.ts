@@ -17,7 +17,7 @@ export const BUYER_SCAN_BUDGET = 200;
 export const BUYER_ITEM_PREVIEW = 2;
 /** Fields the projections need; everything else (buyer identity, hashes, quote) is never read into the response. */
 export const BUYER_ORDER_FIELDS = ["schemaVersion", "orderId", "buyerUid", "status", "createdAt", "items", "subtotalMinor",
-  "deliveryFeeMinor", "totalMinor", "currency", "paymentMethod", "storeSnapshot", "businessSnapshot"] as const;
+  "deliveryFeeMinor","tipMinor", "totalMinor", "currency", "paymentMethod", "storeSnapshot", "businessSnapshot"] as const;
 
 const inconsistent = (): never => { throw new OrderHttpError("DATA_INCONSISTENT", 503, true); };
 
@@ -71,15 +71,16 @@ export function projectBuyerOrderDetail(id: string, data: Record<string, any>, u
       return { status: state.status, statusKnown: state.known, occurredAtEpochMillis };
     }).sort((a, b) => a.occurredAtEpochMillis - b.occurredAtEpochMillis);
     if (statusHistory.length === 0) throw new Error();
-    const estimatedReadyAtEpochMillis = summary.status === "PREPARING" ?
+    const hasEstimate=["PREPARING","READY_FOR_PICKUP"].includes(summary.status);
+    const estimatedReadyAtEpochMillis = hasEstimate ?
       (data.estimatedReadyAt instanceof Timestamp ? data.estimatedReadyAt.toMillis() : (()=>{throw new Error();})()) : null;
-    const estimatedPreparationMinutes = summary.status === "PREPARING" && Number.isInteger(data.estimatedPreparationMinutes) &&
+    const estimatedPreparationMinutes = hasEstimate && Number.isInteger(data.estimatedPreparationMinutes) &&
       data.estimatedPreparationMinutes >= 5 && data.estimatedPreparationMinutes <= 180 ? data.estimatedPreparationMinutes : null;
-    if(summary.status === "PREPARING" && estimatedPreparationMinutes === null)throw new Error();
+    if(hasEstimate && estimatedPreparationMinutes === null)throw new Error();
     return { ...summary, storePhone: optionalText(store.phone), pickupAddressText: orderText(pickup.addressText),
       delivery: { label: optionalText(dropoff.label), addressText: orderText(dropoff.addressText),
         reference: optionalText(dropoff.reference), instructions: optionalText(dropoff.instructions) },
-      items: core.items, subtotalMinor: core.subtotalMinor, deliveryFeeMinor: core.deliveryFeeMinor,
+      items: core.items, subtotalMinor: core.subtotalMinor, deliveryFeeMinor: core.deliveryFeeMinor,tipMinor:core.tipMinor,
       paymentMethod: core.paymentMethod, statusHistory, estimatedPreparationMinutes, estimatedReadyAtEpochMillis };
   } catch (error) {
     if (error instanceof OrderHttpError) throw error;

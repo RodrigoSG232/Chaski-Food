@@ -23,7 +23,7 @@ internal object OrderWireCodec {
             put("quantity", i.quantity); put("unitPriceMinor", i.unitPriceMinor)
         }) } })
         put("amounts", buildJsonObject { put("subtotalMinor", a.amounts.subtotalMinor)
-            put("deliveryFeeMinor", a.amounts.deliveryFeeMinor); put("totalMinor", a.amounts.totalMinor) })
+            put("deliveryFeeMinor", a.amounts.deliveryFeeMinor);put("tipMinor",a.amounts.tipMinor); put("totalMinor", a.amounts.totalMinor) })
         put("currency", a.currency.name); put("paymentMethod", a.paymentMethod.name)
         put("deliveryQuote", buildJsonObject { val q = a.deliveryQuote.quote
             put("quoteId", a.deliveryQuote.quoteId); put("distanceMeters", q.distanceMeters)

@@ -47,9 +47,9 @@ export function validatedOrderCore(id:string,data:Record<string,any>) {
     subtotal+=BigInt(lineTotalMinor);
     return {productId,name,quantity,unitPriceMinor,lineTotalMinor};
   });
-  const subtotalMinor=orderMinor(data.subtotalMinor),deliveryFeeMinor=orderMinor(data.deliveryFeeMinor),totalMinor=orderMinor(data.totalMinor);
-  if(subtotal!==BigInt(subtotalMinor)||subtotal+BigInt(deliveryFeeMinor)!==BigInt(totalMinor))throw new Error();
-  return {createdAtEpochMillis,items,subtotalMinor,deliveryFeeMinor,totalMinor,currency:"PEN" as const,paymentMethod:"CASH_ON_DELIVERY" as const};
+  const subtotalMinor=orderMinor(data.subtotalMinor),deliveryFeeMinor=orderMinor(data.deliveryFeeMinor),tipMinor=orderMinor(data.tipMinor??0),totalMinor=orderMinor(data.totalMinor);
+  if(subtotal!==BigInt(subtotalMinor)||subtotal+BigInt(deliveryFeeMinor)+BigInt(tipMinor)!==BigInt(totalMinor))throw new Error();
+  return {createdAtEpochMillis,items,subtotalMinor,deliveryFeeMinor,tipMinor,totalMinor,currency:"PEN" as const,paymentMethod:"CASH_ON_DELIVERY" as const};
 }
 /** Explicit whitelist: no contacts, addresses, buyer identity, attempts or event state. */
 export function projectPendingOrder(id:string,data:Record<string,any>) {
@@ -57,7 +57,7 @@ export function projectPendingOrder(id:string,data:Record<string,any>) {
     if(data.status!=="PENDING_CONFIRMATION")throw new Error();
     const core=validatedOrderCore(id,data);
     return {orderId:id,createdAtEpochMillis:core.createdAtEpochMillis,status:"PENDING_CONFIRMATION" as const,items:core.items,
-      subtotalMinor:core.subtotalMinor,deliveryFeeMinor:core.deliveryFeeMinor,totalMinor:core.totalMinor,
+      subtotalMinor:core.subtotalMinor,deliveryFeeMinor:core.deliveryFeeMinor,tipMinor:core.tipMinor,totalMinor:core.totalMinor,
       currency:core.currency,paymentMethod:core.paymentMethod};
   }catch{throw new OrderHttpError("DATA_INCONSISTENT",503,true);}
 }
@@ -70,7 +70,7 @@ export function projectStoreOrder(id:string,data:Record<string,any>,status:Store
     const ready=status==="READY_FOR_PICKUP";
     if(ready&&(!(data.readyAt instanceof Timestamp)||typeof data.pickupCode!=="string"||!/^\d{4}$/.test(data.pickupCode)))throw new Error();
     return {orderId:id,createdAtEpochMillis:core.createdAtEpochMillis,status,items:core.items,
-      subtotalMinor:core.subtotalMinor,deliveryFeeMinor:core.deliveryFeeMinor,totalMinor:core.totalMinor,currency:core.currency,
+      subtotalMinor:core.subtotalMinor,deliveryFeeMinor:core.deliveryFeeMinor,tipMinor:core.tipMinor,totalMinor:core.totalMinor,currency:core.currency,
       paymentMethod:core.paymentMethod,estimatedPreparationMinutes:data.estimatedPreparationMinutes,
       estimatedReadyAtEpochMillis:data.estimatedReadyAt.toMillis(),
       ...(ready?{pickupCode:data.pickupCode,readyAtEpochMillis:data.readyAt.toMillis()}:{})};

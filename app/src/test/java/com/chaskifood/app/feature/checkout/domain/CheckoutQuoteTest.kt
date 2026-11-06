@@ -30,6 +30,12 @@ class CheckoutQuoteTest {
         assertEquals(1630L, quote.totalMinor)
     }
 
+    @Test fun `propina es opcional separada y actualiza el total`() {
+        val tipped=quote(listOf(CheckoutPricedItem("a","Plato",2,1250,1250))).withTip(500)
+        assertEquals(500L,tipped.tipMinor)
+        assertEquals(3380L,tipped.totalMinor)
+    }
+
     @Test fun `rechaza cantidad invalida e importes que desbordan`() {
         assertThrows(IllegalArgumentException::class.java) {
             quote(listOf(CheckoutPricedItem("a", "Plato", 0, 1000, 1000)))

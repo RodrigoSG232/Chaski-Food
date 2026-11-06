@@ -105,7 +105,7 @@ private fun BuyerOrderDetailResponse.toDomain(): BuyerOrderDetail {
     return BuyerOrderDetail(summary, storePhone, pickupAddressText,
         BuyerOrderDelivery(delivery.label, delivery.addressText, delivery.reference, delivery.instructions),
         items.map { StoreOrderLine(it.productId, it.name, it.quantity, it.unitPriceMinor, it.lineTotalMinor) },
-        OrderAmounts(subtotalMinor, deliveryFeeMinor, totalMinor), OrderPaymentMethod.CASH_ON_DELIVERY,
+        OrderAmounts(subtotalMinor,deliveryFeeMinor,totalMinor,tipMinor), OrderPaymentMethod.CASH_ON_DELIVERY,
         statusHistory.map { BuyerOrderStatusEntry(it.status, it.statusKnown, it.occurredAtEpochMillis) },
         estimatedPreparationMinutes,estimatedReadyAtEpochMillis)
 }

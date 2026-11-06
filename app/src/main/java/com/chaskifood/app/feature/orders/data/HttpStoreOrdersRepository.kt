@@ -103,7 +103,7 @@ internal class HttpStoreOrdersRepository @Inject constructor(private val api:Sto
                             require(o.status==status.name && o.currency=="PEN" && o.paymentMethod=="CASH_ON_DELIVERY")
                             StoreOrderSummary(o.orderId,o.createdAtEpochMillis,o.items.map {i->
                                 StoreOrderLine(i.productId,i.name,i.quantity,i.unitPriceMinor,i.lineTotalMinor)},
-                                OrderAmounts(o.subtotalMinor,o.deliveryFeeMinor,o.totalMinor),status,
+                                OrderAmounts(o.subtotalMinor,o.deliveryFeeMinor,o.totalMinor,o.tipMinor),status,
                                 estimatedPreparationMinutes=o.estimatedPreparationMinutes,estimatedReadyAtEpochMillis=o.estimatedReadyAtEpochMillis,
                                 pickupCode=o.pickupCode,readyAtEpochMillis=o.readyAtEpochMillis)
                         }

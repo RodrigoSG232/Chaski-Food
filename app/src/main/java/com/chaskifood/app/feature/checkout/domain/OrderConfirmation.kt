@@ -32,7 +32,7 @@ class AcceptedPurchase(
         storePhone?.let { orderText(it) } // Valor real del local: no inventar prefijos internacionales.
         buyerPhone?.let { require(it.matches(Regex("[+][1-9][0-9]{7,14}"))) }
         require(this.items.map { it.productId }.distinct().size == this.items.size)
-        require(amounts == orderAmounts(this.items, deliveryQuote.quote.deliveryFeeMinor))
+        require(amounts == orderAmounts(this.items, deliveryQuote.quote.deliveryFeeMinor,amounts.tipMinor))
         require(deliveryQuote.quote.storeLocation == pickup.location)
         require(deliveryQuote.quote.deliveryLocation == delivery.destination.location)
     }

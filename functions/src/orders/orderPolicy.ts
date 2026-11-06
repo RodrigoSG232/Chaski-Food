@@ -10,7 +10,8 @@ function bits(value: number): string {
 function coordinates(v: OrderCoordinates) { return { latitudeBits: bits(v.latitude), longitudeBits: bits(v.longitude) }; }
 function location(v: OrderLocation) { return { ...v, location: coordinates(v.location) }; }
 function purchase(v: AcceptedPurchase) {
-  return { ...v, pickup: location(v.pickup), delivery: { ...v.delivery, destination: location(v.delivery.destination) },
+  const amounts=v.amounts.tipMinor===0?{subtotalMinor:v.amounts.subtotalMinor,deliveryFeeMinor:v.amounts.deliveryFeeMinor,totalMinor:v.amounts.totalMinor}:v.amounts;
+  return { ...v,amounts, pickup: location(v.pickup), delivery: { ...v.delivery, destination: location(v.delivery.destination) },
     deliveryQuote: { quoteId: v.deliveryQuote.quoteId, distanceBits: bits(v.deliveryQuote.distanceMeters),
       tariffVersion: v.deliveryQuote.tariffVersion, quotedAtEpochMillis: v.deliveryQuote.quotedAtEpochMillis,
       expiresAtEpochMillis: v.deliveryQuote.expiresAtEpochMillis } };
@@ -59,7 +60,7 @@ export function orderReceipt(order: OrderReceipt): OrderReceipt {
     createdAtEpochMillis: order.createdAtEpochMillis, status: order.status });
 }
 const rejections = ["REVIEW_REQUIRED", "QUOTE_EXPIRED", "PURCHASE_FORBIDDEN", "BUSINESS_UNAVAILABLE", "STORE_UNAVAILABLE",
-  "NO_RESPONSIBLE", "INVALID_LOCATION", "OUTSIDE_COVERAGE"];
+  "NO_RESPONSIBLE", "INVALID_LOCATION", "OUTSIDE_COVERAGE","MINIMUM_NOT_MET"];
 export function recordedOrderAttempt(value: RecordedOrderAttempt): RecordedOrderAttempt {
   const uid = orderId(value.ownerUid), id = intentId(value.intentId);
   if (!/^[0-9a-f]{64}$/.test(value.requestHash)) throw new Error("INVALID_ORDER_CONTRACT");

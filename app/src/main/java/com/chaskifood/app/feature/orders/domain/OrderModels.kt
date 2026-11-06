@@ -41,17 +41,17 @@ data class OrderItem(
     }
 }
 
-data class OrderAmounts(val subtotalMinor: Long, val deliveryFeeMinor: Long, val totalMinor: Long) {
+data class OrderAmounts(val subtotalMinor: Long, val deliveryFeeMinor: Long, val totalMinor: Long,val tipMinor:Long=0) {
     init {
-        orderMinor(subtotalMinor); orderMinor(deliveryFeeMinor); orderMinor(totalMinor)
-        require(totalMinor == Math.addExact(subtotalMinor, deliveryFeeMinor))
+        orderMinor(subtotalMinor); orderMinor(deliveryFeeMinor); orderMinor(totalMinor);orderMinor(tipMinor)
+        require(totalMinor == Math.addExact(Math.addExact(subtotalMinor, deliveryFeeMinor),tipMinor))
     }
 }
 
-fun orderAmounts(items: List<OrderItem>, deliveryFeeMinor: Long): OrderAmounts {
+fun orderAmounts(items: List<OrderItem>, deliveryFeeMinor: Long,tipMinor:Long=0): OrderAmounts {
     require(items.isNotEmpty())
     val subtotal = items.fold(0L) { sum, item -> orderMinor(Math.addExact(sum, item.lineTotalMinor)) }
-    return OrderAmounts(subtotal, deliveryFeeMinor, orderMinor(Math.addExact(subtotal, deliveryFeeMinor)))
+    return OrderAmounts(subtotal,deliveryFeeMinor,orderMinor(Math.addExact(Math.addExact(subtotal,deliveryFeeMinor),tipMinor)),tipMinor)
 }
 
 data class OrderLocationSnapshot(
