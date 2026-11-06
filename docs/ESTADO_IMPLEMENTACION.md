@@ -1,6 +1,6 @@
 # Estado de implementación de Chasqui Food
 
-Última revisión: **01-11-2026**. Código integrado: `main` hasta HU17. HU18 está en `hu18-max`; HU19 y HU20 continúan en `ramaMax`. Estas ramas requieren PR y publicación autorizada. Cómo funciona: [ARCHITECTURE](ARCHITECTURE.md). Cómo trabajar: [GUIA_DESARROLLO](GUIA_DESARROLLO.md).
+Última revisión: **06-11-2026**. Código integrado: `main` hasta HU17. HU18–HU21 continúan en `ramaMax`. Esta rama requiere PR y publicación autorizada. Cómo funciona: [ARCHITECTURE](ARCHITECTURE.md). Cómo trabajar: [GUIA_DESARROLLO](GUIA_DESARROLLO.md).
 
 Vocabulario: **implementado** = código integrado; **verificado** = hay evidencia de ejecución; **validado en Cloud** = probado con el APK CONECTADO contra `chaski-food-9adba`. Una pantalla o un commit no cierran una historia por sí solos.
 
@@ -14,14 +14,15 @@ Vocabulario: **implementado** = código integrado; **verificado** = hay evidenci
 | HU05–HU11 negocios, locales, responsables, horarios, catálogo | Implementado | Desde HU34 registro, aprobación y asignación pasan por foodApi. HU07 limita la suspensión general a 8 locales activos. |
 | HU12–HU13 descubrimiento y búsqueda | Implementado | Conviven componentes de demostración (`FakeDiscoverRepository`). |
 | HU14 carrito | Implementado, probado y aceptado | Room por UID; sin reserva de precio/stock. Ajuste aprobado en HU17: «Agregar al carrito» vuelve al catálogo del local con aviso «Ver carrito»; botón «Continuar». |
-| **HU15** revisión de compra | **Validado en Cloud** | Elegibilidad y cotización vial HeiGIT (`lima-driving-car-v1`). |
+| **HU15** revisión de compra | **Validado en Cloud; cambio local pendiente de publicar** | Elegibilidad y cotización vial HeiGIT. En `ramaMax`: tarifa `lima-driving-car-v2` a S/0.90 por km vial, pedido mínimo S/25 y propina opcional separada. |
 | **HU16** confirmar pedido | **Validado en Cloud (31-10)** | Pedido idempotente, outbox, `newOrderNotifier` con FCM real y bandeja del responsable. Pedido de prueba `PENDING_CONFIRMATION`, evento `SENT`. |
 | **HU34** acceso según permisos | **Validado en Cloud** | Coordinador comercial en foodApi, índice privado, reglas publicadas, vinculación VERIFIED, cliente implícito, lease renovable y paneles con cierre de sesión. Comprador, propietario, responsable y administrador comprobados. |
 | **HU17** pedidos propios | **Completada y validada en Cloud (31-10)** | Lista En curso/Historial, detalle histórico, «Mis compras» en Cuenta (propietario/responsable) y «Ver mi pedido» en Checkout. Índice y `foodApi` (`foodapi-00003-vab`) publicados. |
 | **HU18** cancelar pedido | **Implementada; interfaz validada en dispositivo (01-11)** | Botón, confirmación y bloqueo desde `PREPARING` comprobados manualmente. Backend transaccional pendiente de emulador/publicación Cloud. |
 | **HU19** recibir y responder | **En desarrollo en rama** | Backend y Android implementan aceptar con estimación y rechazar con motivo; suspensión permite consultar/rechazar y bloquea aceptar. JVM `orders` aprobadas. Faltan notificación al cliente, emulador y validación manual/Cloud. |
 | **HU20** gestionar tiempo de preparación | **Implementada localmente en rama** | Bandeja `PREPARING`, actualización transaccional de 5–180 min, historial, detalle del cliente y outbox para una entrega existente. JVM `orders` aprobadas y pruebas instrumentadas compilan; faltan ejecutar emulador, validación manual y Cloud. |
-| HU21–HU22 | **Siguiente trabajo** | Ver §4.1. |
+| **HU21** finalizar preparación y validar recojo | **Implementada localmente en rama** | Responsable: `PREPARING → READY_FOR_PICKUP`, código de recojo de 4 dígitos, bandeja de listos y evento Rider cuando ya existe `deliveryId`. Falta emulador, validación manual y Cloud. La validación autenticada del recojo y `IN_DELIVERY` se completa con HU22. |
+| HU22 | **Siguiente trabajo** | Integración autenticada con Chasqui Rider; ver §4.1. |
 | HU23–HU33, EN04 | No iniciadas | Hay pantallas de ejemplo (seguimiento, pago, valoración) que **no** son funcionalidad productiva. Release sin configurar. |
 
 HU34 no figura en la planificación original del curso: es una historia acordada por el equipo (sus decisiones vigentes están en [DECISIONES](DECISIONES.md)).
@@ -54,8 +55,8 @@ Fuente única de pendientes. Cada elemento indica por qué se postergó, dónde 
 | HU18 | Cancelar pedido | **Aprobado:** cancelación directa únicamente en `PENDING_CONFIRMATION`; desde `PREPARING` no se permite. Si ya existe `deliveryId`, no se cancela silenciosamente y se reserva la coordinación para HU22. |
 | HU19 | Recibir y responder pedidos | **Aprobado:** `PENDING_CONFIRMATION → PREPARING`; estimación 5–180 min. Rechazo con motivo. En suspensión: consulta y rechazo permitidos, aceptación bloqueada. Notificación al cliente aún pendiente. |
 | HU20 | Gestionar tiempo de preparación | **Implementado en `ramaMax`:** modificación solo en `PREPARING`, 5–180 min, historial versionado, lectura del cliente al refrescar y evento durable si ya existe reparto. Pendiente de validación LOCAL/Cloud. |
-| HU21 | Finalizar preparación y validar recojo | `READY_FOR_PICKUP`. |
-| HU22 | Solicitar servicio de reparto | Integración con Chasqui Rider; contrato no definido. |
+| HU21 | Finalizar preparación y validar recojo | **Implementado en `ramaMax`:** responsable autorizado marca listo y obtiene código de recojo de cuatro dígitos. La entrega no cambia a `IN_DELIVERY` desde Food. |
+| HU22 | Solicitar servicio de reparto | Rider validará el código de recojo mediante API autenticada; solo su evento `PICKED_UP` permitirá `IN_DELIVERY`. Definir además contrato de ubicación/estados y código de entrega posterior. |
 
 ### 4.2 Mejoras aprobadas, no implementadas
 | Mejora | Por qué se postergó | Dónde | ¿Decisión humana? | Precauciones |

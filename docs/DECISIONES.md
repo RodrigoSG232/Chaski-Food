@@ -8,8 +8,10 @@ Decisiones **aprobadas** por el equipo que siguen aplicando y condicionan las pr
 - **El índice `commercial_access_index` es derivado y privado**: coordina UID y correo; Auth, `business_requests` y `store_managers` siguen siendo las fuentes. No es una colección de roles (HU34-20).
 - **Sin eliminaciones automáticas** al preparar o reconciliar datos; los conflictos se detectan y se resuelven explícitamente (HU34-24).
 
-## Pedidos (HU15–HU20)
+## Pedidos (HU15–HU22)
 - **Cotización**: foodApi la calcula con HeiGIT, la guarda y entrega `quoteId`; vale 5 minutos, pertenece al UID (no a la sesión) y se reutiliza mientras sea válida. Android nunca fija importes (HU16-01, HU16-06, HU16-20).
+- **Tarifa y mínimo:** el reparto cuesta S/0.90 por kilómetro de ruta, sin base fija (`lima-driving-car-v2`). El subtotal de productos debe ser al menos S/25.00; foodApi lo revalida con precios vigentes.
+- **Desglose:** el pedido conserva subtotal de productos, costo de reparto, propina opcional y total. La propina no se mezcla con el costo de reparto.
 - **Confirmación autoritativa**: la transacción final revalida precios, permisos, responsables, dirección, cotización y horario; sin llamadas a HeiGIT/FCM dentro de la transacción (HU16-17).
 - **Idempotencia**: cada intención tiene un `intentId` duradero por UID; repetirla devuelve el resultado original; el mismo ID con otro contenido se rechaza; una compra nueva usa otro ID (HU16-03, HU16-09).
 - **Recuperación**: se distinguen éxito, rechazo final e incertidumbre; un timeout no significa fracaso; la intención se guarda en Room **antes** de llamar y una nueva revisión implica nueva intención, nunca un reenvío automático (HU16-02, HU16-18, HU16-22).
@@ -19,6 +21,9 @@ Decisiones **aprobadas** por el equipo que siguen aplicando y condicionan las pr
 - **Cancelación HU18:** el comprador cancela directamente solo mientras el estado siga en `PENDING_CONFIRMATION`. Desde `PREPARING` no se permite cancelar; la transición compite atómicamente con la futura aceptación de HU19. Repetir una cancelación propia ya completada es idempotente. Un pedido con `deliveryId` requiere coordinación logística de HU22 y no se cancela silenciosamente.
 - **Respuesta HU19:** solo un responsable VERIFIED asignado al local responde pedidos `PENDING_CONFIRMATION`. Aceptar pasa directamente a `PREPARING` e incluye una estimación de 5–180 minutos; rechazar exige un motivo y «Otro» exige explicación. Durante la suspensión se conserva consulta y rechazo, pero se bloquea la aceptación.
 - **Estimación HU20:** solo se modifica mientras el pedido permanezca `PREPARING`, dentro de 5–180 minutos y mediante una transacción de foodApi. Cada cambio crea historial versionado; repetir el mismo valor es idempotente. El cliente recibe el valor vigente al refrescar su detalle. Si ya existe `deliveryId`, se genera un evento durable `PREPARATION_ESTIMATE_UPDATED`; su consumo por Rider pertenece a HU22.
+- **Recojo HU21:** solo un responsable autorizado cambia `PREPARING → READY_FOR_PICKUP`. foodApi genera un código aleatorio de cuatro dígitos y lo muestra en la bandeja privada del local. Si existe `deliveryId`, crea `ORDER_READY_FOR_PICKUP` para Rider.
+- **Códigos separados:** el código de recojo valida local → repartidor. El futuro código de entrega/pago valida repartidor → cliente y se genera según la regla de pago; nunca se reutiliza el código de recojo.
+- **Límite entre apps:** Food no crea usuarios repartidores. Chasqui Rider consume pedidos mediante API autenticada y solo un evento Rider `PICKED_UP` válido podrá cambiar el pedido a `IN_DELIVERY` en HU22.
 - **Para recibir pedidos** basta al menos un responsable asignado válido; no se exige que esté conectado. Sin responsables se bloquean confirmaciones nuevas (HU16-05, HU16-12).
 
 ## Consultas propias (HU17)
