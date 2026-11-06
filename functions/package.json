@@ -16,6 +16,7 @@
     "marketplace:seed": "GCLOUD_PROJECT=demo-chaski-hu15 FIRESTORE_EMULATOR_HOST=127.0.0.1:8089 FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099 STORAGE_EMULATOR_HOST=http://127.0.0.1:9199 node lib/test/marketplace/seed.js",
     "marketplace:reset": "GCLOUD_PROJECT=demo-chaski-hu15 FIRESTORE_EMULATOR_HOST=127.0.0.1:8089 FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099 STORAGE_EMULATOR_HOST=http://127.0.0.1:9199 node lib/test/marketplace/reset.js",
     "marketplace:seed:permanent": "node lib/test/marketplace/permanentSeed.js",
+    "marketplace:verify:permanent": "node lib/test/marketplace/permanentVerify.js",
     "verify:package": "node scripts/verifyPackage.cjs"
   },
   "dependencies": {

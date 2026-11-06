@@ -82,6 +82,12 @@ Las cuatro cuentas usan la contraseña `emulator-password` y ya tienen teléfono
 
 Para retirarlos usa `pnpm --dir functions run marketplace:reset`. Los archivos fuente están en `functions/test/marketplace/assets/`, quedan excluidos del paquete de Cloud y no se publican con Functions.
 
+#### Marketplace permanente compartido
+
+El proyecto real `chaski-food-9adba` contiene también el mismo marketplace como datos persistentes: cuatro perfiles comerciales, dos negocios, seis locales, ocho categorías, veinte productos, sesenta configuraciones por local y veintiséis JPEG en Firebase Storage. No incluye clientes ni repartidores. Los compañeros no deben ejecutar el sembrador para usarlo; solo deben compilar la aplicación en modo `CONECTADO` con su `google-services.json` autorizado.
+
+La carga administrativa es idempotente, exige credenciales fuera del repositorio, una contraseña fuerte por variable de entorno y la confirmación literal `CHASKI_PERMANENT_SEED_CONFIRM=chaski-food-9adba`. Antes de escribir aborta ante colisiones de UID, correo, documento u objeto. `marketplace:verify:permanent` permite auditar cantidades y vínculos sin mostrar secretos. No se ejecuta como parte de compilaciones, pruebas ni despliegues.
+
 ### 2.2 Pruebas
 | Qué | Comando |
 |---|---|

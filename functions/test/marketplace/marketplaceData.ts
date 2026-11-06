@@ -163,7 +163,7 @@ async function populateMarketplace(db: Firestore, auth: Auth, bucket: Marketplac
       category: "RESTAURANT", seedNamespace: MARKETPLACE_NAMESPACE, seedVersion: 1, environment: options.environment,
       createdAt: now, updatedAt: now,
     });
-    for (const store of business.stores) {
+    await Promise.all(business.stores.map(async store => {
       const path = `businesses/${business.id}/stores/${store.id}/cover.jpg`;
       const url = await uploadImage(bucket, business.image, path, options.publicUrl);
       await db.doc(`stores/${store.id}`).set({
@@ -172,14 +172,14 @@ async function populateMarketplace(db: Firestore, auth: Auth, bucket: Marketplac
         status: "ACTIVE", operationalStatus: "OPEN", operatingHours: hours,
         seedNamespace: MARKETPLACE_NAMESPACE, seedVersion: 1, environment: options.environment, createdAt: now, updatedAt: now,
       });
-    }
-    for (const [index, category] of business.categories.entries()) {
+    }));
+    await Promise.all(business.categories.map(async (category, index) => {
       await db.doc(`categories/${category.id}`).set({
         businessId: business.id, name: category.name, isActive: true, displayOrder: index + 1,
         seedNamespace: MARKETPLACE_NAMESPACE, seedVersion: 1, environment: options.environment, createdAt: now, updatedAt: now,
       });
-    }
-    for (const [index, product] of business.products.entries()) {
+    }));
+    await Promise.all(business.products.map(async (product, index) => {
       const categoryName = business.categories.find(category => category.id === product.category)?.name ?? "";
       const path = `businesses/${business.id}/products/${product.id}/image.jpg`;
       const url = await uploadImage(bucket, product.image, path, options.publicUrl);
@@ -190,7 +190,7 @@ async function populateMarketplace(db: Firestore, auth: Auth, bucket: Marketplac
         seedNamespace: MARKETPLACE_NAMESPACE, seedVersion: 1, environment: options.environment,
         createdAt: Date.now() + index, updatedAt: now,
       });
-      for (const [storeIndex, store] of business.stores.entries()) {
+      await Promise.all(business.stores.map(async (store, storeIndex) => {
         await db.doc(`store_product_configs/${store.id}_${product.id}`).set({
           businessId: business.id, storeId: store.id, productId: product.id,
           price: Number((product.price + storeIndex).toFixed(2)),
@@ -198,8 +198,8 @@ async function populateMarketplace(db: Firestore, auth: Auth, bucket: Marketplac
           seedNamespace: MARKETPLACE_NAMESPACE, seedVersion: 1, environment: options.environment,
           updatedBy: business.id, updatedAt: now,
         });
-      }
-    }
+      }));
+    }));
   }
 
   const admin: CommercialIdentity = { ...TEMP_ADMIN, emailVerified: true, admin: true };
