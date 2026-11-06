@@ -1,6 +1,8 @@
 package com.chaskifood.app.feature.orders.presentation
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
@@ -28,13 +30,14 @@ fun StoreOrdersScreen(onBack:()->Unit,viewModel:StoreOrdersViewModel=hiltViewMod
     val authorize=LocalProtectedAction.current
     StoreOrdersContent(state,onBack,{authorize{viewModel.refresh()}},{authorize{viewModel.loadMore()}},
         {id,minutes->authorize{viewModel.accept(id,minutes)}},{id,reason,text->authorize{viewModel.reject(id,reason,text)}},
-        {authorize{viewModel.selectStatus(it)}},{id,minutes->authorize{viewModel.updateEstimate(id,minutes)}})
+        {authorize{viewModel.selectStatus(it)}},{id,minutes->authorize{viewModel.updateEstimate(id,minutes)}},
+        {id->authorize{viewModel.markReady(id)}})
 }
 
 @Composable
 internal fun StoreOrdersContent(state:StoreOrdersUiState,onBack:()->Unit={},onRefresh:()->Unit={},onMore:()->Unit={},
     onAccept:(String,Int)->Unit={_,_->},onReject:(String,StoreOrderRejectionReason,String?)->Unit={_,_,_->},
-    onStatus:(OrderStatus)->Unit={},onEstimate:(String,Int)->Unit={_,_->}) {
+    onStatus:(OrderStatus)->Unit={},onEstimate:(String,Int)->Unit={_,_->},onReady:(String)->Unit={}) {
     var expanded by remember(state.context){mutableStateOf<String?>(null)}
     var accepting by remember{mutableStateOf<String?>(null)}
     var rejecting by remember{mutableStateOf<String?>(null)}
@@ -46,9 +49,10 @@ internal fun StoreOrdersContent(state:StoreOrdersUiState,onBack:()->Unit={},onRe
         LazyColumn(Modifier.fillMaxSize().padding(padding),contentPadding=PaddingValues(ChaskiDimens.ScreenPadding),
             verticalArrangement=Arrangement.spacedBy(ChaskiDimens.SpacingMd)) {
             if(state.storeName.isNotBlank())item("store"){Text(state.storeName,style=MaterialTheme.typography.titleLarge)}
-            item("queues"){Row(horizontalArrangement=Arrangement.spacedBy(8.dp)){
+            item("queues"){Row(Modifier.horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(8.dp)){
                 FilterChip(state.selectedStatus==OrderStatus.PENDING_CONFIRMATION,{onStatus(OrderStatus.PENDING_CONFIRMATION)},{Text("Pendientes")})
-                FilterChip(state.selectedStatus==OrderStatus.PREPARING,{onStatus(OrderStatus.PREPARING)},{Text("En preparación")})}}
+                FilterChip(state.selectedStatus==OrderStatus.PREPARING,{onStatus(OrderStatus.PREPARING)},{Text("En preparación")})
+                FilterChip(state.selectedStatus==OrderStatus.READY_FOR_PICKUP,{onStatus(OrderStatus.READY_FOR_PICKUP)},{Text("Listos")})}}
             when {
                 state.loading->item("loading"){CircularProgressIndicator();Text("Consultando pedidos…")}
                 state.accessDenied->item("denied"){Text(state.message.orEmpty(),modifier=Modifier.semantics{liveRegion=LiveRegionMode.Polite})}
@@ -59,7 +63,7 @@ internal fun StoreOrdersContent(state:StoreOrdersUiState,onBack:()->Unit={},onRe
                     items(state.orders,key={it.orderId}){order->
                         OrderInboxCard(order,expanded==order.orderId,state.respondingOrderId==null,
                             {expanded=if(expanded==order.orderId)null else order.orderId},{accepting=order.orderId},
-                            {rejecting=order.orderId},{estimating=order.orderId})
+                            {rejecting=order.orderId},{estimating=order.orderId},{onReady(order.orderId)})
                     }
                     if(state.loadingMore)item("more-loading"){CircularProgressIndicator()}
                     if(state.nextCursor!=null)item("more"){ChaskiButton("Cargar más",onClick=onMore,enabled=!state.loadingMore,
@@ -70,13 +74,17 @@ internal fun StoreOrdersContent(state:StoreOrdersUiState,onBack:()->Unit={},onRe
     }
 }
 @Composable private fun OrderInboxCard(order:StoreOrderSummary,expanded:Boolean,actionsEnabled:Boolean,onToggle:()->Unit,
-    onAccept:()->Unit,onReject:()->Unit,onEstimate:()->Unit) {
+    onAccept:()->Unit,onReject:()->Unit,onEstimate:()->Unit,onReady:()->Unit) {
     val date=remember(order.createdAtEpochMillis){SimpleDateFormat("dd/MM/yyyy HH:mm",Locale.forLanguageTag("es-PE")).apply{
         timeZone=TimeZone.getTimeZone("America/Lima")}.format(Date(order.createdAtEpochMillis))}
     Surface(color=MaterialTheme.colorScheme.surface,shape=MaterialTheme.shapes.medium) {
         Column(Modifier.fillMaxWidth().padding(ChaskiDimens.SpacingMd),verticalArrangement=Arrangement.spacedBy(ChaskiDimens.SpacingSm)) {
             Text("Pedido ${order.orderId.take(8)}",fontWeight=FontWeight.Bold)
-            Text(date);Text(if(order.status==OrderStatus.PREPARING)"En preparación" else "Pendiente de confirmación")
+            Text(date);Text(when(order.status){
+                OrderStatus.PENDING_CONFIRMATION->"Pendiente de confirmación"
+                OrderStatus.PREPARING->"En preparación"
+                OrderStatus.READY_FOR_PICKUP->"Listo para recojo"
+            })
             order.estimatedPreparationMinutes?.let{Text("Estimación: $it minutos")}
             order.items.forEach{Text("${it.quantity} × ${it.name}")}
             Text("Total: ${formatCartPrice(order.amounts.totalMinor)}",fontWeight=FontWeight.Bold)
@@ -87,12 +95,16 @@ internal fun StoreOrdersContent(state:StoreOrdersUiState,onBack:()->Unit={},onRe
                 Text("Subtotal: ${formatCartPrice(order.amounts.subtotalMinor)}")
                 Text("Reparto: ${formatCartPrice(order.amounts.deliveryFeeMinor)}")
                 Text("Efectivo al recibir · PEN")
+                order.pickupCode?.let{Text("Código de recojo: $it",style=MaterialTheme.typography.titleMedium,fontWeight=FontWeight.Bold)}
                 if(order.status==OrderStatus.PENDING_CONFIRMATION)Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(ChaskiDimens.SpacingSm)) {
                     ChaskiButton("Aceptar pedido",onClick=onAccept,enabled=actionsEnabled,modifier=Modifier.weight(1f))
                     ChaskiButton("Rechazar pedido",onClick=onReject,enabled=actionsEnabled,modifier=Modifier.weight(1f),
                         variant=ChaskiButtonVariant.Outlined)
                 }
-                else ChaskiButton("Actualizar estimación",onClick=onEstimate,enabled=actionsEnabled)
+                else if(order.status==OrderStatus.PREPARING)Column(verticalArrangement=Arrangement.spacedBy(ChaskiDimens.SpacingSm)){
+                    ChaskiButton("Marcar pedido listo",onClick=onReady,enabled=actionsEnabled)
+                    ChaskiButton("Actualizar estimación",onClick=onEstimate,enabled=actionsEnabled,variant=ChaskiButtonVariant.Outlined)
+                }
             }
         }
     }

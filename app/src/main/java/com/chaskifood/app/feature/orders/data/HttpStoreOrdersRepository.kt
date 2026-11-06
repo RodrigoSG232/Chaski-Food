@@ -12,6 +12,26 @@ internal class HttpStoreOrdersRepository @Inject constructor(private val api:Sto
     private val tokens:BuyerTokenSource,private val access:StoreOrdersAccessSource):StoreOrdersRepository {
     override fun observeAuthorization(target:StoreOrdersTarget)=access.observe(target)
     override fun isCurrent(context:StoreOrdersContext)=access.current(context.target)==StoreOrdersAuthorization.Allowed(context)
+    override suspend fun markReady(context:StoreOrdersContext,orderId:String):MarkOrderReadyResult {
+        if(!isCurrent(context))return MarkOrderReadyResult.StaleContext
+        if(!orderId.matches(Regex("[0-9a-f]{64}")))return MarkOrderReadyResult.NotFound
+        return try { withTimeoutOrNull(15_000) {
+            val token=tokens.token(context.ownerUid,context.sessionGeneration)
+            val response=api.markReady(context.target.storeId,orderId,"Bearer $token",buildJsonObject{})
+            if(!isCurrent(context)||!tokens.isCurrent(context.ownerUid,context.sessionGeneration))return@withTimeoutOrNull MarkOrderReadyResult.StaleContext
+            when(response.code()){
+                200->{val body=requireNotNull(response.body());require(body.contractVersion==1&&body.status=="READY_FOR_PICKUP"&&
+                    body.pickupCode?.matches(Regex("[0-9]{4}"))==true&&body.readyAtEpochMillis!=null)
+                    MarkOrderReadyResult.Ready(body.pickupCode,body.readyAtEpochMillis)}
+                401->MarkOrderReadyResult.AuthenticationRequired;403->MarkOrderReadyResult.AccessDenied
+                404->MarkOrderReadyResult.NotFound;409->MarkOrderReadyResult.StateChanged
+                else->MarkOrderReadyResult.Unavailable
+            }
+        }?:MarkOrderReadyResult.Unavailable }catch(e:CancellationException){throw e}
+        catch(_:BuyerSessionChanged){MarkOrderReadyResult.StaleContext}
+        catch(_:BuyerAuthenticationRequired){MarkOrderReadyResult.AuthenticationRequired}
+        catch(_:Exception){MarkOrderReadyResult.Unavailable}
+    }
     override suspend fun updateEstimate(context:StoreOrdersContext,orderId:String,minutes:Int):PreparationEstimateResult {
         if(!isCurrent(context))return PreparationEstimateResult.StaleContext
         if(!orderId.matches(Regex("[0-9a-f]{64}"))||minutes !in 5..180)return PreparationEstimateResult.NotFound
@@ -84,7 +104,8 @@ internal class HttpStoreOrdersRepository @Inject constructor(private val api:Sto
                             StoreOrderSummary(o.orderId,o.createdAtEpochMillis,o.items.map {i->
                                 StoreOrderLine(i.productId,i.name,i.quantity,i.unitPriceMinor,i.lineTotalMinor)},
                                 OrderAmounts(o.subtotalMinor,o.deliveryFeeMinor,o.totalMinor),status,
-                                estimatedPreparationMinutes=o.estimatedPreparationMinutes,estimatedReadyAtEpochMillis=o.estimatedReadyAtEpochMillis)
+                                estimatedPreparationMinutes=o.estimatedPreparationMinutes,estimatedReadyAtEpochMillis=o.estimatedReadyAtEpochMillis,
+                                pickupCode=o.pickupCode,readyAtEpochMillis=o.readyAtEpochMillis)
                         }
                         require(cursor==null || body.nextCursor!=cursor)
                         StoreOrdersResult.Loaded(StoreOrdersPage(body.storeId,body.storeName,orders,body.nextCursor))

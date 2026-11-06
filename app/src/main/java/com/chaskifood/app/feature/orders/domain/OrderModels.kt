@@ -10,7 +10,7 @@ const val MAX_ORDER_MINOR: Long = 9_007_199_254_740_991L
 const val MAX_ORDER_EPOCH_MILLIS: Long = 253_402_300_799_999L
 
 enum class OrderPaymentMethod { CASH_ON_DELIVERY }
-enum class OrderStatus { PENDING_CONFIRMATION, PREPARING }
+enum class OrderStatus { PENDING_CONFIRMATION, PREPARING, READY_FOR_PICKUP }
 
 fun orderMinor(value: Long): Long = value.also { require(it in 0..MAX_ORDER_MINOR) }
 

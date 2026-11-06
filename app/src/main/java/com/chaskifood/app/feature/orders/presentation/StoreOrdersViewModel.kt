@@ -59,6 +59,30 @@ class StoreOrdersViewModel @Inject constructor(private val repository:StoreOrder
     fun accept(orderId:String,estimatedPreparationMinutes:Int)=respond(orderId,StoreOrderDecision.Accept(estimatedPreparationMinutes))
     fun reject(orderId:String,reason:StoreOrderRejectionReason,explanation:String?=null)=
         respond(orderId,StoreOrderDecision.Reject(reason,explanation?.trim()))
+    fun markReady(orderId:String){
+        val expected=usableContext()?:return
+        if(decisionJob?.isActive==true || mutable.value.respondingOrderId!=null ||
+            mutable.value.orders.none{it.orderId==orderId&&it.status==OrderStatus.PREPARING})return
+        val ticket=request
+        mutable.update{it.copy(respondingOrderId=orderId,message=null)}
+        decisionJob=viewModelScope.launch{
+            val result=try{repository.markReady(expected,orderId)}catch(e:CancellationException){throw e}
+                catch(_:Exception){MarkOrderReadyResult.Unavailable}
+            currentCoroutineContext().ensureActive()
+            if(ticket!=request||context!=expected)return@launch
+            when(result){
+                is MarkOrderReadyResult.Ready->mutable.update{it.copy(orders=it.orders.filterNot{o->o.orderId==orderId},
+                    respondingOrderId=null,message="Pedido listo. Código de recojo: ${result.pickupCode}")}
+                MarkOrderReadyResult.StateChanged,MarkOrderReadyResult.NotFound->mutable.update{it.copy(
+                    orders=it.orders.filterNot{o->o.orderId==orderId},respondingOrderId=null,
+                    message="El pedido cambió y ya no está en preparación.")}
+                MarkOrderReadyResult.AccessDenied,MarkOrderReadyResult.AuthenticationRequired,MarkOrderReadyResult.StaleContext->{
+                    context=null;mutable.value=StoreOrdersUiState(loading=false,accessDenied=true,message="Tu autorización cambió.")}
+                MarkOrderReadyResult.Unavailable->mutable.update{it.copy(respondingOrderId=null,
+                    message="No pudimos marcar el pedido como listo. Inténtalo nuevamente.")}
+            }
+        }
+    }
     fun updateEstimate(orderId:String,minutes:Int){
         val expected=usableContext()?:return;if(decisionJob?.isActive==true)return
         mutable.update{it.copy(respondingOrderId=orderId,message=null)}

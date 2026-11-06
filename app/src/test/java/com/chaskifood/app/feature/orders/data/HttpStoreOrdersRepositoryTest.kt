@@ -35,6 +35,8 @@ class HttpStoreOrdersRepositoryTest {
         }
         override suspend fun updateEstimate(storeId:String,orderId:String,authorization:String,body:JsonObject)=
             Response.error<StoreOrderDecisionResponse>(503,"{}".toResponseBody())
+        override suspend fun markReady(storeId:String,orderId:String,authorization:String,body:JsonObject)=
+            Response.error<StoreOrderDecisionResponse>(503,"{}".toResponseBody())
     }
     private fun valid()=StoreOrdersResponse(1,"store","Local",listOf(StoreOrderResponse("order",1800000000000,"PENDING_CONFIRMATION",
         listOf(StoreOrderLineResponse("p","Plato",2,1000,2000)),2000,300,2300,"PEN","CASH_ON_DELIVERY")),null)

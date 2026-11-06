@@ -24,6 +24,7 @@ class StoreOrdersViewModelTest {
         var next:StoreOrdersResult=StoreOrdersResult.Loaded(StoreOrdersPage("store","Local",emptyList(),null))
         var decision:StoreOrderDecisionResult=StoreOrderDecisionResult.Unavailable
         var estimate:PreparationEstimateResult=PreparationEstimateResult.Unavailable
+        var ready:MarkOrderReadyResult=MarkOrderReadyResult.Unavailable
         val decisions=mutableListOf<Pair<String,StoreOrderDecision>>()
         var block:suspend()->StoreOrdersResult={next}
         override fun observeAuthorization(target:StoreOrdersTarget):Flow<StoreOrdersAuthorization> = auth
@@ -33,6 +34,7 @@ class StoreOrdersViewModelTest {
             decisions+=orderId to decision;return this.decision
         }
         override suspend fun updateEstimate(context:StoreOrdersContext,orderId:String,minutes:Int)=estimate
+        override suspend fun markReady(context:StoreOrdersContext,orderId:String)=ready
     }
     private fun vm(repo:Repo,store:String="store")=StoreOrdersViewModel(repo,SavedStateHandle(mapOf("businessId" to "business","storeId" to store)))
     @Test fun firstLoadRefreshAndPagingUseExistingContextWithoutDuplicateCalls()=runTest {
@@ -63,6 +65,15 @@ class StoreOrdersViewModelTest {
         repo.estimate=PreparationEstimateResult.Updated(1800002400000);vm.updateEstimate("order",40);runCurrent()
         assertEquals(40,vm.state.value.orders.single().estimatedPreparationMinutes)
         assertEquals(1800002400000,vm.state.value.orders.single().estimatedReadyAtEpochMillis)
+    }
+    @Test fun readyTransitionRemovesPreparingOrderAndShowsPickupCode()=runTest {
+        val repo=Repo(StoreOrdersAuthorization.Allowed(context()))
+        repo.next=StoreOrdersResult.Loaded(StoreOrdersPage("store","Local",listOf(StoreOrderSummary("order",1800000000000,
+            listOf(StoreOrderLine("p","Plato",1,1000,1000)),OrderAmounts(1000,300,1300),OrderStatus.PREPARING,
+            estimatedPreparationMinutes=30,estimatedReadyAtEpochMillis=1800001800000)),null))
+        val vm=vm(repo);runCurrent();repo.ready=MarkOrderReadyResult.Ready("0042",1800001700000)
+        vm.markReady("order");runCurrent()
+        assertTrue(vm.state.value.orders.isEmpty());assertTrue(vm.state.value.message!!.contains("0042"))
     }
     @Test fun uidGenerationAndRevocationClearDataAndIgnoreUncooperativeLateResponses()=runTest {
         for(next in listOf(StoreOrdersAuthorization.Denied,StoreOrdersAuthorization.SignedOut,

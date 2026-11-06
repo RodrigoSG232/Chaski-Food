@@ -25,15 +25,19 @@ data class StoreOrderLine(val productId:String,val name:String,val quantity:Int,
 }
 class StoreOrderSummary(val orderId:String,val createdAtEpochMillis:Long,items:List<StoreOrderLine>,val amounts:OrderAmounts,
     val status:OrderStatus=OrderStatus.PENDING_CONFIRMATION,val paymentMethod:OrderPaymentMethod=OrderPaymentMethod.CASH_ON_DELIVERY,
-    val estimatedPreparationMinutes:Int?=null,val estimatedReadyAtEpochMillis:Long?=null) {
+    val estimatedPreparationMinutes:Int?=null,val estimatedReadyAtEpochMillis:Long?=null,
+    val pickupCode:String?=null,val readyAtEpochMillis:Long?=null) {
     val items:List<StoreOrderLine> = frozenOrderList(items)
     init {
         orderId(orderId);require(createdAtEpochMillis in 1..MAX_ORDER_EPOCH_MILLIS)
         require(this.items.isNotEmpty() && this.items.map{it.productId}.distinct().size==this.items.size)
         require(this.items.fold(0L){sum,i->orderMinor(Math.addExact(sum,i.lineTotalMinor))}==amounts.subtotalMinor)
-        if(status==OrderStatus.PREPARING)require(estimatedPreparationMinutes!=null&&estimatedPreparationMinutes in 5..180 &&
+        if(status==OrderStatus.PREPARING || status==OrderStatus.READY_FOR_PICKUP)require(estimatedPreparationMinutes!=null&&estimatedPreparationMinutes in 5..180 &&
             estimatedReadyAtEpochMillis!=null&&estimatedReadyAtEpochMillis in 1..MAX_ORDER_EPOCH_MILLIS)
         else require(estimatedPreparationMinutes==null&&estimatedReadyAtEpochMillis==null)
+        if(status==OrderStatus.READY_FOR_PICKUP)require(pickupCode?.matches(Regex("[0-9]{4}"))==true &&
+            readyAtEpochMillis!=null&&readyAtEpochMillis in 1..MAX_ORDER_EPOCH_MILLIS)
+        else require(pickupCode==null&&readyAtEpochMillis==null)
     }
 }
 class StoreOrdersPage(val storeId:String,val storeName:String,orders:List<StoreOrderSummary>,val nextCursor:String?) {
@@ -86,10 +90,20 @@ sealed interface PreparationEstimateResult {
     data object StaleContext:PreparationEstimateResult
     data object Unavailable:PreparationEstimateResult
 }
+sealed interface MarkOrderReadyResult {
+    data class Ready(val pickupCode:String,val readyAtEpochMillis:Long):MarkOrderReadyResult
+    data object StateChanged:MarkOrderReadyResult
+    data object AccessDenied:MarkOrderReadyResult
+    data object AuthenticationRequired:MarkOrderReadyResult
+    data object NotFound:MarkOrderReadyResult
+    data object StaleContext:MarkOrderReadyResult
+    data object Unavailable:MarkOrderReadyResult
+}
 interface StoreOrdersRepository {
     fun observeAuthorization(target:StoreOrdersTarget):Flow<StoreOrdersAuthorization>
     fun isCurrent(context:StoreOrdersContext):Boolean
     suspend fun page(context:StoreOrdersContext,cursor:String?=null,status:OrderStatus=OrderStatus.PENDING_CONFIRMATION):StoreOrdersResult
     suspend fun respond(context:StoreOrdersContext,orderId:String,decision:StoreOrderDecision):StoreOrderDecisionResult
     suspend fun updateEstimate(context:StoreOrdersContext,orderId:String,minutes:Int):PreparationEstimateResult
+    suspend fun markReady(context:StoreOrdersContext,orderId:String):MarkOrderReadyResult
 }
