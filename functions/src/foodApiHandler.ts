@@ -4,6 +4,7 @@ import { OrderDecisionService } from "./orders/orderDecisionService";
 import { parseOrderDecision } from "./orders/orderDecisionPolicy";
 import { PreparationEstimateService } from "./orders/preparationEstimateService";
 import { parsePreparationEstimate } from "./orders/preparationEstimatePolicy";
+import { OrderReadyService } from "./orders/orderReadyService";
 import { BuyerOrdersReader } from "./orders/buyerOrdersReader";
 import { OrderCancellationService } from "./orders/orderCancellationService";
 import { OrderService } from "./orders/orderService";
@@ -69,6 +70,26 @@ export function createFoodApiHandler(dependencies: FoodApiDependencies): FoodHtt
         return;
       }
       const estimatePath = /^\/api\/v1\/stores\/([^/]+)\/orders\/([^/]+)\/preparation-estimate\/?$/.exec(request.path);
+      const readyPath = /^\/api\/v1\/stores\/([^/]+)\/orders\/([^/]+)\/ready-for-pickup\/?$/.exec(request.path);
+      if (readyPath) {
+        if (request.method !== "POST") { response.status(405).set("Allow", "POST").json({ error: "METHOD_NOT_ALLOWED" }); return; }
+        try {
+          if (Object.keys(request.query).length || request.body && Object.keys(request.body).length)
+            throw new OrderHttpError("INVALID_REQUEST", 400);
+          const app = dependencies.app(runtime), auth = getAuth(app);
+          const actor = await verifyCommercialIdentity(auth, request.get("authorization"));
+          response.status(200).json(await new OrderReadyService(getFirestore(app), auth).markReady(actor,
+            decodeURIComponent(readyPath[1]), decodeURIComponent(readyPath[2])));
+        } catch (error) {
+          if (error instanceof AuthenticationRequired) response.status(401).json({ error: "AUTHENTICATION_REQUIRED" });
+          else if (error instanceof OrderHttpError) response.status(error.status).json({ error: error.code });
+          else if (error instanceof CommercialAccessError) response.status(error.status === 403 ? 403 : 503)
+            .json({ error: error.status === 403 ? "ACCESS_DENIED" : "AUTHORIZATION_UNAVAILABLE" });
+          else if (error instanceof URIError) response.status(404).json({ error: "ORDER_NOT_FOUND" });
+          else response.status(503).json({ error: "READY_UPDATE_UNAVAILABLE" });
+        }
+        return;
+      }
       if (estimatePath) {
         if (request.method !== "PUT") { response.status(405).set("Allow", "PUT").json({ error: "METHOD_NOT_ALLOWED" }); return; }
         try {
