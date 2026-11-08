@@ -24,7 +24,7 @@ internal class HttpStoreOrdersRepository @Inject constructor(private val api:Sto
                     body.pickupCode?.matches(Regex("[0-9]{4}"))==true&&body.readyAtEpochMillis!=null)
                     MarkOrderReadyResult.Ready(body.pickupCode,body.readyAtEpochMillis)}
                 401->MarkOrderReadyResult.AuthenticationRequired;403->MarkOrderReadyResult.AccessDenied
-                404->MarkOrderReadyResult.NotFound;409->MarkOrderReadyResult.StateChanged
+                402->MarkOrderReadyResult.PaymentRequired;404->MarkOrderReadyResult.NotFound;409->MarkOrderReadyResult.StateChanged
                 else->MarkOrderReadyResult.Unavailable
             }
         }?:MarkOrderReadyResult.Unavailable }catch(e:CancellationException){throw e}

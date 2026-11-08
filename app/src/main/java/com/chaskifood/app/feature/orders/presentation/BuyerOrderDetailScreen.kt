@@ -33,6 +33,7 @@ import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.chaskifood.app.feature.cart.presentation.formatCartPrice
 import com.chaskifood.app.feature.orders.domain.BuyerOrderDetail
+import com.chaskifood.app.feature.orders.domain.OrderPaymentStatus
 import com.chaskifood.app.ui.components.ChaskiAppBar
 import com.chaskifood.app.ui.components.ChaskiButtonVariant
 import com.chaskifood.app.ui.components.ChaskiButton
@@ -43,20 +44,27 @@ import com.chaskifood.app.ui.theme.*
 fun BuyerOrderDetailScreen(onBack: () -> Unit, viewModel: BuyerOrderDetailViewModel = hiltViewModel()) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     LifecycleResumeEffect(viewModel) { viewModel.refresh(); onPauseOrDispose { } }
-    BuyerOrderDetailContent(state, onBack, onRefresh = viewModel::refresh, onCancel = viewModel::cancel)
+    BuyerOrderDetailContent(state, onBack, onRefresh = viewModel::refresh, onCancel = viewModel::cancel,
+        onSimulatePayment = viewModel::simulatePayment)
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun BuyerOrderDetailContent(state: BuyerOrderDetailUiState, onBack: () -> Unit, onRefresh: () -> Unit,
-    onCancel: () -> Unit = {}) {
+    onCancel: () -> Unit = {}, onSimulatePayment: () -> Unit = {}) {
     val detail = state.detail
     var confirmCancellation by remember { mutableStateOf(false) }
+    var confirmPayment by remember { mutableStateOf(false) }
     if (confirmCancellation) AlertDialog(onDismissRequest = { confirmCancellation = false },
         title = { Text("Cancelar pedido") },
         text = { Text("¿Confirmas que deseas cancelar este pedido?") },
         confirmButton = { TextButton(onClick = { confirmCancellation = false; onCancel() }) { Text("Confirmar") } },
         dismissButton = { TextButton(onClick = { confirmCancellation = false }) { Text("Volver") } })
+    if (confirmPayment) AlertDialog(onDismissRequest = { confirmPayment = false },
+        title = { Text("Simular pago") },
+        text = { Text("Esta acción educativa no realiza ningún cobro real. Confirmará el pago y generará el código de recojo del pedido.") },
+        confirmButton = { TextButton(onClick = { confirmPayment = false; onSimulatePayment() }) { Text("Simular pago") } },
+        dismissButton = { TextButton(onClick = { confirmPayment = false }) { Text("Volver") } })
     Scaffold(containerColor = ChaskiBackground, topBar = {
         ChaskiAppBar(title = detail?.let { "Pedido #${shortOrderId(it.summary.orderId)}" } ?: "Detalle del pedido", onBackClick = onBack)
     }) { padding ->
@@ -67,8 +75,8 @@ internal fun BuyerOrderDetailContent(state: BuyerOrderDetailUiState, onBack: () 
                     "Por seguridad, cerramos la vista al cambiar de cuenta o cerrar sesión.")
                 state.notFound -> OrdersMessage(Icons.Filled.SearchOff, "No encontramos este pedido",
                     "Puede que no exista o que no pertenezca a esta cuenta.", "Volver a mis pedidos", ChaskiButtonVariant.Outlined, onBack)
-                detail != null -> DetailBody(detail, state.message, state.notice, state.cancelling, onRefresh,
-                    { confirmCancellation = true })
+                detail != null -> DetailBody(detail, state.message, state.notice, state.cancelling, state.paying, onRefresh,
+                    { confirmCancellation = true }, { confirmPayment = true })
                 state.message != null -> OrdersMessage(Icons.Filled.WifiOff, "No pudimos cargar el pedido", state.message,
                     "Reintentar", ChaskiButtonVariant.Primary, onRefresh)
                 else -> OrdersLoading("Cargando el pedido…")
@@ -78,8 +86,8 @@ internal fun BuyerOrderDetailContent(state: BuyerOrderDetailUiState, onBack: () 
 }
 
 @Composable
-private fun DetailBody(detail: BuyerOrderDetail, message: String?, notice: String?, cancelling: Boolean,
-    onRetry: () -> Unit, onCancel: () -> Unit) {
+private fun DetailBody(detail: BuyerOrderDetail, message: String?, notice: String?, cancelling: Boolean, paying: Boolean,
+    onRetry: () -> Unit, onCancel: () -> Unit, onSimulatePayment: () -> Unit) {
     val summary = detail.summary
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(ChaskiDimens.SpacingLg),
         verticalArrangement = Arrangement.spacedBy(ChaskiDimens.SpacingMd)) {
@@ -178,9 +186,13 @@ private fun DetailBody(detail: BuyerOrderDetail, message: String?, notice: Strin
             DetailCard {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(ChaskiDimens.SpacingSm)) {
                     Icon(Icons.Filled.Payments, contentDescription = null, tint = ChaskiTextPrimary, modifier = Modifier.size(20.dp))
-                    Text("Efectivo contra entrega", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold, color = ChaskiTextPrimary)
+                    Text(if (detail.paymentStatus == OrderPaymentStatus.PAID) "Pagado · simulación educativa" else "Pago pendiente",
+                        style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold, color = ChaskiTextPrimary)
                 }
-                Text("Método de pago registrado para este pedido.", style = MaterialTheme.typography.bodySmall, color = ChaskiTextTertiary)
+                Text("No se realiza ningún cobro real.", style = MaterialTheme.typography.bodySmall, color = ChaskiTextTertiary)
+                if (summary.status == "PREPARING" && detail.paymentStatus == OrderPaymentStatus.PENDING)
+                    ChaskiButton(if (paying) "Procesando…" else "Simular pago", onClick = onSimulatePayment,
+                        enabled = !paying, variant = ChaskiButtonVariant.Primary)
             }
         }
     }

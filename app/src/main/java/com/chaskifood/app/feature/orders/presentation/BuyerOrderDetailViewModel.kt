@@ -9,7 +9,8 @@ import kotlinx.coroutines.flow.*
 
 data class BuyerOrderDetailUiState(
     val loading: Boolean = true, val detail: BuyerOrderDetail? = null, val notFound: Boolean = false,
-    val signedIn: Boolean = true, val message: String? = null, val cancelling: Boolean = false, val notice: String? = null,
+    val signedIn: Boolean = true, val message: String? = null, val cancelling: Boolean = false,
+    val paying: Boolean = false, val notice: String? = null,
 )
 
 @HiltViewModel
@@ -20,6 +21,7 @@ class BuyerOrderDetailViewModel @Inject constructor(private val repository: Buye
     private var session: BuyerOrdersSession? = null
     private var job: Job? = null
     private var cancellationJob: Job? = null
+    private var paymentJob: Job? = null
     private var ticket = 0L
 
     init {
@@ -27,7 +29,7 @@ class BuyerOrderDetailViewModel @Inject constructor(private val repository: Buye
         else viewModelScope.launch {
             repository.observeSession().catch { e -> if (e is CancellationException) throw e; emit(null) }.collect { next ->
                 if (next == session) return@collect
-                job?.cancel(); cancellationJob?.cancel(); ticket++; session = next
+                job?.cancel(); cancellationJob?.cancel(); paymentJob?.cancel(); ticket++; session = next
                 if (next == null) mutable.value = BuyerOrderDetailUiState(loading = false, signedIn = false)
                 else load(next, orderId)
             }
@@ -38,7 +40,7 @@ class BuyerOrderDetailViewModel @Inject constructor(private val repository: Buye
     fun refresh() {
         val id = orderId ?: return
         val current = session ?: return
-        if (job?.isActive == true || mutable.value.cancelling) return
+        if (job?.isActive == true || mutable.value.cancelling || mutable.value.paying) return
         if (!repository.isCurrent(current)) { session = null; mutable.value = BuyerOrderDetailUiState(loading = false, signedIn = false); return }
         load(current, id)
     }
@@ -64,6 +66,39 @@ class BuyerOrderDetailViewModel @Inject constructor(private val repository: Buye
                 BuyerOrderCancellationResult.AuthenticationRequired -> mutable.update { it.copy(message = "Vuelve a iniciar sesión.") }
                 BuyerOrderCancellationResult.StaleSession -> { session = null; mutable.value = BuyerOrderDetailUiState(loading = false, signedIn = false) }
                 BuyerOrderCancellationResult.Unavailable -> mutable.update { it.copy(message = "No pudimos procesar la cancelación. Comprueba la conexión y vuelve a intentarlo.") }
+            }
+        }
+    }
+
+    fun simulatePayment() {
+        val id = orderId ?: return
+        val expected = session ?: return
+        val detail = mutable.value.detail ?: return
+        if (mutable.value.paying || detail.summary.status != "PREPARING" ||
+            detail.paymentStatus != OrderPaymentStatus.PENDING) return
+        val mine = ++ticket
+        job?.cancel()
+        mutable.update { it.copy(paying = true, message = null, notice = null) }
+        paymentJob = viewModelScope.launch {
+            val result = try { repository.simulatePayment(expected, id) }
+                catch (e: CancellationException) { throw e }
+                catch (_: Exception) { SimulatedPaymentResult.Unavailable }
+            currentCoroutineContext().ensureActive()
+            if (mine != ticket || session != expected) return@launch
+            mutable.update { it.copy(paying = false) }
+            when (result) {
+                SimulatedPaymentResult.Paid -> {
+                    mutable.update { it.copy(notice = "Pago simulado correctamente. El código de recojo ya fue generado.") }
+                    load(expected, id)
+                }
+                SimulatedPaymentResult.NotAllowed -> {
+                    load(expected, id)
+                    mutable.update { it.copy(notice = "El pedido cambió de estado o el pago ya fue procesado.") }
+                }
+                SimulatedPaymentResult.NotFound -> mutable.update { it.copy(detail = null, notFound = true) }
+                SimulatedPaymentResult.AuthenticationRequired -> mutable.update { it.copy(message = "Vuelve a iniciar sesión.") }
+                SimulatedPaymentResult.StaleSession -> { session = null; mutable.value = BuyerOrderDetailUiState(loading = false, signedIn = false) }
+                SimulatedPaymentResult.Unavailable -> mutable.update { it.copy(message = "No pudimos simular el pago. Comprueba la conexión y vuelve a intentarlo.") }
             }
         }
     }

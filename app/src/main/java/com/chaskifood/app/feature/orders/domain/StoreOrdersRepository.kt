@@ -92,6 +92,7 @@ sealed interface PreparationEstimateResult {
 }
 sealed interface MarkOrderReadyResult {
     data class Ready(val pickupCode:String,val readyAtEpochMillis:Long):MarkOrderReadyResult
+    data object PaymentRequired:MarkOrderReadyResult
     data object StateChanged:MarkOrderReadyResult
     data object AccessDenied:MarkOrderReadyResult
     data object AuthenticationRequired:MarkOrderReadyResult

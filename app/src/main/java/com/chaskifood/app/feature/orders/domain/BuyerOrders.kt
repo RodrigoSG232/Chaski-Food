@@ -5,6 +5,8 @@ import kotlinx.coroutines.flow.Flow
 /** HU17: activos e históricos los clasifica foodApi; la app solo muestra la fase recibida. */
 enum class BuyerOrderPhase { ACTIVE, HISTORICAL }
 
+enum class OrderPaymentStatus { PENDING, PAID }
+
 /** Sesión del comprador que hace la consulta; una generación nueva invalida respuestas anteriores aunque el UID se repita. */
 data class BuyerOrdersSession(val uid: String, val generation: Long) {
     init { require(uid.isNotBlank() && generation >= 0) }
@@ -46,6 +48,7 @@ class BuyerOrderDetail(
     val summary: BuyerOrderSummary, val storePhone: String?, val pickupAddressText: String, val delivery: BuyerOrderDelivery,
     items: List<StoreOrderLine>, val amounts: OrderAmounts, val paymentMethod: OrderPaymentMethod, statusHistory: List<BuyerOrderStatusEntry>,
     val estimatedPreparationMinutes:Int?=null,val estimatedReadyAtEpochMillis:Long?=null,
+    val paymentStatus: OrderPaymentStatus = OrderPaymentStatus.PENDING,
 ) {
     val items: List<StoreOrderLine> = frozenOrderList(items)
     val statusHistory: List<BuyerOrderStatusEntry> = frozenOrderList(statusHistory)
@@ -97,6 +100,15 @@ sealed interface BuyerOrderCancellationResult {
     data object Unavailable : BuyerOrderCancellationResult
 }
 
+sealed interface SimulatedPaymentResult {
+    data object Paid : SimulatedPaymentResult
+    data object NotAllowed : SimulatedPaymentResult
+    data object NotFound : SimulatedPaymentResult
+    data object AuthenticationRequired : SimulatedPaymentResult
+    data object StaleSession : SimulatedPaymentResult
+    data object Unavailable : SimulatedPaymentResult
+}
+
 interface BuyerOrdersRepository {
     /** Sesión Firebase vigente (null sin sesión); cambia también en un nuevo inicio con el mismo UID. */
     fun observeSession(): Flow<BuyerOrdersSession?>
@@ -104,4 +116,6 @@ interface BuyerOrdersRepository {
     suspend fun page(session: BuyerOrdersSession, phase: BuyerOrderPhase, cursor: String? = null): BuyerOrdersResult
     suspend fun detail(session: BuyerOrdersSession, orderId: String): BuyerOrderDetailResult
     suspend fun cancel(session: BuyerOrdersSession, orderId: String): BuyerOrderCancellationResult
+    suspend fun simulatePayment(session: BuyerOrdersSession, orderId: String): SimulatedPaymentResult =
+        SimulatedPaymentResult.Unavailable
 }

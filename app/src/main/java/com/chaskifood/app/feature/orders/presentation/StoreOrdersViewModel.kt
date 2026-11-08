@@ -73,6 +73,8 @@ class StoreOrdersViewModel @Inject constructor(private val repository:StoreOrder
             when(result){
                 is MarkOrderReadyResult.Ready->mutable.update{it.copy(orders=it.orders.filterNot{o->o.orderId==orderId},
                     respondingOrderId=null,message="Pedido listo. Código de recojo: ${result.pickupCode}")}
+                MarkOrderReadyResult.PaymentRequired->mutable.update{it.copy(respondingOrderId=null,
+                    message="El cliente debe completar el pago simulado antes de marcar el pedido como listo.")}
                 MarkOrderReadyResult.StateChanged,MarkOrderReadyResult.NotFound->mutable.update{it.copy(
                     orders=it.orders.filterNot{o->o.orderId==orderId},respondingOrderId=null,
                     message="El pedido cambió y ya no está en preparación.")}
