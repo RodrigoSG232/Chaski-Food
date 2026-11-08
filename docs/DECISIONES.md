@@ -24,7 +24,8 @@ Decisiones **aprobadas** por el equipo que siguen aplicando y condicionan las pr
 - **Pago educativo:** mientras no exista una pasarela real, el comprador puede simular el pago únicamente cuando el pedido está `PREPARING`. foodApi registra `paymentStatus=PAID`, `paymentSimulation=true` y `paidAt`; la interfaz advierte que no se efectúa ningún cobro real.
 - **Código único:** foodApi genera un único `pickupCode` aleatorio de cuatro dígitos al confirmar el pago simulado. Marcar el pedido listo no crea ni reemplaza el código. Una reasignación o cancelación del repartidor conserva el mismo código del pedido; no se implementa un segundo PIN de entrega.
 - **Recojo HU21:** solo un responsable autorizado cambia un pedido pagado de `PREPARING → READY_FOR_PICKUP`. Si el pago sigue pendiente, foodApi rechaza la transición. Si existe `deliveryId`, crea `ORDER_READY_FOR_PICKUP` para Rider incluyendo el código ya generado.
-- **Límite entre apps:** Food no crea usuarios repartidores. Chasqui Rider consumirá los pedidos y el código mediante una API autenticada; esa API y la recepción de estados Rider corresponden a HU22 y aún no están implementadas.
+- **Límite entre apps:** Food no crea usuarios repartidores. `riderApi` es una función separada, privada mediante IAM y destinada exclusivamente al backend Rider. Expone el pedido y código; recibe asignación, liberación, fases y tracking. Rider sigue siendo la única autoridad que selecciona al repartidor.
+- **Reasignación HU22:** `ASSIGNMENT_RELEASED` solo libera antes del recojo; no cancela la compra ni modifica el código. Una nueva asignación incrementa su versión. Después de `PICKED_UP` no se reasigna automáticamente y Food pasa a `IN_DELIVERY` únicamente por un evento Rider válido.
 - **Para recibir pedidos** basta al menos un responsable asignado válido; no se exige que esté conectado. Sin responsables se bloquean confirmaciones nuevas (HU16-05, HU16-12).
 
 ## Consultas propias (HU17)

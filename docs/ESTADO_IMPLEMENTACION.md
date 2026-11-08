@@ -22,7 +22,7 @@ Vocabulario: **implementado** = código integrado; **verificado** = hay evidenci
 | **HU19** recibir y responder | **En desarrollo en rama** | Backend y Android implementan aceptar con estimación y rechazar con motivo; suspensión permite consultar/rechazar y bloquea aceptar. JVM `orders` aprobadas. Faltan notificación al cliente, emulador y validación manual/Cloud. |
 | **HU20** gestionar tiempo de preparación | **Implementada localmente en rama** | Bandeja `PREPARING`, actualización transaccional de 5–180 min, historial, detalle del cliente y outbox para una entrega existente. JVM `orders` aprobadas y pruebas instrumentadas compilan; faltan ejecutar emulador, validación manual y Cloud. |
 | **HU21** finalizar preparación y validar recojo | **Implementada localmente en rama** | Cliente simula el pago en `PREPARING`; foodApi genera una sola vez el código de 4 dígitos. El responsable puede pasar a `READY_FOR_PICKUP` únicamente después del pago. Falta validación manual y volver a publicar foodApi con estos cambios. |
-| HU22 | **Siguiente trabajo** | Los datos y el código ya quedan preparados en el pedido, pero la API autenticada que Chasqui Rider consumirá todavía no está implementada; ver §4.1. |
+| **HU22** solicitar servicio de reparto | **Implementada localmente en rama** | `riderApi` privada expone pedidos listos, código estable, asignación/liberación, fases y tracking con idempotencia. Pendiente: desplegar, recibir la cuenta de servicio Rider, otorgarle `run.invoker` y validar entre ambos backends. Contrato: [API_CHASKI_RIDER.md](API_CHASKI_RIDER.md). |
 | HU23–HU33, EN04 | No iniciadas | Hay pantallas de ejemplo (seguimiento, pago, valoración) que **no** son funcionalidad productiva. Release sin configurar. |
 
 HU34 no figura en la planificación original del curso: es una historia acordada por el equipo (sus decisiones vigentes están en [DECISIONES](DECISIONES.md)).
@@ -56,7 +56,7 @@ Fuente única de pendientes. Cada elemento indica por qué se postergó, dónde 
 | HU19 | Recibir y responder pedidos | **Aprobado:** `PENDING_CONFIRMATION → PREPARING`; estimación 5–180 min. Rechazo con motivo. En suspensión: consulta y rechazo permitidos, aceptación bloqueada. Notificación al cliente aún pendiente. |
 | HU20 | Gestionar tiempo de preparación | **Implementado en `ramaMax`:** modificación solo en `PREPARING`, 5–180 min, historial versionado, lectura del cliente al refrescar y evento durable si ya existe reparto. Pendiente de validación LOCAL/Cloud. |
 | HU21 | Finalizar preparación y validar recojo | **Implementado en `ramaMax`:** el cliente realiza un pago simulado sin cobro real; foodApi genera un único código de recojo y el responsable autorizado puede marcar listo solamente después del pago. La entrega no cambia a `IN_DELIVERY` desde Food. |
-| HU22 | Solicitar servicio de reparto | Pendiente: exponer a Rider el pedido y su código mediante API autenticada, admitir reasignación sin regenerar el código y recibir ubicación/estados. No habrá un segundo PIN de entrega. |
+| HU22 | Solicitar servicio de reparto | **Implementado en `ramaMax`:** API privada para lectura del pedido completo, código único, asignación/liberación, estados y última ubicación. Food nunca asigna repartidores. Falta despliegue y prueba contractual con la identidad de servicio Rider. |
 
 ### 4.2 Mejoras aprobadas, no implementadas
 | Mejora | Por qué se postergó | Dónde | ¿Decisión humana? | Precauciones |

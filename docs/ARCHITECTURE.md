@@ -115,7 +115,9 @@ Estructura: `foodApiHandler.ts` (enrutado HTTP y traducción de errores) → ser
 | `commercial_access_index/{uid_*|email_*}` | Índice privado UID↔correo con revisión | **Solo foodApi**; ningún cliente lo lee |
 | `stores`, `categories`, `products`, `store_product_configs` | Locales, catálogo y precio/disponibilidad por local | Propietario aprobado / responsable VERIFIED según reglas; admin para suspensión |
 | `audit_logs` | Auditoría administrativa y comercial | Admin (reglas) y foodApi |
-| `delivery_quotes`, `order_attempts`, `food_orders` (+`status_history`, +`estimate_history`, +`payment_history`), `order_events` (+`deliveries`), `rider_events`, `notification_devices` | HU15–HU21 | **Solo foodApi**; cerradas a clientes. El pago educativo se registra en foodApi y genera una sola vez el código de recojo. |
+| `delivery_quotes`, `order_attempts`, `food_orders` (+`status_history`, +`estimate_history`, +`payment_history`, +`rider_events`), `order_events` (+`deliveries`), `rider_events`, `notification_devices` | HU15–HU22 | **Solo backends Admin**; cerradas a clientes. El pago educativo genera una sola vez el código y Rider solo opera mediante `riderApi`. |
+
+HU22 incorpora `riderApi` como Cloud Function v2 separada y privada por IAM. El backend Rider consulta pedidos listos y envía eventos/tracking; nunca accede directamente a Firestore. Los eventos se conservan en `food_orders/{orderId}/rider_events`, y el snapshot vigente de asignación y ubicación permanece dentro del documento de pedido para su posterior consulta autorizada por HU23.
 | `store_notices` | Bloque de reglas heredado sin datos ni código que lo use (ver pendientes) | — |
 
 Las imágenes de locales/productos se guardan en Storage bajo `businesses/{businessId}/stores|products/...`; Firestore guarda la URL.
