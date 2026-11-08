@@ -21,7 +21,7 @@ Regla de oro: **todo cambio se prueba primero en LOCAL**. CONECTADO usa Firebase
    pnpm install --frozen-lockfile
    pnpm run build
    $env:CHASKI_ROUTE_FIXTURE = 'enabled'
-   pnpm run emulators        # Auth 9099, Firestore 8089, Functions 5001 en demo-chaski-hu15
+   pnpm run emulators        # Auth 9099, Firestore 8089, Storage 9199 y Functions 5001
    ```
    Se detiene con `Ctrl+C` en esa terminal.
 3. App (otra terminal, desde la raíz):
@@ -29,8 +29,64 @@ Regla de oro: **todo cambio se prueba primero en LOCAL**. CONECTADO usa Firebase
    .\gradlew.bat :app:assembleDebug -PchaskiFirebaseMode=LOCAL
    adb install -r app/build/outputs/apk/debug/app-debug.apk
    ```
-   En AVD el host es `10.0.2.2`. En teléfono físico: `adb reverse tcp:9099 tcp:9099`, `adb reverse tcp:8089 tcp:8089`, `adb reverse tcp:5001 tcp:5001` y compilar con `-PchaskiEmulatorHost=127.0.0.1`.
-4. Datos: las pruebas automáticas crean sus propios datos ficticios. **No hay** un cargador de datos para recorrer toda la app manualmente en LOCAL; prepara solo datos ficticios y nunca copies datos reales.
+   En AVD el host es `10.0.2.2`. En teléfono físico: `adb reverse tcp:9099 tcp:9099`, `adb reverse tcp:8089 tcp:8089`, `adb reverse tcp:9199 tcp:9199`, `adb reverse tcp:5001 tcp:5001` y compilar con `-PchaskiEmulatorHost=127.0.0.1`.
+4. Datos: las pruebas automáticas crean sus propios datos ficticios. Para recorridos manuales usa el laboratorio automatizado siguiente; nunca copies datos reales.
+
+#### Laboratorio automatizado para pruebas manuales
+
+El repositorio incluye un sembrador idempotente exclusivo de `demo-chaski-hu15`. Se bloquea si Auth y Firestore no apuntan exactamente a `127.0.0.1:9099` y `127.0.0.1:8089`; su código está bajo `functions/test/` y no forma parte del paquete de Cloud.
+
+1. Levanta los emuladores y deja la terminal abierta:
+   ```bash
+   cd functions
+   CHASKI_ROUTE_FIXTURE=enabled pnpm run emulators
+   ```
+2. Desde otra terminal, compila y crea el escenario deseado:
+   ```bash
+   pnpm --dir functions run build
+   pnpm --dir functions run lab:seed -- hu20
+   ```
+   Repetir el comando reinicia únicamente los documentos y cuentas fijos del laboratorio. Para retirarlos: `pnpm --dir functions run lab:reset`.
+3. Cuentas creadas (todas usan `emulator-password`):
+
+   | Experiencia | Correo |
+   |---|---|
+   | Administrador | `admin@chaski.test` |
+   | Propietario | `owner@chaski.test` |
+   | Responsable | `manager@chaski.test` |
+   | Cliente | `buyer@chaski.test` |
+
+El escenario `hu20` crea dos locales, catálogo mínimo, una asignación VERIFIED, un pedido pendiente y dos pedidos `PREPARING` (25 y 35 minutos; el segundo con `deliveryId`). El responsable usa **Local Central Lab → En preparación**; el cliente consulta los mismos pedidos en **Pedidos**. Los emuladores conservan estos datos mientras sigan encendidos.
+
+En teléfono físico ejecuta antes `adb reverse` para los cuatro puertos y compila con `-PchaskiFirebaseMode=LOCAL -PchaskiEmulatorHost=127.0.0.1`. El JSON activo debe ser `app/src/debug/google-services.demo.json`, copiado como `app/src/debug/google-services.json`; ninguna propiedad CONECTADO debe permanecer en el `gradle.properties` personal.
+
+#### Marketplace preestablecido con imágenes
+
+Para explorar catálogos sin crear manualmente negocios y productos, con los cuatro emuladores levantados ejecuta:
+
+```bash
+pnpm --dir functions run build
+pnpm --dir functions run marketplace:seed
+```
+
+El comando es idempotente y solo acepta el proyecto local `demo-chaski-hu15`. Crea dos negocios aprobados, tres locales por negocio, ocho categorías, veinte productos y configuraciones distintas por local. Las 26 imágenes JPEG se cargan como objetos en Storage; Firestore guarda solamente sus URL. No crea clientes ni repartidores.
+
+Las cuatro cuentas usan la contraseña `emulator-password` y ya tienen teléfono y correo verificado en Auth:
+
+| Perfil | Correo | Local asignado |
+|---|---|---|
+| Propietario Chicken | `owner.chicken@chaski.test` | Todos los de Chicken House |
+| Responsable Centro Chicken | `manager.chicken.centro@chaski.test` | Chicken House Centro |
+| Propietario Burger | `owner.burger@chaski.test` | Todos los de Burger Station |
+| Responsable Este Burger | `manager.burger.este@chaski.test` | Burger Station Este |
+
+Para retirarlos usa `pnpm --dir functions run marketplace:reset`. Los archivos fuente están en `functions/test/marketplace/assets/`, quedan excluidos del paquete de Cloud y no se publican con Functions.
+
+#### Marketplace permanente compartido
+
+El proyecto real `chaski-food-9adba` contiene también el mismo marketplace como datos persistentes: cuatro perfiles comerciales, dos negocios, seis locales, ocho categorías, veinte productos, sesenta configuraciones por local y veintiséis JPEG en Firebase Storage. No incluye clientes ni repartidores. Los compañeros no deben ejecutar el sembrador para usarlo; solo deben compilar la aplicación en modo `CONECTADO` con su `google-services.json` autorizado.
+
+La carga administrativa es idempotente, exige credenciales fuera del repositorio, una contraseña fuerte por variable de entorno y la confirmación literal `CHASKI_PERMANENT_SEED_CONFIRM=chaski-food-9adba`. Antes de escribir aborta ante colisiones de UID, correo, documento u objeto. `marketplace:verify:permanent` permite auditar cantidades y vínculos sin mostrar secretos. No se ejecuta como parte de compilaciones, pruebas ni despliegues.
 
 ### 2.2 Pruebas
 | Qué | Comando |

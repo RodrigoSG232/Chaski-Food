@@ -17,6 +17,9 @@ import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -30,8 +33,10 @@ import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.chaskifood.app.feature.cart.presentation.formatCartPrice
 import com.chaskifood.app.feature.orders.domain.BuyerOrderDetail
+import com.chaskifood.app.feature.orders.domain.OrderPaymentStatus
 import com.chaskifood.app.ui.components.ChaskiAppBar
 import com.chaskifood.app.ui.components.ChaskiButtonVariant
+import com.chaskifood.app.ui.components.ChaskiButton
 import com.chaskifood.app.ui.theme.*
 
 /** Detalle histórico de una compra propia (HU17). Se actualiza al abrir, al volver a la app y al deslizar hacia abajo. */
@@ -39,13 +44,27 @@ import com.chaskifood.app.ui.theme.*
 fun BuyerOrderDetailScreen(onBack: () -> Unit, viewModel: BuyerOrderDetailViewModel = hiltViewModel()) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     LifecycleResumeEffect(viewModel) { viewModel.refresh(); onPauseOrDispose { } }
-    BuyerOrderDetailContent(state, onBack, onRefresh = viewModel::refresh)
+    BuyerOrderDetailContent(state, onBack, onRefresh = viewModel::refresh, onCancel = viewModel::cancel,
+        onSimulatePayment = viewModel::simulatePayment)
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-internal fun BuyerOrderDetailContent(state: BuyerOrderDetailUiState, onBack: () -> Unit, onRefresh: () -> Unit) {
+internal fun BuyerOrderDetailContent(state: BuyerOrderDetailUiState, onBack: () -> Unit, onRefresh: () -> Unit,
+    onCancel: () -> Unit = {}, onSimulatePayment: () -> Unit = {}) {
     val detail = state.detail
+    var confirmCancellation by remember { mutableStateOf(false) }
+    var confirmPayment by remember { mutableStateOf(false) }
+    if (confirmCancellation) AlertDialog(onDismissRequest = { confirmCancellation = false },
+        title = { Text("Cancelar pedido") },
+        text = { Text("¿Confirmas que deseas cancelar este pedido?") },
+        confirmButton = { TextButton(onClick = { confirmCancellation = false; onCancel() }) { Text("Confirmar") } },
+        dismissButton = { TextButton(onClick = { confirmCancellation = false }) { Text("Volver") } })
+    if (confirmPayment) AlertDialog(onDismissRequest = { confirmPayment = false },
+        title = { Text("Simular pago") },
+        text = { Text("Esta acción educativa no realiza ningún cobro real. Confirmará el pago y generará el código de recojo del pedido.") },
+        confirmButton = { TextButton(onClick = { confirmPayment = false; onSimulatePayment() }) { Text("Simular pago") } },
+        dismissButton = { TextButton(onClick = { confirmPayment = false }) { Text("Volver") } })
     Scaffold(containerColor = ChaskiBackground, topBar = {
         ChaskiAppBar(title = detail?.let { "Pedido #${shortOrderId(it.summary.orderId)}" } ?: "Detalle del pedido", onBackClick = onBack)
     }) { padding ->
@@ -56,7 +75,8 @@ internal fun BuyerOrderDetailContent(state: BuyerOrderDetailUiState, onBack: () 
                     "Por seguridad, cerramos la vista al cambiar de cuenta o cerrar sesión.")
                 state.notFound -> OrdersMessage(Icons.Filled.SearchOff, "No encontramos este pedido",
                     "Puede que no exista o que no pertenezca a esta cuenta.", "Volver a mis pedidos", ChaskiButtonVariant.Outlined, onBack)
-                detail != null -> DetailBody(detail, state.message, onRefresh)
+                detail != null -> DetailBody(detail, state.message, state.notice, state.cancelling, state.paying, onRefresh,
+                    { confirmCancellation = true }, { confirmPayment = true })
                 state.message != null -> OrdersMessage(Icons.Filled.WifiOff, "No pudimos cargar el pedido", state.message,
                     "Reintentar", ChaskiButtonVariant.Primary, onRefresh)
                 else -> OrdersLoading("Cargando el pedido…")
@@ -66,7 +86,8 @@ internal fun BuyerOrderDetailContent(state: BuyerOrderDetailUiState, onBack: () 
 }
 
 @Composable
-private fun DetailBody(detail: BuyerOrderDetail, message: String?, onRetry: () -> Unit) {
+private fun DetailBody(detail: BuyerOrderDetail, message: String?, notice: String?, cancelling: Boolean, paying: Boolean,
+    onRetry: () -> Unit, onCancel: () -> Unit, onSimulatePayment: () -> Unit) {
     val summary = detail.summary
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(ChaskiDimens.SpacingLg),
         verticalArrangement = Arrangement.spacedBy(ChaskiDimens.SpacingMd)) {
@@ -82,8 +103,15 @@ private fun DetailBody(detail: BuyerOrderDetail, message: String?, onRetry: () -
                     color = ChaskiTextSecondary)
                 Text("Se actualiza al abrir esta pantalla, al volver a la app o al deslizar hacia abajo.",
                     style = MaterialTheme.typography.bodySmall, color = ChaskiTextTertiary)
+                detail.estimatedPreparationMinutes?.let { Text("Tiempo estimado: $it minutos",fontWeight=FontWeight.Bold) }
             }
         }
+        if (notice != null) item("notice") { DetailCard { Text(notice, color = ChaskiTextPrimary) } }
+        if (summary.status == "PENDING_CONFIRMATION")
+            item("cancel-action") {
+                ChaskiButton(if (cancelling) "Cancelando…" else "Cancelar pedido", onClick = onCancel, enabled = !cancelling,
+                    variant = ChaskiButtonVariant.Outlined)
+            }
         item("history") {
             Section("HISTORIAL DE ESTADOS")
             DetailCard(spacing = 0.dp) {
@@ -148,6 +176,7 @@ private fun DetailBody(detail: BuyerOrderDetail, message: String?, onRetry: () -
             DetailCard {
                 AmountRow("Subtotal", detail.amounts.subtotalMinor)
                 AmountRow("Costo de reparto", detail.amounts.deliveryFeeMinor)
+                AmountRow("Propina",detail.amounts.tipMinor)
                 HorizontalDivider(color = ChaskiBorder)
                 AmountRow("Total", detail.amounts.totalMinor, bold = true)
             }
@@ -157,9 +186,13 @@ private fun DetailBody(detail: BuyerOrderDetail, message: String?, onRetry: () -
             DetailCard {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(ChaskiDimens.SpacingSm)) {
                     Icon(Icons.Filled.Payments, contentDescription = null, tint = ChaskiTextPrimary, modifier = Modifier.size(20.dp))
-                    Text("Efectivo contra entrega", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold, color = ChaskiTextPrimary)
+                    Text(if (detail.paymentStatus == OrderPaymentStatus.PAID) "Pagado · simulación educativa" else "Pago pendiente",
+                        style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold, color = ChaskiTextPrimary)
                 }
-                Text("Método de pago registrado para este pedido.", style = MaterialTheme.typography.bodySmall, color = ChaskiTextTertiary)
+                Text("No se realiza ningún cobro real.", style = MaterialTheme.typography.bodySmall, color = ChaskiTextTertiary)
+                if (summary.status == "PREPARING" && detail.paymentStatus == OrderPaymentStatus.PENDING)
+                    ChaskiButton(if (paying) "Procesando…" else "Simular pago", onClick = onSimulatePayment,
+                        enabled = !paying, variant = ChaskiButtonVariant.Primary)
             }
         }
     }

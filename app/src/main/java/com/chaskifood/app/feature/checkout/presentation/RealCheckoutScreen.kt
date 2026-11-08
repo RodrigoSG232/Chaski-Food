@@ -6,6 +6,8 @@ import com.chaskifood.app.core.navigation.LocalNavigationAccess
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import com.chaskifood.app.ui.theme.ChaskiBorder
 import com.chaskifood.app.ui.theme.ChaskiSurface
@@ -34,6 +36,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
@@ -212,6 +215,18 @@ fun RealCheckoutScreen(
                             }
                         }
                     }
+                    item("tip") {
+                        Surface(color=MaterialTheme.colorScheme.surface,shape=MaterialTheme.shapes.medium){
+                            Column(Modifier.fillMaxWidth().padding(ChaskiDimens.SpacingMd),verticalArrangement=Arrangement.spacedBy(ChaskiDimens.SpacingSm)){
+                                Text("Propina para el repartidor",style=MaterialTheme.typography.titleMedium,fontWeight=FontWeight.Bold)
+                                Text("Es opcional y se entrega íntegramente al repartidor.",style=MaterialTheme.typography.bodySmall)
+                                Row(Modifier.horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(ChaskiDimens.SpacingSm)){
+                                    listOf(0L,200L,500L,1000L).forEach{tip->FilterChip(selected=quote.tipMinor==tip,
+                                        onClick={authorize{viewModel.selectTip(tip)}},label={Text(if(tip==0L)"Sin propina" else formatCartPrice(tip))})}
+                                }
+                            }
+                        }
+                    }
                     item("summary") { CheckoutAmountSummary(quote) }
                     item("status") {
                         CheckoutMessage(
@@ -275,6 +290,7 @@ private fun CheckoutAmountSummary(quote: CheckoutQuote) {
             verticalArrangement = Arrangement.spacedBy(ChaskiDimens.SpacingSm)) {
             CheckoutAmountRow("Subtotal", quote.subtotalMinor)
             CheckoutAmountRow("Costo de reparto", quote.deliveryFeeMinor)
+            CheckoutAmountRow("Propina",quote.tipMinor)
             HorizontalDivider()
             CheckoutAmountRow("Total", quote.totalMinor, bold = true)
             Text("La cotización de reparto es temporal. Los importes se volverán a validar al confirmar el pedido.",
@@ -321,6 +337,7 @@ internal fun CheckoutConfirmationPanel(state: CheckoutConfirmation, onRecover: (
                     OrderRejection.NO_RESPONSIBLE -> "El local no tiene un responsable asignado."
                     OrderRejection.INVALID_LOCATION -> "La ubicación ya no es válida."
                     OrderRejection.OUTSIDE_COVERAGE -> "La dirección está fuera de cobertura."
+                    OrderRejection.MINIMUM_NOT_MET -> "El pedido mínimo de productos es S/ 25.00."
                 }
                 CheckoutMessage("$reason Tu carrito se conserva.")
                 if (onReview != null) ChaskiButton("Revisar nuevamente", onClick = onReview)

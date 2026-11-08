@@ -5,6 +5,8 @@ import kotlinx.coroutines.flow.Flow
 /** HU17: activos e históricos los clasifica foodApi; la app solo muestra la fase recibida. */
 enum class BuyerOrderPhase { ACTIVE, HISTORICAL }
 
+enum class OrderPaymentStatus { PENDING, PAID }
+
 /** Sesión del comprador que hace la consulta; una generación nueva invalida respuestas anteriores aunque el UID se repita. */
 data class BuyerOrdersSession(val uid: String, val generation: Long) {
     init { require(uid.isNotBlank() && generation >= 0) }
@@ -45,6 +47,8 @@ data class BuyerOrderStatusEntry(val status: String, val statusKnown: Boolean, v
 class BuyerOrderDetail(
     val summary: BuyerOrderSummary, val storePhone: String?, val pickupAddressText: String, val delivery: BuyerOrderDelivery,
     items: List<StoreOrderLine>, val amounts: OrderAmounts, val paymentMethod: OrderPaymentMethod, statusHistory: List<BuyerOrderStatusEntry>,
+    val estimatedPreparationMinutes:Int?=null,val estimatedReadyAtEpochMillis:Long?=null,
+    val paymentStatus: OrderPaymentStatus = OrderPaymentStatus.PENDING,
 ) {
     val items: List<StoreOrderLine> = frozenOrderList(items)
     val statusHistory: List<BuyerOrderStatusEntry> = frozenOrderList(statusHistory)
@@ -56,6 +60,9 @@ class BuyerOrderDetail(
         require(summary.itemLineCount == this.items.size && summary.itemPreview ==
             this.items.take(BuyerOrderSummary.MAX_ITEM_PREVIEW).map { BuyerOrderItemPreview(it.name, it.quantity) })
         require(this.statusHistory.isNotEmpty() && this.statusHistory.zipWithNext().all { (a, b) -> a.occurredAtEpochMillis <= b.occurredAtEpochMillis })
+        if(estimatedPreparationMinutes!=null||estimatedReadyAtEpochMillis!=null)require(summary.status=="PREPARING"&&
+            estimatedPreparationMinutes!=null&&estimatedPreparationMinutes in 5..180&&estimatedReadyAtEpochMillis!=null&&
+            estimatedReadyAtEpochMillis in 1..MAX_ORDER_EPOCH_MILLIS)
     }
 }
 
@@ -84,10 +91,31 @@ sealed interface BuyerOrderDetailResult {
     data object Unavailable : BuyerOrderDetailResult
 }
 
+sealed interface BuyerOrderCancellationResult {
+    data object Cancelled : BuyerOrderCancellationResult
+    data object NotAllowed : BuyerOrderCancellationResult
+    data object NotFound : BuyerOrderCancellationResult
+    data object AuthenticationRequired : BuyerOrderCancellationResult
+    data object StaleSession : BuyerOrderCancellationResult
+    data object Unavailable : BuyerOrderCancellationResult
+}
+
+sealed interface SimulatedPaymentResult {
+    data object Paid : SimulatedPaymentResult
+    data object NotAllowed : SimulatedPaymentResult
+    data object NotFound : SimulatedPaymentResult
+    data object AuthenticationRequired : SimulatedPaymentResult
+    data object StaleSession : SimulatedPaymentResult
+    data object Unavailable : SimulatedPaymentResult
+}
+
 interface BuyerOrdersRepository {
     /** Sesión Firebase vigente (null sin sesión); cambia también en un nuevo inicio con el mismo UID. */
     fun observeSession(): Flow<BuyerOrdersSession?>
     fun isCurrent(session: BuyerOrdersSession): Boolean
     suspend fun page(session: BuyerOrdersSession, phase: BuyerOrderPhase, cursor: String? = null): BuyerOrdersResult
     suspend fun detail(session: BuyerOrdersSession, orderId: String): BuyerOrderDetailResult
+    suspend fun cancel(session: BuyerOrdersSession, orderId: String): BuyerOrderCancellationResult
+    suspend fun simulatePayment(session: BuyerOrdersSession, orderId: String): SimulatedPaymentResult =
+        SimulatedPaymentResult.Unavailable
 }

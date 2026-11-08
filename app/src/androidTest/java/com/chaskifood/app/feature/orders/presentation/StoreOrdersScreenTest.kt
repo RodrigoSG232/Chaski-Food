@@ -29,7 +29,8 @@ class StoreOrdersScreenTest {
         compose.onNodeWithText("2 × Plato de prueba").assertIsDisplayed()
         compose.onNodeWithText("Ver detalle").performScrollTo().performClick()
         compose.onNodeWithText("Efectivo al recibir · PEN").performScrollTo().assertIsDisplayed()
-        for(action in listOf("Aceptar pedido","Rechazar pedido","Preparar","Cancelar pedido"))compose.onNodeWithText(action).assertDoesNotExist()
+        for(action in listOf("Aceptar pedido","Rechazar pedido"))compose.onNodeWithText(action).assertIsDisplayed()
+        for(action in listOf("Preparar","Cancelar pedido"))compose.onNodeWithText(action).assertDoesNotExist()
         compose.onNodeWithText("Teléfono del comprador").assertDoesNotExist()
     }
     @Test fun emptyErrorAndManualRefreshHaveConcreteCallbacks() {
@@ -41,6 +42,16 @@ class StoreOrdersScreenTest {
         compose.runOnIdle {assertEquals(1,refreshes);state.value=state.value.copy(message="Red no disponible")}
         compose.onNodeWithText("Red no disponible").assertIsDisplayed()
         compose.onNodeWithText("No hay pedidos pendientes en este local.").assertDoesNotExist()
+    }
+    @Test fun preparingQueueShowsEstimateUpdateInsteadOfDecisionActions() {
+        val preparing=StoreOrderSummary("3".repeat(64),1800000000000,listOf(StoreOrderLine("p","Plato",1,1000,1000)),
+            OrderAmounts(1000,300,1300),OrderStatus.PREPARING,estimatedPreparationMinutes=25,estimatedReadyAtEpochMillis=1800001500000)
+        compose.setContent{ChaskiTheme{StoreOrdersContent(StoreOrdersUiState(context,loading=false,storeName="Local",
+            orders=listOf(preparing),selectedStatus=OrderStatus.PREPARING))}}
+        compose.onNodeWithText("Ver detalle").performClick()
+        compose.onNodeWithText("Estimación: 25 minutos").assertIsDisplayed()
+        compose.onNodeWithText("Actualizar estimación").assertIsDisplayed()
+        compose.onNodeWithText("Aceptar pedido").assertDoesNotExist()
     }
     @Test fun moreResultsAndCollapsedDetailsDoNotAddBusinessActions() {
         var more=0
@@ -65,7 +76,9 @@ class StoreOrdersScreenTest {
         val repo=object:StoreOrdersRepository {
             override fun observeAuthorization(target:StoreOrdersTarget):Flow<StoreOrdersAuthorization> = auth
             override fun isCurrent(context:StoreOrdersContext)=auth.value==StoreOrdersAuthorization.Allowed(context)
-            override suspend fun page(context:StoreOrdersContext,cursor:String?):StoreOrdersResult {
+            override suspend fun respond(context:StoreOrdersContext,orderId:String,decision:StoreOrderDecision)=StoreOrderDecisionResult.Unavailable
+            override suspend fun updateEstimate(context:StoreOrdersContext,orderId:String,minutes:Int)=PreparationEstimateResult.Unavailable
+            override suspend fun page(context:StoreOrdersContext,cursor:String?,status:OrderStatus):StoreOrdersResult {
                 reads++;return StoreOrdersResult.Loaded(StoreOrdersPage("store","Local",listOf(order()),null))
             }
         }

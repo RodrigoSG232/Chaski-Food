@@ -29,8 +29,8 @@ object OrderFingerprints {
             "label" to v.delivery.label, "destination" to location(v.delivery.destination)),
         "items" to v.items.map { mapOf("productId" to it.productId, "categoryId" to it.categoryId,
             "name" to it.name, "quantity" to it.quantity, "unitPriceMinor" to it.unitPriceMinor) },
-        "amounts" to mapOf("subtotalMinor" to v.amounts.subtotalMinor,
-            "deliveryFeeMinor" to v.amounts.deliveryFeeMinor, "totalMinor" to v.amounts.totalMinor),
+        "amounts" to buildMap<String,Long>{put("subtotalMinor",v.amounts.subtotalMinor);put("deliveryFeeMinor",v.amounts.deliveryFeeMinor)
+            if(v.amounts.tipMinor!=0L)put("tipMinor",v.amounts.tipMinor);put("totalMinor",v.amounts.totalMinor)},
         "currency" to v.currency.name, "paymentMethod" to v.paymentMethod.name,
         "deliveryQuote" to v.deliveryQuote.let { mapOf("quoteId" to it.quoteId,
             "distanceBits" to bits(it.quote.distanceMeters), "tariffVersion" to it.quote.tariffVersion,

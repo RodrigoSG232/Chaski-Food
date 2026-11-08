@@ -1,6 +1,13 @@
 import { DeviceRegistry } from "./notifications/deviceRegistry";
 import { StoreOrdersReader } from "./orders/storeOrdersReader";
+import { OrderDecisionService } from "./orders/orderDecisionService";
+import { parseOrderDecision } from "./orders/orderDecisionPolicy";
+import { PreparationEstimateService } from "./orders/preparationEstimateService";
+import { parsePreparationEstimate } from "./orders/preparationEstimatePolicy";
+import { OrderReadyService } from "./orders/orderReadyService";
 import { BuyerOrdersReader } from "./orders/buyerOrdersReader";
+import { OrderCancellationService } from "./orders/orderCancellationService";
+import { SimulatedPaymentService } from "./orders/simulatedPaymentService";
 import { OrderService } from "./orders/orderService";
 import { OrderHttpError, parseOrderSubmission } from "./orders/orderRequest";
 import { intentId as validateIntentId } from "./orders/orderModels";
@@ -63,6 +70,67 @@ export function createFoodApiHandler(dependencies: FoodApiDependencies): FoodHtt
         }
         return;
       }
+      const estimatePath = /^\/api\/v1\/stores\/([^/]+)\/orders\/([^/]+)\/preparation-estimate\/?$/.exec(request.path);
+      const readyPath = /^\/api\/v1\/stores\/([^/]+)\/orders\/([^/]+)\/ready-for-pickup\/?$/.exec(request.path);
+      if (readyPath) {
+        if (request.method !== "POST") { response.status(405).set("Allow", "POST").json({ error: "METHOD_NOT_ALLOWED" }); return; }
+        try {
+          if (Object.keys(request.query).length || request.body && Object.keys(request.body).length)
+            throw new OrderHttpError("INVALID_REQUEST", 400);
+          const app = dependencies.app(runtime), auth = getAuth(app);
+          const actor = await verifyCommercialIdentity(auth, request.get("authorization"));
+          response.status(200).json(await new OrderReadyService(getFirestore(app), auth).markReady(actor,
+            decodeURIComponent(readyPath[1]), decodeURIComponent(readyPath[2])));
+        } catch (error) {
+          if (error instanceof AuthenticationRequired) response.status(401).json({ error: "AUTHENTICATION_REQUIRED" });
+          else if (error instanceof OrderHttpError) response.status(error.status).json({ error: error.code });
+          else if (error instanceof CommercialAccessError) response.status(error.status === 403 ? 403 : 503)
+            .json({ error: error.status === 403 ? "ACCESS_DENIED" : "AUTHORIZATION_UNAVAILABLE" });
+          else if (error instanceof URIError) response.status(404).json({ error: "ORDER_NOT_FOUND" });
+          else response.status(503).json({ error: "READY_UPDATE_UNAVAILABLE" });
+        }
+        return;
+      }
+      if (estimatePath) {
+        if (request.method !== "PUT") { response.status(405).set("Allow", "PUT").json({ error: "METHOD_NOT_ALLOWED" }); return; }
+        try {
+          if (Object.keys(request.query).length) throw new OrderHttpError("INVALID_REQUEST", 400);
+          const app = dependencies.app(runtime), auth = getAuth(app);
+          const actor = await verifyCommercialIdentity(auth, request.get("authorization"));
+          const input = parsePreparationEstimate(request.body);
+          response.status(200).json(await new PreparationEstimateService(getFirestore(app), auth).update(actor,
+            decodeURIComponent(estimatePath[1]), decodeURIComponent(estimatePath[2]), input.estimatedPreparationMinutes));
+        } catch (error) {
+          if (error instanceof AuthenticationRequired) response.status(401).json({ error: "AUTHENTICATION_REQUIRED" });
+          else if (error instanceof OrderHttpError) response.status(error.status).json({ error: error.code });
+          else if (error instanceof CommercialAccessError) response.status(error.status === 403 ? 403 : 503)
+            .json({ error: error.status === 403 ? "ACCESS_DENIED" : "AUTHORIZATION_UNAVAILABLE" });
+          else if (error instanceof URIError) response.status(404).json({ error: "ORDER_NOT_FOUND" });
+          else response.status(503).json({ error: "ESTIMATE_UPDATE_UNAVAILABLE" });
+        }
+        return;
+      }
+      const decisionPath = /^\/api\/v1\/stores\/([^/]+)\/orders\/([^/]+)\/decision\/?$/.exec(request.path);
+      if (decisionPath) {
+        if (request.method !== "POST") { response.status(405).set("Allow", "POST").json({ error: "METHOD_NOT_ALLOWED" }); return; }
+        try {
+          if (Object.keys(request.query).length) throw new OrderHttpError("INVALID_REQUEST", 400);
+          const app = dependencies.app(runtime), auth = getAuth(app);
+          const actor = await verifyCommercialIdentity(auth, request.get("authorization"));
+          const result = await new OrderDecisionService(getFirestore(app), auth).respond(actor,
+            decodeURIComponent(decisionPath[1]), decodeURIComponent(decisionPath[2]), parseOrderDecision(request.body));
+          response.status(200).json(result);
+        } catch (error) {
+          if (error instanceof AuthenticationRequired) response.status(401).json({ error: "AUTHENTICATION_REQUIRED" });
+          else if (error instanceof OrderHttpError) response.status(error.status).json({ error: error.code });
+          else if (error instanceof CommercialAccessError) {
+            const denied = ["FORBIDDEN", "EMAIL_VERIFICATION_REQUIRED", "AUTHORIZATION_CONFLICT"].includes(error.code);
+            response.status(denied ? 403 : 503).json({ error: denied ? "ACCESS_DENIED" : "AUTHORIZATION_UNAVAILABLE" });
+          } else if (error instanceof URIError) response.status(404).json({ error: "ORDER_NOT_FOUND" });
+          else response.status(503).json({ error: "ORDER_DECISION_UNAVAILABLE" });
+        }
+        return;
+      }
       const inboxPath = /^\/api\/v1\/stores\/([^/]+)\/orders\/?$/.exec(request.path);
       if (inboxPath) {
         if (request.method !== "GET") { response.status(405).set("Allow","GET").json({error:"METHOD_NOT_ALLOWED"}); return; }
@@ -85,6 +153,40 @@ export function createFoodApiHandler(dependencies: FoodApiDependencies): FoodHtt
       // HU17: own purchases of the authenticated UID, whatever its commercial experience; never a purchase permission.
       const myOrdersPath = /^\/api\/v1\/me\/orders\/?$/.test(request.path);
       const myOrderPath = /^\/api\/v1\/me\/orders\/([^/]+)\/?$/.exec(request.path);
+      const cancelPath = /^\/api\/v1\/me\/orders\/([^/]+)\/cancel\/?$/.exec(request.path);
+      const simulatedPaymentPath = /^\/api\/v1\/me\/orders\/([^/]+)\/simulate-payment\/?$/.exec(request.path);
+      if (simulatedPaymentPath) {
+        if (request.method !== "POST") { response.status(405).set("Allow","POST").json({error:"METHOD_NOT_ALLOWED"}); return; }
+        try {
+          if (Object.keys(request.query).length || request.body && Object.keys(request.body).length)
+            throw new OrderHttpError("INVALID_REQUEST",400);
+          const app=dependencies.app(runtime),uid=await verifyBuyerToken(getAuth(app),request.get("authorization"));
+          response.status(200).json(await new SimulatedPaymentService(getFirestore(app))
+            .pay(uid,decodeURIComponent(simulatedPaymentPath[1])));
+        } catch(error) {
+          if(error instanceof AuthenticationRequired)response.status(401).json({error:"AUTHENTICATION_REQUIRED"});
+          else if(error instanceof OrderHttpError)response.status(error.status).json({error:error.code});
+          else if(error instanceof URIError)response.status(404).json({error:"ORDER_NOT_FOUND"});
+          else response.status(503).json({error:"SIMULATED_PAYMENT_UNAVAILABLE"});
+        }
+        return;
+      }
+      if (cancelPath) {
+        if (request.method !== "POST") { response.status(405).set("Allow","POST").json({error:"METHOD_NOT_ALLOWED"}); return; }
+        try {
+          if (Object.keys(request.query).length || request.body && Object.keys(request.body).length)
+            throw new OrderHttpError("INVALID_REQUEST", 400);
+          const app = dependencies.app(runtime), uid = await verifyBuyerToken(getAuth(app), request.get("authorization"));
+          response.status(200).json(await new OrderCancellationService(getFirestore(app))
+            .buyerCancel(uid, decodeURIComponent(cancelPath[1])));
+        } catch (error) {
+          if (error instanceof AuthenticationRequired) response.status(401).json({error:"AUTHENTICATION_REQUIRED"});
+          else if (error instanceof OrderHttpError) response.status(error.status).json({error:error.code});
+          else if (error instanceof URIError) response.status(404).json({error:"ORDER_NOT_FOUND"});
+          else response.status(503).json({error:"CANCELLATION_UNAVAILABLE"});
+        }
+        return;
+      }
       if (myOrdersPath || myOrderPath) {
         if (request.method !== "GET") { response.status(405).set("Allow","GET").json({error:"METHOD_NOT_ALLOWED"}); return; }
         try {

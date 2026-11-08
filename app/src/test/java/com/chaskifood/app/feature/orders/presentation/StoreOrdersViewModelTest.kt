@@ -22,10 +22,19 @@ class StoreOrdersViewModelTest {
     private class Repo(initial:StoreOrdersAuthorization):StoreOrdersRepository {
         val auth=MutableStateFlow(initial);var current=true;var calls=0;val cursors=mutableListOf<String?>()
         var next:StoreOrdersResult=StoreOrdersResult.Loaded(StoreOrdersPage("store","Local",emptyList(),null))
+        var decision:StoreOrderDecisionResult=StoreOrderDecisionResult.Unavailable
+        var estimate:PreparationEstimateResult=PreparationEstimateResult.Unavailable
+        var ready:MarkOrderReadyResult=MarkOrderReadyResult.Unavailable
+        val decisions=mutableListOf<Pair<String,StoreOrderDecision>>()
         var block:suspend()->StoreOrdersResult={next}
         override fun observeAuthorization(target:StoreOrdersTarget):Flow<StoreOrdersAuthorization> = auth
         override fun isCurrent(context:StoreOrdersContext)=current && auth.value==StoreOrdersAuthorization.Allowed(context)
-        override suspend fun page(context:StoreOrdersContext,cursor:String?):StoreOrdersResult {calls++;cursors+=cursor;return block()}
+        override suspend fun page(context:StoreOrdersContext,cursor:String?,status:OrderStatus):StoreOrdersResult {calls++;cursors+=cursor;return block()}
+        override suspend fun respond(context:StoreOrdersContext,orderId:String,decision:StoreOrderDecision):StoreOrderDecisionResult {
+            decisions+=orderId to decision;return this.decision
+        }
+        override suspend fun updateEstimate(context:StoreOrdersContext,orderId:String,minutes:Int)=estimate
+        override suspend fun markReady(context:StoreOrdersContext,orderId:String)=ready
     }
     private fun vm(repo:Repo,store:String="store")=StoreOrdersViewModel(repo,SavedStateHandle(mapOf("businessId" to "business","storeId" to store)))
     @Test fun firstLoadRefreshAndPagingUseExistingContextWithoutDuplicateCalls()=runTest {
@@ -34,6 +43,37 @@ class StoreOrdersViewModelTest {
         repo.next=loaded("second");vm.loadMore();vm.loadMore();runCurrent()
         assertEquals(listOf(null,"next"),repo.cursors);assertEquals(2,vm.state.value.orders.size)
         repo.next=loaded("new");vm.refresh();runCurrent();assertEquals(listOf("new"),vm.state.value.orders.map{it.orderId})
+    }
+    @Test fun acceptAndRejectRemoveAnsweredOrdersAndExposeConcreteFeedback()=runTest {
+        val repo=Repo(StoreOrdersAuthorization.Allowed(context()));repo.next=loaded();val vm=vm(repo);runCurrent()
+        repo.decision=StoreOrderDecisionResult.Accepted(1_800_000_300_000);vm.accept("order",30);runCurrent()
+        assertTrue(vm.state.value.orders.isEmpty());assertTrue(vm.state.value.message!!.contains("aceptado"))
+        assertEquals(StoreOrderDecision.Accept(30),repo.decisions.single().second)
+
+        repo.next=loaded("other");vm.refresh();runCurrent();repo.decision=StoreOrderDecisionResult.Rejected
+        vm.reject("other",StoreOrderRejectionReason.OTHER,"Sin insumos");runCurrent()
+        assertTrue(vm.state.value.orders.isEmpty());assertTrue(vm.state.value.message!!.contains("rechazado"))
+    }
+    @Test fun suspendedAcceptanceKeepsOrderAvailableForRejection()=runTest {
+        val repo=Repo(StoreOrdersAuthorization.Allowed(context()));repo.next=loaded();val vm=vm(repo);runCurrent()
+        repo.decision=StoreOrderDecisionResult.AcceptanceSuspended;vm.accept("order",20);runCurrent()
+        assertEquals(listOf("order"),vm.state.value.orders.map{it.orderId});assertTrue(vm.state.value.message!!.contains("suspendido"))
+        assertNull(vm.state.value.respondingOrderId)
+    }
+    @Test fun estimateUpdateChangesVisiblePreparingOrder()=runTest {
+        val repo=Repo(StoreOrdersAuthorization.Allowed(context()));repo.next=loaded();val vm=vm(repo);runCurrent()
+        repo.estimate=PreparationEstimateResult.Updated(1800002400000);vm.updateEstimate("order",40);runCurrent()
+        assertEquals(40,vm.state.value.orders.single().estimatedPreparationMinutes)
+        assertEquals(1800002400000,vm.state.value.orders.single().estimatedReadyAtEpochMillis)
+    }
+    @Test fun readyTransitionRemovesPreparingOrderAndShowsPickupCode()=runTest {
+        val repo=Repo(StoreOrdersAuthorization.Allowed(context()))
+        repo.next=StoreOrdersResult.Loaded(StoreOrdersPage("store","Local",listOf(StoreOrderSummary("order",1800000000000,
+            listOf(StoreOrderLine("p","Plato",1,1000,1000)),OrderAmounts(1000,300,1300),OrderStatus.PREPARING,
+            estimatedPreparationMinutes=30,estimatedReadyAtEpochMillis=1800001800000)),null))
+        val vm=vm(repo);runCurrent();repo.ready=MarkOrderReadyResult.Ready("0042",1800001700000)
+        vm.markReady("order");runCurrent()
+        assertTrue(vm.state.value.orders.isEmpty());assertTrue(vm.state.value.message!!.contains("0042"))
     }
     @Test fun uidGenerationAndRevocationClearDataAndIgnoreUncooperativeLateResponses()=runTest {
         for(next in listOf(StoreOrdersAuthorization.Denied,StoreOrdersAuthorization.SignedOut,

@@ -29,7 +29,7 @@ export function receiptFromDocument(data: Record<string, any> | undefined, uid: 
       items:data.items.map((i:Record<string,any>)=>{
         if(BigInt(i.quantity)*BigInt(i.unitPriceMinor)!==BigInt(i.lineTotalMinor))return inconsistent();
         return {productId:i.productId,categoryId:i.categoryId,name:i.name,quantity:i.quantity,unitPriceMinor:i.unitPriceMinor};
-      }),amounts:{subtotalMinor:data.subtotalMinor,deliveryFeeMinor:data.deliveryFeeMinor,totalMinor:data.totalMinor},
+      }),amounts:{subtotalMinor:data.subtotalMinor,deliveryFeeMinor:data.deliveryFeeMinor,tipMinor:data.tipMinor??0,totalMinor:data.totalMinor},
       currency:data.currency,paymentMethod:data.paymentMethod,deliveryQuote:{quoteId:q.quoteId,distanceMeters:q.distanceMeters,
         tariffVersion:q.tariffVersion,quotedAtEpochMillis:q.quotedAt.toMillis(),expiresAtEpochMillis:q.expiresAt.toMillis()}});
     if(requestHash({intentId:id,accepted})!==hash || data.buyerSnapshot.uid!==uid || data.businessSnapshot.id!==accepted.businessId ||

@@ -53,6 +53,47 @@ internal class HttpBuyerOrdersRepository @Inject constructor(private val api: Bu
             }
         }
 
+    override suspend fun cancel(session: BuyerOrdersSession, orderId: String): BuyerOrderCancellationResult =
+        guarded(BuyerOrderCancellationResult.StaleSession, BuyerOrderCancellationResult.AuthenticationRequired,
+            BuyerOrderCancellationResult.Unavailable, session) { bearer ->
+            if (!orderId.matches(Regex("[0-9a-f]{64}"))) return@guarded BuyerOrderCancellationResult.NotFound
+            val response = api.cancel(bearer, orderId)
+            if (!isCurrent(session)) return@guarded BuyerOrderCancellationResult.StaleSession
+            when (response.code()) {
+                200 -> {
+                    val body = requireNotNull(response.body())
+                    require(body.contractVersion == 1)
+                    when (body.outcome) {
+                        "CANCELLED" -> { require(body.status == "CANCELLED"); BuyerOrderCancellationResult.Cancelled }
+                        else -> BuyerOrderCancellationResult.Unavailable
+                    }
+                }
+                409 -> BuyerOrderCancellationResult.NotAllowed
+                404 -> BuyerOrderCancellationResult.NotFound
+                401 -> BuyerOrderCancellationResult.AuthenticationRequired
+                else -> BuyerOrderCancellationResult.Unavailable
+            }
+        }
+
+    override suspend fun simulatePayment(session: BuyerOrdersSession, orderId: String): SimulatedPaymentResult =
+        guarded(SimulatedPaymentResult.StaleSession, SimulatedPaymentResult.AuthenticationRequired,
+            SimulatedPaymentResult.Unavailable, session) { bearer ->
+            if (!orderId.matches(Regex("[0-9a-f]{64}"))) return@guarded SimulatedPaymentResult.NotFound
+            val response = api.simulatePayment(bearer, orderId)
+            if (!isCurrent(session)) return@guarded SimulatedPaymentResult.StaleSession
+            when (response.code()) {
+                200 -> {
+                    val body = requireNotNull(response.body())
+                    require(body.contractVersion == 1 && body.outcome == "PAID" && body.paymentStatus == "PAID")
+                    SimulatedPaymentResult.Paid
+                }
+                409 -> SimulatedPaymentResult.NotAllowed
+                404 -> SimulatedPaymentResult.NotFound
+                401 -> SimulatedPaymentResult.AuthenticationRequired
+                else -> SimulatedPaymentResult.Unavailable
+            }
+        }
+
     /** Token por sesión, timeout y traducción de fallos; un contrato inesperado nunca se presenta como dato válido. */
     private suspend fun <T> guarded(stale: T, auth: T, unavailable: T, session: BuyerOrdersSession, call: suspend (String) -> T): T {
         if (!isCurrent(session)) return stale
@@ -83,6 +124,7 @@ private fun BuyerOrderDetailResponse.toDomain(): BuyerOrderDetail {
     return BuyerOrderDetail(summary, storePhone, pickupAddressText,
         BuyerOrderDelivery(delivery.label, delivery.addressText, delivery.reference, delivery.instructions),
         items.map { StoreOrderLine(it.productId, it.name, it.quantity, it.unitPriceMinor, it.lineTotalMinor) },
-        OrderAmounts(subtotalMinor, deliveryFeeMinor, totalMinor), OrderPaymentMethod.CASH_ON_DELIVERY,
-        statusHistory.map { BuyerOrderStatusEntry(it.status, it.statusKnown, it.occurredAtEpochMillis) })
+        OrderAmounts(subtotalMinor,deliveryFeeMinor,totalMinor,tipMinor), OrderPaymentMethod.CASH_ON_DELIVERY,
+        statusHistory.map { BuyerOrderStatusEntry(it.status, it.statusKnown, it.occurredAtEpochMillis) },
+        estimatedPreparationMinutes,estimatedReadyAtEpochMillis,OrderPaymentStatus.valueOf(paymentStatus))
 }

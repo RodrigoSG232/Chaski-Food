@@ -7,6 +7,10 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class CheckoutQuoteTest {
+    @Test fun `el subtotal minimo es veinticinco soles`() {
+        assertEquals(2500L, MINIMUM_ORDER_SUBTOTAL_MINOR)
+    }
+
     @Test fun `recalcula subtotal y total con precios vigentes y muestra cambios`() {
         val quote = quote(listOf(
             CheckoutPricedItem("a", "Plato", 2, 1000, 1250),
@@ -24,6 +28,12 @@ class CheckoutQuoteTest {
         val quote = quote(listOf(CheckoutPricedItem("a", "Plato", 1, 1250, 1250)))
         assertFalse(quote.hasPriceChanges)
         assertEquals(1630L, quote.totalMinor)
+    }
+
+    @Test fun `propina es opcional separada y actualiza el total`() {
+        val tipped=quote(listOf(CheckoutPricedItem("a","Plato",2,1250,1250))).withTip(500)
+        assertEquals(500L,tipped.tipMinor)
+        assertEquals(3380L,tipped.totalMinor)
     }
 
     @Test fun `rechaza cantidad invalida e importes que desbordan`() {

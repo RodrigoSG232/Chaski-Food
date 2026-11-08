@@ -20,7 +20,8 @@ internal object OrderIntentCodec {
             OrderItem(i.text("productId"), i.text("categoryId"), i.text("name"), i.integer("quantity").let(Math::toIntExact), i.integer("unitPriceMinor"))
         } }
         val a = p.getValue("amounts").jsonObject
-        val amounts = OrderAmounts(a.integer("subtotalMinor"), a.integer("deliveryFeeMinor"), a.integer("totalMinor"))
+        val amounts = OrderAmounts(a.integer("subtotalMinor"),a.integer("deliveryFeeMinor"),a.integer("totalMinor"),
+            if("tipMinor" in a)a.integer("tipMinor") else 0)
         val q = p.getValue("deliveryQuote").jsonObject
         val quoteId = q.text("quoteId")
         val quote = DeliveryQuote(bits(q.text("distanceBits")), amounts.deliveryFeeMinor, CartCurrency.valueOf(p.text("currency")),

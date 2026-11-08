@@ -9,7 +9,7 @@ const order=()=>({schemaVersion:1,orderId:id,status:"PENDING_CONFIRMATION",creat
   intentId:"PRIVATE",requestHash:"PRIVATE",quoteSnapshot:{quoteId:"PRIVATE"}});
 test("explicit minimal projection omits private snapshots and keeps exact amounts",()=>{
   const projected=projectPendingOrder(id,order());
-  assert.deepEqual(Object.keys(projected).sort(),["orderId","createdAtEpochMillis","status","items","subtotalMinor","deliveryFeeMinor","totalMinor","currency","paymentMethod"].sort());
+  assert.deepEqual(Object.keys(projected).sort(),["orderId","createdAtEpochMillis","status","items","subtotalMinor","deliveryFeeMinor","tipMinor","totalMinor","currency","paymentMethod"].sort());
   assert.equal(projected.createdAtEpochMillis,1800000000123);assert.equal(projected.totalMinor,2300);
   assert.equal(JSON.stringify(projected).includes("PRIVATE"),false);
 });

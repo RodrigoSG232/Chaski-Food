@@ -9,6 +9,7 @@ import com.chaskifood.app.feature.checkout.domain.CheckoutContext
 import com.chaskifood.app.feature.checkout.domain.CheckoutContextState
 import com.chaskifood.app.feature.checkout.domain.CheckoutReviewResult
 import com.chaskifood.app.feature.checkout.domain.CheckoutClock
+import com.chaskifood.app.feature.checkout.domain.withTip
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.CancellationException
@@ -193,6 +194,12 @@ class CheckoutViewModel @Inject constructor(
     fun selectPaymentMethod(method: CheckoutPaymentMethod) {
         if (expireIfNeeded()) return
         _uiState.value = _uiState.value.copy(paymentMethod = method)
+    }
+
+    fun selectTip(tipMinor:Long) {
+        if(expireIfNeeded())return
+        val ready=_uiState.value.result as? CheckoutReviewResult.Ready?:return
+        _uiState.value=_uiState.value.copy(result=CheckoutReviewResult.Ready(ready.quote.withTip(tipMinor)))
     }
 
     fun acceptPriceChanges() {

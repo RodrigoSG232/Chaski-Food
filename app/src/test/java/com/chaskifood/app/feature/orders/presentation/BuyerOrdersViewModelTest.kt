@@ -31,6 +31,7 @@ class BuyerOrdersViewModelTest {
             calls += phase to cursor; return block?.invoke() ?: queue.removeFirstOrNull() ?: BuyerOrdersResult.Unavailable
         }
         override suspend fun detail(session: BuyerOrdersSession, orderId: String) = BuyerOrderDetailResult.NotFound
+        override suspend fun cancel(session: BuyerOrdersSession, orderId: String) = BuyerOrderCancellationResult.Unavailable
     }
 
     @Test fun firstLoadPagingAndRefreshKeepChronologicalRowsWithoutDuplicates() = runTest {
@@ -103,6 +104,7 @@ class BuyerOrdersViewModelTest {
             override fun isCurrent(session: BuyerOrdersSession) = this.session.value == session
             override suspend fun page(session: BuyerOrdersSession, phase: BuyerOrderPhase, cursor: String?) = BuyerOrdersResult.Unavailable
             override suspend fun detail(session: BuyerOrdersSession, orderId: String): BuyerOrderDetailResult { ids += orderId; return BuyerOrderDetailResult.NotFound }
+            override suspend fun cancel(session: BuyerOrdersSession, orderId: String) = BuyerOrderCancellationResult.Unavailable
         }
         val bad = BuyerOrderDetailViewModel(repo, SavedStateHandle(mapOf("orderId" to "../x"))); runCurrent()
         assertTrue(bad.state.value.notFound); assertTrue(repo.ids.isEmpty())

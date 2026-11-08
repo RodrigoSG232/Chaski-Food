@@ -1,6 +1,6 @@
 # Estado de implementación de Chasqui Food
 
-Última revisión: **31-10-2026**. Código de referencia: `ramaDante` (HU17 en commits `c80c178`…`66e2d6c` más documentación, pendientes de push/PR; `main` en PR #4/#5). Cómo funciona: [ARCHITECTURE](ARCHITECTURE.md). Cómo trabajar: [GUIA_DESARROLLO](GUIA_DESARROLLO.md).
+Última revisión: **08-11-2026**. Código integrado: `main` hasta HU17. HU18–HU21 y el pago simulado educativo continúan en `ramaMax`. Esta rama requiere PR y publicación autorizada. Cómo funciona: [ARCHITECTURE](ARCHITECTURE.md). Cómo trabajar: [GUIA_DESARROLLO](GUIA_DESARROLLO.md).
 
 Vocabulario: **implementado** = código integrado; **verificado** = hay evidencia de ejecución; **validado en Cloud** = probado con el APK CONECTADO contra `chaski-food-9adba`. Una pantalla o un commit no cierran una historia por sí solos.
 
@@ -14,11 +14,15 @@ Vocabulario: **implementado** = código integrado; **verificado** = hay evidenci
 | HU05–HU11 negocios, locales, responsables, horarios, catálogo | Implementado | Desde HU34 registro, aprobación y asignación pasan por foodApi. HU07 limita la suspensión general a 8 locales activos. |
 | HU12–HU13 descubrimiento y búsqueda | Implementado | Conviven componentes de demostración (`FakeDiscoverRepository`). |
 | HU14 carrito | Implementado, probado y aceptado | Room por UID; sin reserva de precio/stock. Ajuste aprobado en HU17: «Agregar al carrito» vuelve al catálogo del local con aviso «Ver carrito»; botón «Continuar». |
-| **HU15** revisión de compra | **Validado en Cloud** | Elegibilidad y cotización vial HeiGIT (`lima-driving-car-v1`). |
+| **HU15** revisión de compra | **Validado en Cloud; cambio local pendiente de publicar** | Elegibilidad y cotización vial HeiGIT. En `ramaMax`: tarifa `lima-driving-car-v2` a S/0.90 por km vial, pedido mínimo S/25 y propina opcional separada. |
 | **HU16** confirmar pedido | **Validado en Cloud (31-10)** | Pedido idempotente, outbox, `newOrderNotifier` con FCM real y bandeja del responsable. Pedido de prueba `PENDING_CONFIRMATION`, evento `SENT`. |
 | **HU34** acceso según permisos | **Validado en Cloud** | Coordinador comercial en foodApi, índice privado, reglas publicadas, vinculación VERIFIED, cliente implícito, lease renovable y paneles con cierre de sesión. Comprador, propietario, responsable y administrador comprobados. |
 | **HU17** pedidos propios | **Completada y validada en Cloud (31-10)** | Lista En curso/Historial, detalle histórico, «Mis compras» en Cuenta (propietario/responsable) y «Ver mi pedido» en Checkout. Índice y `foodApi` (`foodapi-00003-vab`) publicados. |
-| HU18–HU22 | **Siguiente trabajo** | Ver §4.1. |
+| **HU18** cancelar pedido | **Implementada; interfaz validada en dispositivo (01-11)** | Botón, confirmación y bloqueo desde `PREPARING` comprobados manualmente. Backend transaccional pendiente de emulador/publicación Cloud. |
+| **HU19** recibir y responder | **En desarrollo en rama** | Backend y Android implementan aceptar con estimación y rechazar con motivo; suspensión permite consultar/rechazar y bloquea aceptar. JVM `orders` aprobadas. Faltan notificación al cliente, emulador y validación manual/Cloud. |
+| **HU20** gestionar tiempo de preparación | **Implementada localmente en rama** | Bandeja `PREPARING`, actualización transaccional de 5–180 min, historial, detalle del cliente y outbox para una entrega existente. JVM `orders` aprobadas y pruebas instrumentadas compilan; faltan ejecutar emulador, validación manual y Cloud. |
+| **HU21** finalizar preparación y validar recojo | **Implementada localmente en rama** | Cliente simula el pago en `PREPARING`; foodApi genera una sola vez el código de 4 dígitos. El responsable puede pasar a `READY_FOR_PICKUP` únicamente después del pago. Falta validación manual y volver a publicar foodApi con estos cambios. |
+| **HU22** solicitar servicio de reparto | **Implementada localmente en rama** | `riderApi` privada expone pedidos listos, código estable, asignación/liberación, fases y tracking con idempotencia. Pendiente: desplegar, recibir la cuenta de servicio Rider, otorgarle `run.invoker` y validar entre ambos backends. Contrato: [API_CHASKI_RIDER.md](API_CHASKI_RIDER.md). |
 | HU23–HU33, EN04 | No iniciadas | Hay pantallas de ejemplo (seguimiento, pago, valoración) que **no** son funcionalidad productiva. Release sin configurar. |
 
 HU34 no figura en la planificación original del curso: es una historia acordada por el equipo (sus decisiones vigentes están en [DECISIONES](DECISIONES.md)).
@@ -37,6 +41,8 @@ HU34 no figura en la planificación original del curso: es una historia acordada
 | Reglas publicadas (API de prueba de reglas) | 17/17 permitidos/denegados esperados |
 | HU17 (código `66e2d6c`, LOCAL) | Functions unitarias 126/126; emulador HU16/HU17 58/58; JVM 590/590+; instrumentadas de Pedidos, Checkout, Carrito y Oferta 31/31; E2E LOCAL HU16+HU17 (respuesta perdida, recuperación, «Ver mi pedido», lista y detalle con datos reales); revisión manual de Dante en AVD aprobada |
 | HU17 en Cloud (APK CONECTADO, 31-10) | **Validación manual de Dante:** regresión de la bandeja HU16 y navegación comercial; cliente (En curso, Historial, detalle, productos, importes, actualización); «Mis compras» de propietario y responsable; cambio de sesión, estados vacíos y errores; dos compras reales con «Pedido enviado → Ver mi pedido → Pedidos». **Registros `foodapi-00003-vab`:** 68 peticiones, sin 5xx, `DATA_INCONSISTENT` ni `UNKNOWN_ORDER_STATUS` (los 401 son pruebas sin token). El aislamiento por UID con ID ajeno solo se probó automáticamente en LOCAL; en Cloud se comprobó visualmente al cambiar de cuenta. |
+| HU20 local (`ramaMax`, 01-11) | JVM de `feature.orders` aprobadas; `compileDebugAndroidTestKotlin` aprobado. Functions compila con Node 22, 136 pruebas unitarias aprobadas y paquete verificado. Se agregaron casos de emulador para actualización, idempotencia, historial, permisos y outbox; la batería completa aún debe ejecutarse. |
+| Laboratorio manual HU20 (`ramaMax`, 01-11) | Sembrador LOCAL seguro probado dos veces contra Auth/Firestore Emulator: 4 identidades, negocio, 2 locales, catálogo, responsable VERIFIED y 3 pedidos; 1/1 prueba de idempotencia aprobada. Nunca apunta al proyecto real y se excluye del paquete Cloud. |
 | Instrumentadas Android (anteriores a HU17) | Compilan; las últimas correcciones de acceso/avisos **no** se ejecutaron en dispositivo como suite |
 | Cloud manual con APK CONECTADO | E1 (registro/aprobación), E2 (asignación, VERIFIED, dispositivo), G (4 roles con reglas nuevas), F (pedido → evento SENT → push → bandeja) |
 
@@ -46,11 +52,11 @@ Fuente única de pendientes. Cada elemento indica por qué se postergó, dónde 
 ### 4.1 Próximas historias (planificación original)
 | HU | Título | Notas ya decididas |
 |---|---|---|
-| HU18 | Cancelar pedido | Según estado (p. ej. `PENDING_CONFIRMATION`). |
-| HU19 | Recibir y responder pedidos | **Aprobado:** aceptar pasa directo `PENDING_CONFIRMATION → PREPARING` (sin `CONFIRMED`). Debe precisar acciones durante suspensión. El pedido de prueba sirve para probarla. |
-| HU20 | Gestionar tiempo de preparación | — |
-| HU21 | Finalizar preparación y validar recojo | `READY_FOR_PICKUP`. |
-| HU22 | Solicitar servicio de reparto | Integración con Chasqui Rider; contrato no definido. |
+| HU18 | Cancelar pedido | **Aprobado:** cancelación directa únicamente en `PENDING_CONFIRMATION`; desde `PREPARING` no se permite. Si ya existe `deliveryId`, no se cancela silenciosamente y se reserva la coordinación para HU22. |
+| HU19 | Recibir y responder pedidos | **Aprobado:** `PENDING_CONFIRMATION → PREPARING`; estimación 5–180 min. Rechazo con motivo. En suspensión: consulta y rechazo permitidos, aceptación bloqueada. Notificación al cliente aún pendiente. |
+| HU20 | Gestionar tiempo de preparación | **Implementado en `ramaMax`:** modificación solo en `PREPARING`, 5–180 min, historial versionado, lectura del cliente al refrescar y evento durable si ya existe reparto. Pendiente de validación LOCAL/Cloud. |
+| HU21 | Finalizar preparación y validar recojo | **Implementado en `ramaMax`:** el cliente realiza un pago simulado sin cobro real; foodApi genera un único código de recojo y el responsable autorizado puede marcar listo solamente después del pago. La entrega no cambia a `IN_DELIVERY` desde Food. |
+| HU22 | Solicitar servicio de reparto | **Implementado en `ramaMax`:** API privada para lectura del pedido completo, código único, asignación/liberación, estados y última ubicación. Food nunca asigna repartidores. Falta despliegue y prueba contractual con la identidad de servicio Rider. |
 
 ### 4.2 Mejoras aprobadas, no implementadas
 | Mejora | Por qué se postergó | Dónde | ¿Decisión humana? | Precauciones |

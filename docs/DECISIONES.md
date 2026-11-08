@@ -8,14 +8,24 @@ Decisiones **aprobadas** por el equipo que siguen aplicando y condicionan las pr
 - **El índice `commercial_access_index` es derivado y privado**: coordina UID y correo; Auth, `business_requests` y `store_managers` siguen siendo las fuentes. No es una colección de roles (HU34-20).
 - **Sin eliminaciones automáticas** al preparar o reconciliar datos; los conflictos se detectan y se resuelven explícitamente (HU34-24).
 
-## Pedidos (HU15–HU19)
+## Pedidos (HU15–HU22)
 - **Cotización**: foodApi la calcula con HeiGIT, la guarda y entrega `quoteId`; vale 5 minutos, pertenece al UID (no a la sesión) y se reutiliza mientras sea válida. Android nunca fija importes (HU16-01, HU16-06, HU16-20).
+- **Tarifa y mínimo:** el reparto cuesta S/0.90 por kilómetro de ruta, sin base fija (`lima-driving-car-v2`). El subtotal de productos debe ser al menos S/25.00; foodApi lo revalida con precios vigentes.
+- **Desglose:** el pedido conserva subtotal de productos, costo de reparto, propina opcional y total. La propina no se mezcla con el costo de reparto.
 - **Confirmación autoritativa**: la transacción final revalida precios, permisos, responsables, dirección, cotización y horario; sin llamadas a HeiGIT/FCM dentro de la transacción (HU16-17).
 - **Idempotencia**: cada intención tiene un `intentId` duradero por UID; repetirla devuelve el resultado original; el mismo ID con otro contenido se rechaza; una compra nueva usa otro ID (HU16-03, HU16-09).
 - **Recuperación**: se distinguen éxito, rechazo final e incertidumbre; un timeout no significa fracaso; la intención se guarda en Room **antes** de llamar y una nueva revisión implica nueva intención, nunca un reenvío automático (HU16-02, HU16-18, HU16-22).
 - **Consentimiento**: cualquier cambio relevante (incluidas subidas y bajadas de precio) exige nueva revisión (HU16-10).
 - **Pedido histórico por valor**: se guardan comprador, negocio/local, líneas con nombre y precio, importes, pago (`CASH_ON_DELIVERY`, PEN), direcciones de recojo y entrega, instrucciones, contacto, cotización, estado y fechas. Editar los datos originales no cambia pedidos pasados (HU16-15).
 - **Estado inicial `PENDING_CONFIRMATION`.** HU19 acepta pasando **directo a `PREPARING`**, sin estado `CONFIRMED` (aunque el PDF del curso lo mencione).
+- **Cancelación HU18:** el comprador cancela directamente solo mientras el estado siga en `PENDING_CONFIRMATION`. Desde `PREPARING` no se permite cancelar; la transición compite atómicamente con la futura aceptación de HU19. Repetir una cancelación propia ya completada es idempotente. Un pedido con `deliveryId` requiere coordinación logística de HU22 y no se cancela silenciosamente.
+- **Respuesta HU19:** solo un responsable VERIFIED asignado al local responde pedidos `PENDING_CONFIRMATION`. Aceptar pasa directamente a `PREPARING` e incluye una estimación de 5–180 minutos; rechazar exige un motivo y «Otro» exige explicación. Durante la suspensión se conserva consulta y rechazo, pero se bloquea la aceptación.
+- **Estimación HU20:** solo se modifica mientras el pedido permanezca `PREPARING`, dentro de 5–180 minutos y mediante una transacción de foodApi. Cada cambio crea historial versionado; repetir el mismo valor es idempotente. El cliente recibe el valor vigente al refrescar su detalle. Si ya existe `deliveryId`, se genera un evento durable `PREPARATION_ESTIMATE_UPDATED`; su consumo por Rider pertenece a HU22.
+- **Pago educativo:** mientras no exista una pasarela real, el comprador puede simular el pago únicamente cuando el pedido está `PREPARING`. foodApi registra `paymentStatus=PAID`, `paymentSimulation=true` y `paidAt`; la interfaz advierte que no se efectúa ningún cobro real.
+- **Código único:** foodApi genera un único `pickupCode` aleatorio de cuatro dígitos al confirmar el pago simulado. Marcar el pedido listo no crea ni reemplaza el código. Una reasignación o cancelación del repartidor conserva el mismo código del pedido; no se implementa un segundo PIN de entrega.
+- **Recojo HU21:** solo un responsable autorizado cambia un pedido pagado de `PREPARING → READY_FOR_PICKUP`. Si el pago sigue pendiente, foodApi rechaza la transición. Si existe `deliveryId`, crea `ORDER_READY_FOR_PICKUP` para Rider incluyendo el código ya generado.
+- **Límite entre apps:** Food no crea usuarios repartidores. `riderApi` es una función separada, privada mediante IAM y destinada exclusivamente al backend Rider. Expone el pedido y código; recibe asignación, liberación, fases y tracking. Rider sigue siendo la única autoridad que selecciona al repartidor.
+- **Reasignación HU22:** `ASSIGNMENT_RELEASED` solo libera antes del recojo; no cancela la compra ni modifica el código. Una nueva asignación incrementa su versión. Después de `PICKED_UP` no se reasigna automáticamente y Food pasa a `IN_DELIVERY` únicamente por un evento Rider válido.
 - **Para recibir pedidos** basta al menos un responsable asignado válido; no se exige que esté conectado. Sin responsables se bloquean confirmaciones nuevas (HU16-05, HU16-12).
 
 ## Consultas propias (HU17)

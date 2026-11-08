@@ -34,14 +34,36 @@ class HttpBuyerOrdersRepositoryTest {
             BuyerOrderStatusResponse("PREPARING", true, 1_800_000_000_100)),
         listOf(BuyerOrderItemPreviewResponse("Plato", 2)), 1)
     private fun repo(page: (String, String?) -> Response<BuyerOrdersResponse> = { _, _ -> Response.success(BuyerOrdersResponse(1, "ACTIVE", listOf(summary()), null)) },
-        detail: (String) -> Response<BuyerOrderDetailEnvelope> = { Response.success(BuyerOrderDetailEnvelope(1, detail())) }) =
+        detail: (String) -> Response<BuyerOrderDetailEnvelope> = { Response.success(BuyerOrderDetailEnvelope(1, detail())) },
+        cancel: (String) -> Response<BuyerOrderCancellationResponse> = { Response.success(BuyerOrderCancellationResponse(1, "CANCELLED", "CANCELLED")) },
+        payment: (String) -> Response<SimulatedPaymentResponse> = { Response.success(SimulatedPaymentResponse(1, "PAID", "PAID")) }) =
         HttpBuyerOrdersRepository(object : BuyerOrdersApi {
             override suspend fun page(authorization: String, phase: String, cursor: String?, pageSize: Int): Response<BuyerOrdersResponse> {
                 assertEquals("Bearer fixture-token", authorization); assertEquals(20, pageSize); return page(phase, cursor)
             }
             override suspend fun detail(authorization: String, orderId: String) = detail(orderId)
+            override suspend fun cancel(authorization: String, orderId: String) = cancel(orderId)
+            override suspend fun simulatePayment(authorization: String, orderId: String) = payment(orderId)
         }, tokens, sessions)
     private fun <T> error(code: Int): Response<T> = Response.error(code, "{}".toResponseBody())
+
+    @Test fun cancellationMapsServerOutcomesAndConflicts() = runTest {
+        assertEquals(BuyerOrderCancellationResult.Cancelled, repo().cancel(session, id))
+        assertEquals(BuyerOrderCancellationResult.Unavailable, repo(cancel = {
+            Response.success(BuyerOrderCancellationResponse(1, "REQUESTED", "PREPARING")) }).cancel(session, id))
+        assertEquals(BuyerOrderCancellationResult.NotAllowed, repo(cancel = { error(409) }).cancel(session, id))
+        assertEquals(BuyerOrderCancellationResult.Unavailable, repo(cancel = {
+            Response.success(BuyerOrderCancellationResponse(1, "CANCELLED", "PREPARING")) }).cancel(session, id))
+    }
+
+    @Test fun simulatedPaymentMapsSuccessAndConflicts() = runTest {
+        assertEquals(SimulatedPaymentResult.Paid, repo().simulatePayment(session, id))
+        assertEquals(SimulatedPaymentResult.NotAllowed,
+            repo(payment = { error(409) }).simulatePayment(session, id))
+        assertEquals(SimulatedPaymentResult.Unavailable,
+            repo(payment = { Response.success(SimulatedPaymentResponse(1, "PAID", "PENDING")) })
+                .simulatePayment(session, id))
+    }
 
     @Test fun mapsPagesAndDetailWithExactAmountsAndHistory() = runTest {
         val loaded = repo().page(session, BuyerOrderPhase.ACTIVE) as BuyerOrdersResult.Loaded

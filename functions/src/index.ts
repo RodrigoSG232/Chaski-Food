@@ -2,6 +2,7 @@ import { getApps } from "firebase-admin/app";
 import { onRequest } from "firebase-functions/v2/https";
 import { defineSecret } from "firebase-functions/params";
 import { createFoodApiHandler } from "./foodApiHandler";
+import { createRiderApiHandler } from "./riderApiHandler";
 import { QuoteError } from "./delivery/deliveryQuoteService";
 import { OpenRouteServiceReader } from "./delivery/openRouteServiceReader";
 import { RouteReader } from "./delivery/routeReader";
@@ -18,6 +19,17 @@ export const foodApi = onRequest({ region: "southamerica-west1", timeoutSeconds:
     },
     routeFixture: process.env.CHASKI_ROUTE_FIXTURE,
     routeReader,
+  }));
+
+/** Server-to-server HU22 API. Cloud Run IAM must grant invoker only to the Rider backend service account. */
+export const riderApi = onRequest({region:"southamerica-west1",timeoutSeconds:15,minInstances:0,maxInstances:1,
+  concurrency:10,invoker:"private"},createRiderApiHandler({
+    runtime:()=>resolveRuntimeEnvironment(process.env,"riderApi"),
+    app:runtime=>{
+      const app=getApps().find(candidate=>candidate.name==="[DEFAULT]")??initializeRuntimeApp(runtime);
+      if(app.options.projectId!==runtime.projectId)throw new RuntimeConfigurationError();
+      return app;
+    },
   }));
 
 function routeReader(runtime: ReturnType<typeof resolveRuntimeEnvironment>): { reader: RouteReader; source: "HEIGIT" | "SIMULATED" } {

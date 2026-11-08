@@ -59,7 +59,7 @@ class StoreOrdersHttpEmulatorTest {
             assertEquals(StoreOrdersResult.StaleContext,repo.page(allowed))
             withTimeout(15000){auth.signInWithEmailAndPassword("hu16-e2e-owner@example.test","emulator-password").await()}
             val owner=sessions.current();val ownerToken=tokens.token("hu16-e2e-owner",owner.generation)
-            assertEquals(403,api.page(target.storeId,"Bearer $ownerToken",null,20).code())
+            assertEquals(403,api.page(target.storeId,"Bearer $ownerToken",null,"PENDING_CONFIRMATION",20).code())
             // Explicit test-only HU34 revocation against demo Functions; no production or direct private reads.
             val revoked=retrofit.create(LabOperations::class.java).execute("Bearer $ownerToken",buildJsonObject {
                 put("action","REVOKE");put("operationId","revoke-inbox-android");put("expectedRevision",revision)
@@ -68,7 +68,7 @@ class StoreOrdersHttpEmulatorTest {
             assertEquals(200,revoked.code())
             auth.signOut();withTimeout(15000){auth.signInWithEmailAndPassword("hu16-e2e-manager@example.test","emulator-password").await()}
             val current=sessions.current();val token=tokens.token("hu16-e2e-manager",current.generation)
-            val denied=api.page(target.storeId,"Bearer $token",null,20)
+            val denied=api.page(target.storeId,"Bearer $token",null,"PENDING_CONFIRMATION",20)
             assertEquals(403,denied.code());assertNull(denied.body())
             assertEquals(StoreOrdersResult.StaleContext,repo.page(allowed))
         } finally {scope.cancel();auth.signOut();app.delete()}

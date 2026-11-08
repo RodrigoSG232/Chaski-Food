@@ -7,7 +7,7 @@ import { evaluateEligibility, businessIdOf } from "../eligibility/storeEligibili
 import { readStoredQuote, haversineKm, QuoteContext } from "../delivery/deliveryQuoteStore";
 import { QuoteError } from "../delivery/deliveryQuotePolicy";
 import { validCoordinates } from "../delivery/routeReader";
-import { AcceptedPurchase, OrderIntent, OrderItem, orderAmounts, parseAcceptedPurchase, intentId } from "./orderModels";
+import { AcceptedPurchase, MINIMUM_ORDER_SUBTOTAL_MINOR, OrderIntent, OrderItem, orderAmounts, parseAcceptedPurchase, intentId } from "./orderModels";
 import { consentHash, logisticsContextHash, requestHash, recordedOrderAttempt } from "./orderPolicy";
 import { OrderHttpError } from "./orderRequest";
 import { effectivePriceMinor, inconsistent, optionalStorePhone, OrderRejected, trustedText, withinStoreHours } from "./orderValidation";
@@ -94,11 +94,13 @@ export class OrderService {
         const qc:QuoteContext={uid,storeId:expected.storeId,addressId:expected.delivery.addressId,businessId,origin,destination,
           logisticsHash:logisticsContextHash(uid,expected.storeId,expected.delivery.addressId,origin,destination)};
         const quote=readStoredQuote(expected.deliveryQuote.quoteId,quoteData,qc,decisionAt);
+        const amounts=orderAmounts(items,quote.deliveryFeeMinor,expected.amounts.tipMinor);
+        if(amounts.subtotalMinor<MINIMUM_ORDER_SUBTOTAL_MINOR)throw new OrderRejected("MINIMUM_NOT_MET","MINIMUM_NOT_MET",409);
         const actual:AcceptedPurchase=parseAcceptedPurchase({ownerUid:uid,businessId,storeId:expected.storeId,businessName:trustedText(business!.businessName),
           storeName:trustedText(store.name),storePhone:optionalStorePhone(store.phone),buyerName:trustedText(profile?.displayName || user.displayName),
           buyerPhone:user.phoneNumber??null,pickup:{addressText:trustedText(store.address),location:origin,reference:null,instructions:null},
           delivery:{addressId:expected.delivery.addressId,label:address.label,destination:{addressText:address.addressText,location:destination,
-            reference:address.reference,instructions:address.instructions}},items,amounts:orderAmounts(items,quote.deliveryFeeMinor),
+            reference:address.reference,instructions:address.instructions}},items,amounts,
           currency:"PEN",paymentMethod:"CASH_ON_DELIVERY",deliveryQuote:{quoteId:quote.quoteId,distanceMeters:quote.distanceMeters,
             tariffVersion:quote.tariffVersion,quotedAtEpochMillis:Date.parse(quote.quotedAt),expiresAtEpochMillis:Date.parse(quote.expiresAt)}});
         if(consentHash(actual)!==consentHash(expected))throw new OrderRejected("REVIEW_REQUIRED","REVIEW_REQUIRED");

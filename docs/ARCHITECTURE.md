@@ -46,7 +46,7 @@ Dirección: Presentation → Domain ← Data. `core/` contiene infraestructura c
 | `feature/discover`, `search`, `home`, `restaurants` | Descubrimiento de locales por dirección/horario/cobertura, búsqueda y detalle de ofertas. |
 | `feature/cart` | **HU14**: carrito por UID en Room con validación remota de oferta. |
 | `feature/checkout` | **HU15/HU16**: revisión de compra (`FirebaseCheckoutRepository`), cotización y elegibilidad (foodApi), confirmación idempotente y recuperación (`CheckoutOrderOperations`, intenciones en Room). |
-| `feature/orders` | Bandeja del responsable (`StoreOrdersScreen`, `HttpStoreOrdersRepository`) y compras propias HU17 (`BuyerOrdersScreen` compartida por la pestaña Pedidos y «Mis compras», `BuyerOrderDetailScreen`, `HttpBuyerOrdersRepository`). Las pantallas de seguimiento/valoración siguen siendo **demostrativas**. |
+| `feature/orders` | Bandeja del responsable (`StoreOrdersScreen`, `HttpStoreOrdersRepository`), respuesta HU19, estimación HU20, compras propias HU17 y cancelación HU18 (`BuyerOrdersScreen`, `BuyerOrderDetailScreen`, `HttpBuyerOrdersRepository`). Las pantallas de seguimiento/valoración siguen siendo **demostrativas**. |
 | `feature/menu`, `main` | Contenedor principal y piezas de ejemplo. |
 
 Módulos Hilt (todos en `SingletonComponent`): `AccessDataModule`, `DatabaseModule`, `FirebaseModule`, `NetworkModule`, `NotificationsModule`, `AddressDataModule`, `AuthDataModule`, `BusinessDataModule`, `CartDataModule`, `CatalogDataModule`, `CheckoutDataModule`, `DiscoverDataModule`, `StoreOrdersDataModule`, `SearchDataModule`.
@@ -86,16 +86,19 @@ Estructura: `foodApiHandler.ts` (enrutado HTTP y traducción de errores) → ser
 | `GET order-attempts/{intentId}` | HU16 | Recuperación del resultado de una confirmación incierta. |
 | `GET stores/{storeId}/orders` | HU16 | Bandeja paginada del responsable VERIFIED del local. |
 | `GET me/orders?phase=ACTIVE\|HISTORICAL` y `GET me/orders/{orderId}` | HU17 | Compras propias por `buyerUid` (cualquier experiencia); cursor ligado a UID y fase; ajeno = 404. Ver [DECISIONES](DECISIONES.md#consultas-propias-hu17). |
+| `POST me/orders/{orderId}/cancel` | HU18 | Cancelación idempotente del comprador únicamente desde `PENDING_CONFIRMATION`; transición e historial en una transacción. Ajeno = 404, estado no permitido = 409. |
+| `POST stores/{storeId}/orders/{orderId}/decision` | HU19 | Responsable asignado acepta con estimación (`PREPARING`) o rechaza con motivo (`REJECTED`). Compite atómicamente con HU18; suspensión bloquea aceptar, no consultar/rechazar. |
+| `PUT stores/{storeId}/orders/{orderId}/preparation-estimate` | HU20 | Responsable asignado actualiza la estimación de 5–180 minutos únicamente en `PREPARING`; registra historial e informa mediante outbox a una entrega existente. |
 | `PUT` / `DELETE devices/{installationId}` | HU16 | Registro/retirada del dispositivo FCM (PUT solo responsables con local asignado). |
 | `GET access/facts` | HU34 | Hechos de acceso de la cuenta (propiedad, asignaciones, locales). |
 | `GET access/revision`, `POST access/assignment-revision` | HU34 | Revisiones del índice para control de concurrencia. |
 | `POST access/operations` | HU34 | Operaciones comerciales: `REGISTER`, `RESUBMIT`, `APPROVE` (admin), `ASSIGN`, `REVOKE`, `BIND`, `PREPARE` (admin, sin UI). Idempotentes por `operationId` y auditadas. |
 
 ### HeiGIT y tarifa (HU15)
-`delivery/openRouteServiceReader.ts` consulta HeiGIT openrouteservice (`driving-car`) con la clave `HEIGIT_API_KEY` (Secret Manager; nunca en Android). Cobertura: distancia en línea recta ≤ `stores.deliveryRadiusKm`. Tarifa vigente (`deliveryQuotePolicy.ts`, versión `lima-driving-car-v1`): **150 céntimos + redondeo(120 céntimos × km viales)**, aritmética entera. En LOCAL, `CHASKI_ROUTE_FIXTURE=enabled` simula 1 250,5 m sin llamar a HeiGIT.
+`delivery/openRouteServiceReader.ts` consulta HeiGIT openrouteservice (`driving-car`) con la clave `HEIGIT_API_KEY` (Secret Manager; nunca en Android). Cobertura: distancia en línea recta ≤ `stores.deliveryRadiusKm`. Tarifa vigente en `ramaMax` (`deliveryQuotePolicy.ts`, versión `lima-driving-car-v2`): **redondeo(90 céntimos × km viales)**, sin base fija y con aritmética entera. El subtotal mínimo de productos es S/25.00. En LOCAL, `CHASKI_ROUTE_FIXTURE=enabled` simula 1 250,5 m sin llamar a HeiGIT.
 
 ### Pedidos (HU16)
-`orders/orderService.ts` revalida en una transacción: identidad y compra solo como cliente, negocio/local habilitados y `OPEN`, horario, cobertura, cotización vigente del mismo UID, productos/precios/categorías, responsable receptor y consentimiento (huella de lo que el cliente aceptó). Crea a la vez `food_orders/{id}` (estado `PENDING_CONFIRMATION`, `CASH_ON_DELIVERY`, PEN, copias por valor de dirección y líneas), `food_orders/{id}/status_history/initial`, `order_attempts/{uid}/intents/{intentId}` (idempotencia duradera) y `order_events/{id}` (outbox). Android guarda la intención en Room **antes** de llamar y recupera con `order-attempts` si la respuesta se pierde.
+`orders/orderService.ts` revalida en una transacción: identidad y compra solo como cliente, negocio/local habilitados y `OPEN`, horario, cobertura, cotización vigente del mismo UID, mínimo, productos/precios/categorías, responsable receptor y consentimiento (huella de lo que el cliente aceptó). Crea a la vez `food_orders/{id}` (estado `PENDING_CONFIRMATION`, `CASH_ON_DELIVERY`, PEN, propina separada y copias por valor de dirección y líneas), `food_orders/{id}/status_history/initial`, `order_attempts/{uid}/intents/{intentId}` (idempotencia duradera) y `order_events/{id}` (outbox). Android guarda la intención en Room **antes** de llamar y recupera con `order-attempts` si la respuesta se pierde.
 
 ### Avisos (HU16)
 `newOrderNotifier` procesa cada `order_events` con lease (3 min), hasta 5 intentos con backoff (1, 5, 15, 15, 15 min) y progreso por dispositivo (`order_events/{id}/deliveries`). Reautoriza a cada responsable antes de enviar. FCM: prioridad alta, `ttl` 5 min. Estados finales: `SENT`, `NO_RECIPIENTS` (sin dispositivos; **no se reintenta**), `FAILED_PERMANENT`, `EXHAUSTED`. El aviso no es la fuente de verdad: **la bandeja sí**. Cerrar sesión retira el dispositivo (`DELETE devices`).
@@ -112,7 +115,9 @@ Estructura: `foodApiHandler.ts` (enrutado HTTP y traducción de errores) → ser
 | `commercial_access_index/{uid_*|email_*}` | Índice privado UID↔correo con revisión | **Solo foodApi**; ningún cliente lo lee |
 | `stores`, `categories`, `products`, `store_product_configs` | Locales, catálogo y precio/disponibilidad por local | Propietario aprobado / responsable VERIFIED según reglas; admin para suspensión |
 | `audit_logs` | Auditoría administrativa y comercial | Admin (reglas) y foodApi |
-| `delivery_quotes`, `order_attempts`, `food_orders` (+`status_history`), `order_events` (+`deliveries`), `notification_devices` | HU15/HU16 | **Solo foodApi**; cerradas a clientes |
+| `delivery_quotes`, `order_attempts`, `food_orders` (+`status_history`, +`estimate_history`, +`payment_history`, +`rider_events`), `order_events` (+`deliveries`), `rider_events`, `notification_devices` | HU15–HU22 | **Solo backends Admin**; cerradas a clientes. El pago educativo genera una sola vez el código y Rider solo opera mediante `riderApi`. |
+
+HU22 incorpora `riderApi` como Cloud Function v2 separada y privada por IAM. El backend Rider consulta pedidos listos y envía eventos/tracking; nunca accede directamente a Firestore. Los eventos se conservan en `food_orders/{orderId}/rider_events`, y el snapshot vigente de asignación y ubicación permanece dentro del documento de pedido para su posterior consulta autorizada por HU23.
 | `store_notices` | Bloque de reglas heredado sin datos ni código que lo use (ver pendientes) | — |
 
 Las imágenes de locales/productos se guardan en Storage bajo `businesses/{businessId}/stores|products/...`; Firestore guarda la URL.

@@ -50,6 +50,7 @@ Thumbs.db
 
 # Assistant artifacts
 .artifacts/
+.firebase-lab/
 
 # Firebase / Credenciales
 google-services.json
@@ -65,6 +66,7 @@ app/google-services.json
 !/docs/GUIA_DESARROLLO.md
 !/docs/ESTADO_IMPLEMENTACION.md
 !/docs/DECISIONES.md
+!/docs/API_CHASKI_RIDER.md
 /contexto/
 # Instrucciones para asistentes de IA: se comparten internamente, no se versionan.
 /AGENTS.md

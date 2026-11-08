@@ -64,7 +64,8 @@ class OrderNotificationEmulatorTest {
             withTimeout(15000){shared.states.first {it.phase==AccessContextPhase.RESOLVED}}
             val tokens=FirebaseBuyerTokenSource(auth,sessions)
             val current=sessions.current()
-            val order=retrofit.create(StoreOrdersApi::class.java).page("hu16-e2e-store","Bearer ${tokens.token(current.uid!!,current.generation)}",null).body()!!.orders.single()
+            val order=retrofit.create(StoreOrdersApi::class.java).page("hu16-e2e-store",
+                "Bearer ${tokens.token(current.uid!!,current.generation)}",null,"PENDING_CONFIRMATION").body()!!.orders.single()
             val expected=mapOf("type" to "NEW_ORDER","eventId" to "new_order_${order.orderId}","orderId" to order.orderId,
                 "businessId" to "hu16-e2e-owner","storeId" to "hu16-e2e-store","recipientUid" to "hu16-e2e-manager")
             val encoded=InstrumentationRegistry.getArguments().getString("hu16NoticePayload")

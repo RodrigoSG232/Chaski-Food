@@ -40,9 +40,11 @@
     }
   ],
   "firestore": { "rules": "firestore.rules", "indexes": "firestore.indexes.json" },
+  "storage": { "rules": "storage.rules" },
   "emulators": {
     "auth": { "host": "127.0.0.1", "port": 9099 },
     "firestore": { "host": "127.0.0.1", "port": 8089 },
+    "storage": { "host": "127.0.0.1", "port": 9199 },
     "functions": { "host": "127.0.0.1", "port": 5001 },
     "hub": { "host": "127.0.0.1", "port": 4409 },
     "logging": { "host": "127.0.0.1", "port": 4509 },
