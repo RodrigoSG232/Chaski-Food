@@ -79,7 +79,7 @@ export function payloadHash(value:unknown):string{return createHash("sha256").up
 export function riderOrderId(value:string):string|null{return /^[0-9a-f]{64}$/.test(value)?value:null;}
 
 export function projectRiderOrder(data:Record<string,any>){
-  if(data.schemaVersion!==1||data.status!=="READY_FOR_PICKUP"||data.paymentStatus!=="PAID"||data.paymentSimulation!==true||
+  if(data.schemaVersion!==1||!["READY_FOR_PICKUP","IN_DELIVERY","COMPLETED"].includes(data.status)||data.paymentStatus!=="PAID"||data.paymentSimulation!==true||
     typeof data.pickupCode!=="string"||!/^[0-9]{4}$/.test(data.pickupCode)||!(data.updatedAt instanceof Timestamp))
     throw new OrderHttpError("ORDER_NOT_READY",409);
   const pickup=data.pickupSnapshot,dropoff=data.dropoffSnapshot,buyer=data.buyerSnapshot,store=data.storeSnapshot;

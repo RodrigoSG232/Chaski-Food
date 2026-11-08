@@ -26,5 +26,7 @@ test("projects only paid ready orders and includes the stable code without unit 
   const projected:any=projectRiderOrder(order);
   assert.equal(projected.pickupCode,"0042");assert.deepEqual(projected.items,[{id:"p",name:"Plato",quantity:2}]);
   assert.equal("unitPriceMinor" in projected.items[0],false);
+  assert.equal(projectRiderOrder({...order,status:"IN_DELIVERY"}).status,"IN_DELIVERY");
+  assert.equal(projectRiderOrder({...order,status:"COMPLETED"}).status,"COMPLETED");
   assert.throws(()=>projectRiderOrder({...order,paymentStatus:"PENDING"}));
 });
