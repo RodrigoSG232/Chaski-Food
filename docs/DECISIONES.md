@@ -29,6 +29,14 @@ Decisiones **aprobadas** por el equipo que siguen aplicando y condicionan las pr
 - **Para recibir pedidos** basta al menos un responsable asignado válido; no se exige que esté conectado. Sin responsables se bloquean confirmaciones nuevas (HU16-05, HU16-12).
 
 ## Consultas propias (HU17)
+### Seguimiento HU23 (08-11-2026)
+- **Aprobado por el usuario:** ETA proporcionado por Rider. Avanzar con simulación LOCAL mientras se recibe el contrato definitivo; actualizar después. En ausencia de ETA real, mostrar «ETA no disponible».
+- **Implementación:** consulta propia en foodApi, fases sin mapa antes del recojo, última posición persistida y cierre solo por transición válida. Se usa el evento existente `COMPLETED_SUCCESSFULLY`; no se crea un evento `DELIVERED` incompatible.
+- **Resultado de entrega:** `UNSUCCESSFUL` se muestra «Entrega no exitosa»; pedidos antiguos sin resultado, «Finalizado». Solo `SUCCESS` se etiqueta «Entregado».
+- **Valores provisionales de implementación:** polling de 10 segundos (20/30 ante fallos), muestra desactualizada después de 120 segundos, extensión opcional `estimatedArrivalAt`. La fuente Rider está aprobada; estos detalles de intercambio aún deben confirmarse con su equipo.
+- Sin cambios Cloud, IAM, PIN ni chat en esta historia. El simulador está bajo `functions/test/lab`, fuera del paquete de despliegue.
+
+### Consulta e historial
 - **Acceso:** el cliente usa la pestaña **Pedidos**; propietario y responsable, **Cuenta → «Mis compras»**, con la misma lista y detalle. Las rutas usan `verifyBuyerToken` y filtran por `buyerUid`: no exigen experiencia comercial ni conceden `START_PURCHASE` (D1, HU34-01/07).
 - **Estados:** una sola tabla en foodApi. Activos: `PENDING_CONFIRMATION`, `PREPARING`, `READY_FOR_PICKUP`, `IN_DELIVERY`; históricos: `COMPLETED`, `CANCELLED`, `REJECTED`. Un estado válido desconocido se muestra como activo («Estado en actualización») y se registra; `status` ausente/nulo o documento corrupto → `503 DATA_INCONSISTENT` (D2, N1).
 - **Refresco:** HTTP al abrir, al volver a la app y al deslizar; sin tiempo real ni caché local (D3).

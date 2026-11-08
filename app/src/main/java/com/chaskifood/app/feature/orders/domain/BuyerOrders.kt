@@ -23,6 +23,7 @@ data class BuyerOrderSummary(
     val phase: BuyerOrderPhase, val storeName: String, val businessName: String, val itemCount: Int, val totalMinor: Long,
     /** Hasta [MAX_ITEM_PREVIEW] líneas; el resto se muestra como «+N más». */
     val itemPreview: List<BuyerOrderItemPreview>, val itemLineCount: Int,
+    val deliveryOutcome: String? = null,
 ) {
     val hiddenLineCount: Int get() = itemLineCount - itemPreview.size
     init {
@@ -31,6 +32,7 @@ data class BuyerOrderSummary(
         require(itemLineCount in 1..itemCount && this.itemPreview.size == minOf(itemLineCount, MAX_ITEM_PREVIEW) &&
             this.itemPreview.sumOf { it.quantity.toLong() } <= itemCount)
         orderMinor(totalMinor)
+        require(deliveryOutcome == null || (status == "COMPLETED" && deliveryOutcome in setOf("SUCCESS", "UNSUCCESSFUL")))
     }
     companion object { const val MAX_ITEM_PREVIEW = 2 }
 }
@@ -60,7 +62,7 @@ class BuyerOrderDetail(
         require(summary.itemLineCount == this.items.size && summary.itemPreview ==
             this.items.take(BuyerOrderSummary.MAX_ITEM_PREVIEW).map { BuyerOrderItemPreview(it.name, it.quantity) })
         require(this.statusHistory.isNotEmpty() && this.statusHistory.zipWithNext().all { (a, b) -> a.occurredAtEpochMillis <= b.occurredAtEpochMillis })
-        if(estimatedPreparationMinutes!=null||estimatedReadyAtEpochMillis!=null)require(summary.status=="PREPARING"&&
+        if(estimatedPreparationMinutes!=null||estimatedReadyAtEpochMillis!=null)require(summary.status in setOf("PREPARING", "READY_FOR_PICKUP")&&
             estimatedPreparationMinutes!=null&&estimatedPreparationMinutes in 5..180&&estimatedReadyAtEpochMillis!=null&&
             estimatedReadyAtEpochMillis in 1..MAX_ORDER_EPOCH_MILLIS)
     }
@@ -115,6 +117,7 @@ interface BuyerOrdersRepository {
     fun isCurrent(session: BuyerOrdersSession): Boolean
     suspend fun page(session: BuyerOrdersSession, phase: BuyerOrderPhase, cursor: String? = null): BuyerOrdersResult
     suspend fun detail(session: BuyerOrdersSession, orderId: String): BuyerOrderDetailResult
+    suspend fun tracking(session: BuyerOrdersSession, orderId: String): BuyerTrackingResult = BuyerTrackingResult.Unavailable
     suspend fun cancel(session: BuyerOrdersSession, orderId: String): BuyerOrderCancellationResult
     suspend fun simulatePayment(session: BuyerOrdersSession, orderId: String): SimulatedPaymentResult =
         SimulatedPaymentResult.Unavailable

@@ -44,6 +44,7 @@ export function parseRiderEvent(value:unknown):RiderEvent{
   const assignment=object(body.assignment);exact(assignment,["id","version"]);
   let rider:RiderEvent["rider"]=null;
   if(body.rider!==null){const r=object(body.rider);exact(r,["id","displayName","phone","vehicleType","vehiclePlate"]);
+    if(typeof r.displayName!=="string")throw new OrderHttpError("INVALID_REQUEST",422);
     if(r.vehicleType!=="MOTORCYCLE"&&r.vehicleType!=="BICYCLE")throw new OrderHttpError("INVALID_REQUEST",422);
     rider={id:id(r.id),displayName:optionalText(r.displayName,120)!,phone:r.phone===null?null:optionalText(r.phone,30),
       vehicleType:r.vehicleType,vehiclePlate:r.vehiclePlate===null?null:optionalText(r.vehiclePlate,20)};}
@@ -64,15 +65,20 @@ export function parseRiderEvent(value:unknown):RiderEvent{
 }
 
 export type RiderTracking={assignmentId:string;assignmentVersion:number;sequence:number;riderId:string;latitude:number;longitude:number;
-  accuracyMeters:number;recordedAt:Timestamp};
+  accuracyMeters:number;recordedAt:Timestamp;estimatedArrivalAt:Timestamp|null};
 export function parseRiderTracking(value:unknown):RiderTracking{
-  const body=object(value);exact(body,["assignmentId","assignmentVersion","sequence","riderId","latitude","longitude","accuracyMeters","recordedAt"]);
+  const body=object(value);exact(body,["assignmentId","assignmentVersion","sequence","riderId","latitude","longitude","accuracyMeters","recordedAt",
+    ...("estimatedArrivalAt" in body ? ["estimatedArrivalAt"] : [])]);
   const point={latitude:typeof body.latitude==="number"?body.latitude:NaN,
     longitude:typeof body.longitude==="number"?body.longitude:NaN};
   if(!validCoordinates(point)||typeof body.accuracyMeters!=="number"||!Number.isFinite(body.accuracyMeters)||body.accuracyMeters<0||body.accuracyMeters>500)
     throw new OrderHttpError("INVALID_REQUEST",422);
+  const recordedAt=instant(body.recordedAt);
+  const estimatedArrivalAt=body.estimatedArrivalAt==null?null:instant(body.estimatedArrivalAt);
+  if(recordedAt.toMillis()<=0 || (estimatedArrivalAt && (estimatedArrivalAt.toMillis()<recordedAt.toMillis() ||
+      estimatedArrivalAt.toMillis()-recordedAt.toMillis()>24*60*60*1000)))throw new OrderHttpError("INVALID_REQUEST",422);
   return {assignmentId:id(body.assignmentId),assignmentVersion:integer(body.assignmentVersion),sequence:integer(body.sequence),riderId:id(body.riderId),
-    latitude:point.latitude,longitude:point.longitude,accuracyMeters:body.accuracyMeters,recordedAt:instant(body.recordedAt)};
+    latitude:point.latitude,longitude:point.longitude,accuracyMeters:body.accuracyMeters,recordedAt,estimatedArrivalAt};
 }
 
 export function payloadHash(value:unknown):string{return createHash("sha256").update(JSON.stringify(value)).digest("hex");}

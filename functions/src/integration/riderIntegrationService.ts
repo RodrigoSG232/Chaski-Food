@@ -40,7 +40,7 @@ export class RiderIntegrationService{
       const sameAssignment=assignment?.id===event.assignmentId&&assignment.version===event.assignmentVersion;
       let nextStatus=order.status,nextAssignment=assignment,nextRider=integration.rider,nextDeliveryStatus=event.status;
       if(event.eventType==="ASSIGNMENT_ACCEPTED"){
-        if(order.status!=="READY_FOR_PICKUP"||event.assignmentVersion!==(integration.lastAssignmentVersion??0)+1)
+        if(order.status!=="READY_FOR_PICKUP"||assignment!==null||event.assignmentVersion!==(integration.lastAssignmentVersion??0)+1)
           throw new OrderHttpError("ASSIGNMENT_CONFLICT",409);
         nextAssignment={id:event.assignmentId,version:event.assignmentVersion};nextRider=event.rider;
       }else{
@@ -83,12 +83,15 @@ export class RiderIntegrationService{
       if(order.status!=="IN_DELIVERY"||assignment?.id!==tracking.assignmentId||assignment.version!==tracking.assignmentVersion||
         integration.rider?.id!==tracking.riderId)throw new OrderHttpError("ASSIGNMENT_STALE",409);
       const current=order.riderTracking;
+      if(tracking.recordedAt.toMillis()>receivedAt.toMillis()+60_000)throw new OrderHttpError("INVALID_REQUEST",422);
       if(current&&tracking.sequence<current.sequence)return {contractVersion:1,orderId,assignmentVersion:tracking.assignmentVersion,
         acceptedSequence:current.sequence,received:false};
       if(current&&tracking.sequence===current.sequence){
         if(current.payloadHash!==hash)throw new OrderHttpError("IDEMPOTENCY_CONFLICT",409);
         return {contractVersion:1,orderId,assignmentVersion:tracking.assignmentVersion,acceptedSequence:tracking.sequence,received:true};
       }
+      if(current && tracking.recordedAt.toMillis()<current.recordedAt.toMillis())
+        return {contractVersion:1,orderId,assignmentVersion:tracking.assignmentVersion,acceptedSequence:current.sequence,received:false};
       tx.update(ref,{riderTracking:{...tracking,payloadHash:hash,receivedAt}});
       return {contractVersion:1,orderId,assignmentVersion:tracking.assignmentVersion,acceptedSequence:tracking.sequence,received:true};
     });

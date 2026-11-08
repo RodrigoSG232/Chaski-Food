@@ -152,6 +152,7 @@ export function createFoodApiHandler(dependencies: FoodApiDependencies): FoodHtt
       }
       // HU17: own purchases of the authenticated UID, whatever its commercial experience; never a purchase permission.
       const myOrdersPath = /^\/api\/v1\/me\/orders\/?$/.test(request.path);
+      const trackingPath = /^\/api\/v1\/me\/orders\/([^/]+)\/tracking\/?$/.exec(request.path);
       const myOrderPath = /^\/api\/v1\/me\/orders\/([^/]+)\/?$/.exec(request.path);
       const cancelPath = /^\/api\/v1\/me\/orders\/([^/]+)\/cancel\/?$/.exec(request.path);
       const simulatedPaymentPath = /^\/api\/v1\/me\/orders\/([^/]+)\/simulate-payment\/?$/.exec(request.path);
@@ -187,14 +188,15 @@ export function createFoodApiHandler(dependencies: FoodApiDependencies): FoodHtt
         }
         return;
       }
-      if (myOrdersPath || myOrderPath) {
+      if (myOrdersPath || myOrderPath || trackingPath) {
         if (request.method !== "GET") { response.status(405).set("Allow","GET").json({error:"METHOD_NOT_ALLOWED"}); return; }
         try {
           const app=dependencies.app(runtime);
           const uid=await verifyBuyerToken(getAuth(app),request.get("authorization"));
           const reader=new BuyerOrdersReader(getFirestore(app));
-          if(myOrderPath && Object.keys(request.query).length>0) throw new OrderHttpError("INVALID_REQUEST",400);
-          response.status(200).json(myOrderPath ? await reader.detail(uid,decodeURIComponent(myOrderPath[1])) : await reader.page(uid,request.query));
+          if((myOrderPath || trackingPath) && Object.keys(request.query).length>0) throw new OrderHttpError("INVALID_REQUEST",400);
+          response.status(200).json(trackingPath ? await reader.tracking(uid,decodeURIComponent(trackingPath[1])) :
+            myOrderPath ? await reader.detail(uid,decodeURIComponent(myOrderPath[1])) : await reader.page(uid,request.query));
         } catch(error) {
           if(error instanceof AuthenticationRequired) response.status(401).json({error:"AUTHENTICATION_REQUIRED"});
           else if(error instanceof OrderHttpError) response.status(error.status).json({error:error.code});

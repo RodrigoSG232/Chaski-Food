@@ -16,6 +16,7 @@ import androidx.compose.material.icons.filled.WifiOff
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -41,17 +42,32 @@ import com.chaskifood.app.ui.theme.*
 
 /** Detalle histórico de una compra propia (HU17). Se actualiza al abrir, al volver a la app y al deslizar hacia abajo. */
 @Composable
-fun BuyerOrderDetailScreen(onBack: () -> Unit, viewModel: BuyerOrderDetailViewModel = hiltViewModel()) {
+fun BuyerOrderDetailScreen(onBack: () -> Unit, viewModel: BuyerOrderDetailViewModel = hiltViewModel(),
+    trackingModel: BuyerTrackingViewModel = hiltViewModel()) {
     val state by viewModel.state.collectAsStateWithLifecycle()
-    LifecycleResumeEffect(viewModel) { viewModel.refresh(); onPauseOrDispose { } }
-    BuyerOrderDetailContent(state, onBack, onRefresh = viewModel::refresh, onCancel = viewModel::cancel,
-        onSimulatePayment = viewModel::simulatePayment)
+    val trackingState by trackingModel.state.collectAsStateWithLifecycle()
+    var refreshedTrackingStatus by remember { mutableStateOf<String?>(null) }
+    LifecycleResumeEffect(viewModel, trackingModel) {
+        viewModel.refresh(); trackingModel.resume()
+        onPauseOrDispose { trackingModel.pause() }
+    }
+    LaunchedEffect(trackingState.tracking?.status, state.detail?.summary?.status, state.loading) {
+        val status = trackingState.tracking?.status
+        if (status != null && status != refreshedTrackingStatus && state.detail != null &&
+            status != state.detail?.summary?.status && !state.loading && state.message == null) {
+            refreshedTrackingStatus = status
+            viewModel.refresh()
+        }
+    }
+    BuyerOrderDetailContent(state, onBack, onRefresh = { viewModel.refresh(); trackingModel.refresh() }, onCancel = viewModel::cancel,
+        onSimulatePayment = viewModel::simulatePayment, trackingState = trackingState, onTrackingRefresh = trackingModel::refresh)
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun BuyerOrderDetailContent(state: BuyerOrderDetailUiState, onBack: () -> Unit, onRefresh: () -> Unit,
-    onCancel: () -> Unit = {}, onSimulatePayment: () -> Unit = {}) {
+    onCancel: () -> Unit = {}, onSimulatePayment: () -> Unit = {},
+    trackingState: BuyerTrackingUiState? = null, onTrackingRefresh: () -> Unit = {}) {
     val detail = state.detail
     var confirmCancellation by remember { mutableStateOf(false) }
     var confirmPayment by remember { mutableStateOf(false) }
@@ -76,7 +92,7 @@ internal fun BuyerOrderDetailContent(state: BuyerOrderDetailUiState, onBack: () 
                 state.notFound -> OrdersMessage(Icons.Filled.SearchOff, "No encontramos este pedido",
                     "Puede que no exista o que no pertenezca a esta cuenta.", "Volver a mis pedidos", ChaskiButtonVariant.Outlined, onBack)
                 detail != null -> DetailBody(detail, state.message, state.notice, state.cancelling, state.paying, onRefresh,
-                    { confirmCancellation = true }, { confirmPayment = true })
+                    { confirmCancellation = true }, { confirmPayment = true }, trackingState, onTrackingRefresh)
                 state.message != null -> OrdersMessage(Icons.Filled.WifiOff, "No pudimos cargar el pedido", state.message,
                     "Reintentar", ChaskiButtonVariant.Primary, onRefresh)
                 else -> OrdersLoading("Cargando el pedido…")
@@ -87,7 +103,8 @@ internal fun BuyerOrderDetailContent(state: BuyerOrderDetailUiState, onBack: () 
 
 @Composable
 private fun DetailBody(detail: BuyerOrderDetail, message: String?, notice: String?, cancelling: Boolean, paying: Boolean,
-    onRetry: () -> Unit, onCancel: () -> Unit, onSimulatePayment: () -> Unit) {
+    onRetry: () -> Unit, onCancel: () -> Unit, onSimulatePayment: () -> Unit,
+    trackingState: BuyerTrackingUiState?, onTrackingRefresh: () -> Unit) {
     val summary = detail.summary
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(ChaskiDimens.SpacingLg),
         verticalArrangement = Arrangement.spacedBy(ChaskiDimens.SpacingMd)) {
@@ -98,7 +115,7 @@ private fun DetailBody(detail: BuyerOrderDetail, message: String?, notice: Strin
         }
         item("status") {
             DetailCard {
-                BuyerOrderStatusChip(summary.status, summary.statusKnown)
+                BuyerOrderStatusChip(summary.status, summary.statusKnown, summary.deliveryOutcome)
                 Text("Realizado el ${formatOrderDateTime(summary.createdAtEpochMillis)}", style = MaterialTheme.typography.bodyMedium,
                     color = ChaskiTextSecondary)
                 Text("Se actualiza al abrir esta pantalla, al volver a la app o al deslizar hacia abajo.",
@@ -106,6 +123,7 @@ private fun DetailBody(detail: BuyerOrderDetail, message: String?, notice: Strin
                 detail.estimatedPreparationMinutes?.let { Text("Tiempo estimado: $it minutos",fontWeight=FontWeight.Bold) }
             }
         }
+        if (trackingState != null) item("tracking") { BuyerTrackingCard(trackingState, onTrackingRefresh) }
         if (notice != null) item("notice") { DetailCard { Text(notice, color = ChaskiTextPrimary) } }
         if (summary.status == "PENDING_CONFIRMATION")
             item("cancel-action") {
@@ -125,7 +143,8 @@ private fun DetailBody(detail: BuyerOrderDetail, message: String?, notice: Strin
                             if (!last) Box(Modifier.width(2.dp).weight(1f).background(ChaskiBorder))
                         }
                         Column(Modifier.padding(bottom = if (last) 0.dp else ChaskiDimens.SpacingLg)) {
-                            val label = buyerOrderStatusUi(entry.status, entry.statusKnown).label
+                            val label = buyerOrderStatusUi(entry.status, entry.statusKnown,
+                                if (entry.status == "COMPLETED") summary.deliveryOutcome else null).label
                             Text(if (last) "$label · actual" else label, style = MaterialTheme.typography.bodyMedium,
                                 fontWeight = if (last) FontWeight.SemiBold else FontWeight.Normal, color = ChaskiTextPrimary)
                             Text(formatOrderShortDateTime(entry.occurredAtEpochMillis), style = MaterialTheme.typography.bodySmall,

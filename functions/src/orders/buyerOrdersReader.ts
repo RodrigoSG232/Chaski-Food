@@ -1,5 +1,6 @@
 import { FieldPath, Firestore, Timestamp } from "firebase-admin/firestore";
 import { OrderHttpError } from "./orderRequest";
+import { projectBuyerTracking } from "./buyerTrackingPolicy";
 import { BUYER_ORDER_FIELDS, BUYER_SCAN_BATCH, BUYER_SCAN_BUDGET, buyerOrderId, encodeBuyerOrdersCursor, parseBuyerOrdersQuery,
   projectBuyerOrderDetail, projectBuyerOrderSummary } from "./buyerOrdersPolicy";
 
@@ -9,6 +10,14 @@ type Summary = ReturnType<typeof projectBuyerOrderSummary>;
  * Read-only transactions; one chronological stream per UID classified by phase here, so no status is excluded by the query. */
 export class BuyerOrdersReader {
   constructor(private readonly db: Firestore) {}
+
+  async tracking(uid: string, rawId: string) {
+    const id = buyerOrderId(rawId);
+    if (!id) throw new OrderHttpError("ORDER_NOT_FOUND", 404);
+    const data = (await this.db.doc(`food_orders/${id}`).get()).data();
+    if (!data || data.buyerUid !== uid) throw new OrderHttpError("ORDER_NOT_FOUND", 404);
+    return projectBuyerTracking(id, data);
+  }
 
   async page(uid: string, query: Record<string, unknown>) {
     const { phase, pageSize, cursor } = parseBuyerOrdersQuery(query, uid);

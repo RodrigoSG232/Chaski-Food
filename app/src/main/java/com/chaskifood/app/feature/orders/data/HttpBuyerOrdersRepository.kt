@@ -19,6 +19,26 @@ internal class HttpBuyerOrdersRepository @Inject constructor(private val api: Bu
     override fun isCurrent(session: BuyerOrdersSession) =
         sessions.isCurrent(CartSession(session.uid, session.generation)) && tokens.isCurrent(session.uid, session.generation)
 
+    override suspend fun tracking(session: BuyerOrdersSession, orderId: String): BuyerTrackingResult =
+        guarded(BuyerTrackingResult.StaleSession, BuyerTrackingResult.AuthenticationRequired, BuyerTrackingResult.Unavailable, session) { bearer ->
+            if (!orderId.matches(Regex("[0-9a-f]{64}"))) return@guarded BuyerTrackingResult.NotFound
+            val response = api.tracking(bearer, orderId)
+            if (!isCurrent(session)) return@guarded BuyerTrackingResult.StaleSession
+            when (response.code()) {
+                200 -> {
+                    val body = requireNotNull(response.body())
+                    require(body.contractVersion == 1 && body.orderId == orderId)
+                    BuyerTrackingResult.Loaded(BuyerTracking(body.orderId, body.status, body.stage, body.assigned,
+                        body.riderName, body.deliveryOutcome, body.position?.let {
+                            BuyerTrackingPosition(it.latitude, it.longitude, it.accuracyMeters, it.recordedAtEpochMillis, it.receivedAtEpochMillis)
+                        }, body.estimatedArrivalAtEpochMillis, body.serverTimeEpochMillis))
+                }
+                404 -> BuyerTrackingResult.NotFound
+                401, 403 -> BuyerTrackingResult.AuthenticationRequired
+                else -> BuyerTrackingResult.Unavailable
+            }
+        }
+
     override suspend fun page(session: BuyerOrdersSession, phase: BuyerOrderPhase, cursor: String?): BuyerOrdersResult =
         guarded(BuyerOrdersResult.StaleSession, BuyerOrdersResult.AuthenticationRequired, BuyerOrdersResult.Unavailable, session) { bearer ->
             val response = api.page(bearer, phase.name, cursor)
@@ -114,13 +134,13 @@ private fun phaseOf(value: String) = BuyerOrderPhase.valueOf(value)
 private fun BuyerOrderSummaryResponse.toDomain(): BuyerOrderSummary {
     require(currency == "PEN")
     return BuyerOrderSummary(orderId, createdAtEpochMillis, status, statusKnown, phaseOf(phase), storeName, businessName, itemCount, totalMinor,
-        itemPreview.map { BuyerOrderItemPreview(it.name, it.quantity) }, itemLineCount)
+        itemPreview.map { BuyerOrderItemPreview(it.name, it.quantity) }, itemLineCount, deliveryOutcome)
 }
 
 private fun BuyerOrderDetailResponse.toDomain(): BuyerOrderDetail {
     require(currency == "PEN" && paymentMethod == "CASH_ON_DELIVERY")
     val summary = BuyerOrderSummary(orderId, createdAtEpochMillis, status, statusKnown, phaseOf(phase), storeName, businessName, itemCount, totalMinor,
-        itemPreview.map { BuyerOrderItemPreview(it.name, it.quantity) }, itemLineCount)
+        itemPreview.map { BuyerOrderItemPreview(it.name, it.quantity) }, itemLineCount, deliveryOutcome)
     return BuyerOrderDetail(summary, storePhone, pickupAddressText,
         BuyerOrderDelivery(delivery.label, delivery.addressText, delivery.reference, delivery.instructions),
         items.map { StoreOrderLine(it.productId, it.name, it.quantity, it.unitPriceMinor, it.lineTotalMinor) },

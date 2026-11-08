@@ -1,6 +1,6 @@
 # API Chaski Food → Chaski Rider — v1
 
-Estado: implementada en `ramaMax`, pendiente de despliegue y de autorizar la cuenta de servicio del backend Rider.
+Estado del código: HU22 integrada en `main` (`722764f`); extensión HU23 en `feat/hu23-seguimiento`. Despliegue y autorización de la identidad Rider no verificados en esta revisión. La ampliación opcional de ETA propuesta aquí aún requiere confirmación del equipo Rider.
 
 ## Seguridad
 
@@ -144,7 +144,29 @@ Solo acepta la asignación vigente cuando el pedido está `IN_DELIVERY`:
 }
 ```
 
-Una posición anterior no reemplaza la vigente. El seguimiento visible al cliente pertenece a HU23.
+Una posición anterior no reemplaza la vigente, aunque tenga una secuencia mayor. Se rechazan muestras con `recordedAt` más de 60 segundos adelantado respecto al servidor. Una asignación activa debe liberarse antes de aceptar otra; después del recojo no se permite reasignar.
+
+### Extensión opcional de ETA (HU23, pendiente de confirmar con Rider)
+
+El mismo cuerpo puede añadir `"estimatedArrivalAt": "2026-11-08T15:30:00.000Z"`. Es la **hora estimada de llegada calculada por Rider**, no una duración ni un cálculo de Food. Puede omitirse o ser `null`; el contrato anterior sigue siendo válido. Cada muestra reemplaza el ETA anterior; omitirlo deja el ETA no disponible.
+
+Fechas en UTC con formato ISO canónico y milisegundos (`YYYY-MM-DDTHH:mm:ss.sssZ`). La llegada no puede preceder a `recordedAt` ni superar 24 horas después de la muestra. Son límites de validación provisionales de Food que deben revisarse al acordar el contrato.
+
+Food conserva la última posición si no llegan muestras. La app oculta el ETA cuando venció, la muestra tiene más de 120 segundos o falla la consulta; conserva mapa, hora de captura y aviso de ubicación sin actualizar. El umbral de 120 segundos es provisional, no una frecuencia acordada con Rider.
+
+El evento equivalente a «DELIVERED» de la HU es `COMPLETED_SUCCESSFULLY` con `deliveryOutcome=SUCCESS`. No se acepta un alias `DELIVERED`. Solo completa desde `IN_DELIVERY`, con asignación vigente y secuencia válida. `COMPLETED_UNSUCCESSFULLY` se presenta como entrega no exitosa.
+
+### Consulta del comprador
+
+`GET /api/v1/me/orders/{orderId}/tracking` en **foodApi**, con Firebase ID token del comprador. Solo permite `buyerUid == UID autenticado`; ajeno e inexistente devuelven el mismo 404. Respuesta v1:
+
+- `orderId`, `status`, `stage`, `assigned`, `riderName`, `deliveryOutcome`;
+- `position`: latitude, longitude, accuracyMeters, recordedAtEpochMillis, receivedAtEpochMillis; o `null`;
+- `estimatedArrivalAtEpochMillis`: número o `null`; `serverTimeEpochMillis`.
+
+Solo expone coordenadas/ETA durante `IN_DELIVERY` y para la asignación vigente. No incluye PIN, teléfono, placa, ID del Rider ni datos privados del pedido. `Cache-Control: no-store`. Sin parámetros de consulta. 401 sin sesión, 405 para métodos distintos de GET, 503 ante datos inconsistentes/fallo temporal.
+
+Simulación y pasos de validación: [HU23_SEGUIMIENTO.md](HU23_SEGUIMIENTO.md).
 
 ## Publicación
 

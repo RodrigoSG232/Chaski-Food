@@ -30,9 +30,11 @@ class BuyerOrderFormattingTest {
 
     @Test fun statusesAreSpanishAndUnknownNeverBreaks() {
         val expected = mapOf("PENDING_CONFIRMATION" to "Pendiente de confirmación", "PREPARING" to "En preparación",
-            "READY_FOR_PICKUP" to "Listo para recoger", "IN_DELIVERY" to "En camino", "COMPLETED" to "Entregado",
+            "READY_FOR_PICKUP" to "Listo para recoger", "IN_DELIVERY" to "En camino", "COMPLETED" to "Finalizado",
             "CANCELLED" to "Cancelado", "REJECTED" to "Rechazado")
         expected.forEach { (status, label) -> assertEquals(label, buyerOrderStatusUi(status, true).label) }
+        assertEquals("Entregado", buyerOrderStatusUi("COMPLETED", true, "SUCCESS").label)
+        assertEquals("Entrega no exitosa", buyerOrderStatusUi("COMPLETED", true, "UNSUCCESSFUL").label)
         assertEquals("Estado en actualización", buyerOrderStatusUi("AWAITING_RIDER", false).label)
         // Un código conocido marcado como desconocido por el servidor tampoco se interpreta en la app.
         assertEquals("Estado en actualización", buyerOrderStatusUi("PREPARING", false).label)

@@ -17,7 +17,7 @@ export const BUYER_SCAN_BUDGET = 200;
 export const BUYER_ITEM_PREVIEW = 2;
 /** Fields the projections need; everything else (buyer identity, hashes, quote) is never read into the response. */
 export const BUYER_ORDER_FIELDS = ["schemaVersion", "orderId", "buyerUid", "status", "createdAt", "items", "subtotalMinor",
-  "deliveryFeeMinor","tipMinor", "totalMinor", "currency", "paymentMethod","paymentStatus", "storeSnapshot", "businessSnapshot"] as const;
+  "deliveryFeeMinor","tipMinor", "totalMinor", "currency", "paymentMethod","paymentStatus", "storeSnapshot", "businessSnapshot", "riderIntegration.deliveryOutcome"] as const;
 
 const inconsistent = (): never => { throw new OrderHttpError("DATA_INCONSISTENT", 503, true); };
 
@@ -45,11 +45,18 @@ export function projectBuyerOrderSummary(id: string, data: Record<string, any>, 
       itemPreview: core.items.slice(0, BUYER_ITEM_PREVIEW).map((item: { name: string; quantity: number }) =>
         ({ name: item.name, quantity: item.quantity })),
       itemLineCount: core.items.length,
-      totalMinor: core.totalMinor, currency: core.currency };
+      totalMinor: core.totalMinor, currency: core.currency,
+      ...(data.riderIntegration?.deliveryOutcome ? { deliveryOutcome: buyerDeliveryOutcome(data) } : {}) };
   } catch (error) {
     if (error instanceof OrderHttpError) throw error;
     return inconsistent();
   }
+}
+
+function buyerDeliveryOutcome(data: Record<string, any>): "SUCCESS" | "UNSUCCESSFUL" {
+  const outcome = data.riderIntegration?.deliveryOutcome;
+  if (data.status !== "COMPLETED" || (outcome !== "SUCCESS" && outcome !== "UNSUCCESSFUL")) return inconsistent();
+  return outcome;
 }
 
 function optionalText(value: unknown): string | null {

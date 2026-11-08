@@ -117,7 +117,11 @@ Estructura: `foodApiHandler.ts` (enrutado HTTP y traducción de errores) → ser
 | `audit_logs` | Auditoría administrativa y comercial | Admin (reglas) y foodApi |
 | `delivery_quotes`, `order_attempts`, `food_orders` (+`status_history`, +`estimate_history`, +`payment_history`, +`rider_events`), `order_events` (+`deliveries`), `rider_events`, `notification_devices` | HU15–HU22 | **Solo backends Admin**; cerradas a clientes. El pago educativo genera una sola vez el código y Rider solo opera mediante `riderApi`. |
 
-HU22 incorpora `riderApi` como Cloud Function v2 separada y privada por IAM. El backend Rider consulta pedidos listos y envía eventos/tracking; nunca accede directamente a Firestore. Los eventos se conservan en `food_orders/{orderId}/rider_events`, y el snapshot vigente de asignación y ubicación permanece dentro del documento de pedido para su posterior consulta autorizada por HU23.
+HU22 incorpora `riderApi` como Cloud Function v2 separada y privada por IAM. El backend Rider consulta pedidos listos y envía eventos/tracking; nunca accede directamente a Firestore. Los eventos se conservan en `food_orders/{orderId}/rider_events`, y el snapshot vigente de asignación y ubicación permanece dentro del documento de pedido.
+
+HU23 añade `GET me/orders/{orderId}/tracking` a `foodApi`: autentica al comprador y proyecta una lista explícita de campos desde ese snapshot. La ubicación solo se entrega después del recojo y antes de terminar. No cambia las reglas de Firestore, los índices ni el esquema Room.
+
+En Android, `BuyerTrackingViewModel → BuyerOrdersRepository ← HttpBuyerOrdersRepository` alimenta una tarjeta dentro del detalle existente. Consulta cada 10 segundos mientras la pantalla está RESUMED, retrocede a 20/30 segundos ante fallos y se detiene al finalizar. Conserva la última respuesta ante fallos transitorios y la borra al cambiar la sesión o perder autorización. El reloj monotónico anclado al tiempo del servidor evita rejuvenecer muestras al modificar el reloj del teléfono o recrear la tarjeta. Reutiliza MapLibre sin pedir ubicación del dispositivo; no interpola trayectos. ETA opcional de Rider y simulador exclusivamente LOCAL: [HU23_SEGUIMIENTO](HU23_SEGUIMIENTO.md).
 | `store_notices` | Bloque de reglas heredado sin datos ni código que lo use (ver pendientes) | — |
 
 Las imágenes de locales/productos se guardan en Storage bajo `businesses/{businessId}/stores|products/...`; Firestore guarda la URL.

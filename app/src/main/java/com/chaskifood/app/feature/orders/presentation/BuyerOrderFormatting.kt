@@ -29,12 +29,16 @@ private val StoppedBg = Color(0xFFFDECEC)
 private val StoppedText = Color(0xFFB71C1C)
 
 /** Un estado desconocido nunca rompe la pantalla: se muestra como «Estado en actualización» (N1). */
-internal fun buyerOrderStatusUi(status: String, known: Boolean): BuyerOrderStatusUi = when (if (known) status else "") {
+internal fun buyerOrderStatusUi(status: String, known: Boolean, outcome: String? = null): BuyerOrderStatusUi = when (if (known) status else "") {
     "PENDING_CONFIRMATION" -> BuyerOrderStatusUi("Pendiente de confirmación", Icons.Filled.HourglassEmpty, Neutral, NeutralText)
     "PREPARING" -> BuyerOrderStatusUi("En preparación", Icons.Filled.SoupKitchen, Neutral, NeutralText)
     "READY_FOR_PICKUP" -> BuyerOrderStatusUi("Listo para recoger", Icons.Filled.Inventory2, Neutral, NeutralText)
     "IN_DELIVERY" -> BuyerOrderStatusUi("En camino", Icons.Filled.DeliveryDining, Neutral, NeutralText)
-    "COMPLETED" -> BuyerOrderStatusUi("Entregado", Icons.Filled.Check, DoneBg, DoneText)
+    "COMPLETED" -> when (outcome) {
+        "UNSUCCESSFUL" -> BuyerOrderStatusUi("Entrega no exitosa", Icons.Filled.Block, StoppedBg, StoppedText)
+        "SUCCESS" -> BuyerOrderStatusUi("Entregado", Icons.Filled.Check, DoneBg, DoneText)
+        else -> BuyerOrderStatusUi("Finalizado", Icons.Filled.Check, Neutral, NeutralText)
+    }
     "CANCELLED" -> BuyerOrderStatusUi("Cancelado", Icons.Filled.Close, StoppedBg, StoppedText)
     "REJECTED" -> BuyerOrderStatusUi("Rechazado", Icons.Filled.Block, StoppedBg, StoppedText)
     else -> BuyerOrderStatusUi("Estado en actualización", Icons.Filled.Refresh, Color.White, NeutralText, outlined = true)

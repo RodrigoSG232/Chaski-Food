@@ -10,6 +10,7 @@ test("accepts a strict assignment event and rejects forged combinations",()=>{
   assert.equal(parseRiderEvent(event).rider?.id,"RIDER_1");
   assert.throws(()=>parseRiderEvent({...event,status:"COMPLETED"}));
   assert.throws(()=>parseRiderEvent({...event,unexpected:true}));
+  assert.throws(()=>parseRiderEvent({...event,rider:{...event.rider,displayName:null}}));
 });
 test("validates tracking coordinates and accuracy",()=>{
   const tracking={assignmentId:"ASG_1",assignmentVersion:1,sequence:2,riderId:"RIDER_1",latitude:-12.1,longitude:-77.1,
