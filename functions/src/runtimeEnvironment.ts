@@ -2,8 +2,8 @@ import { initializeApp } from "firebase-admin/app";
 
 export type RuntimeEnvironment = { mode: "LOCAL" | "CLOUD"; projectId: string };
 /** Closed list of deployable entry points; each caller declares its own target. */
-export type FunctionTarget = "foodApi" | "newOrderNotifier";
-const functionTargets: readonly string[] = ["foodApi", "newOrderNotifier"];
+export type FunctionTarget = "foodApi" | "newOrderNotifier" | "riderApi";
+const functionTargets: readonly string[] = ["foodApi", "newOrderNotifier", "riderApi"];
 export class RuntimeConfigurationError extends Error {
   constructor() { super("RUNTIME_CONFIGURATION_INVALID"); }
 }
