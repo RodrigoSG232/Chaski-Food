@@ -115,7 +115,7 @@ Estructura: `foodApiHandler.ts` (enrutado HTTP y traducción de errores) → ser
 | `commercial_access_index/{uid_*|email_*}` | Índice privado UID↔correo con revisión | **Solo foodApi**; ningún cliente lo lee |
 | `stores`, `categories`, `products`, `store_product_configs` | Locales, catálogo y precio/disponibilidad por local | Propietario aprobado / responsable VERIFIED según reglas; admin para suspensión |
 | `audit_logs` | Auditoría administrativa y comercial | Admin (reglas) y foodApi |
-| `delivery_quotes`, `order_attempts`, `food_orders` (+`status_history`, +`estimate_history`), `order_events` (+`deliveries`), `rider_events`, `notification_devices` | HU15–HU21 | **Solo foodApi**; cerradas a clientes |
+| `delivery_quotes`, `order_attempts`, `food_orders` (+`status_history`, +`estimate_history`, +`payment_history`), `order_events` (+`deliveries`), `rider_events`, `notification_devices` | HU15–HU21 | **Solo foodApi**; cerradas a clientes. El pago educativo se registra en foodApi y genera una sola vez el código de recojo. |
 | `store_notices` | Bloque de reglas heredado sin datos ni código que lo use (ver pendientes) | — |
 
 Las imágenes de locales/productos se guardan en Storage bajo `businesses/{businessId}/stores|products/...`; Firestore guarda la URL.
