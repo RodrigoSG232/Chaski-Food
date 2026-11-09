@@ -1,6 +1,10 @@
 package com.chaskifood.app.feature.cart.presentation
 
 import androidx.lifecycle.ViewModelStore
+import com.chaskifood.app.core.common.ApiResult
+import com.chaskifood.app.feature.catalog.domain.CatalogRepository
+import com.chaskifood.app.feature.catalog.domain.Product
+import com.chaskifood.app.feature.catalog.domain.ProductCategory
 import com.chaskifood.app.feature.cart.domain.AddToCartRejectionReason
 import com.chaskifood.app.feature.cart.domain.Cart
 import com.chaskifood.app.feature.cart.domain.CartChangeRejectionReason
@@ -37,6 +41,7 @@ class CartViewModelTest {
     private val store = ViewModelStore()
     private val original = Cart("a", listOf(item()))
     private val repository = FakeCartRepository(CartState.Ready(original))
+    private val catalog = FakeCartCatalog()
 
     @Before fun setUp() = Dispatchers.setMain(dispatcher)
 
@@ -420,7 +425,59 @@ class CartViewModelTest {
         assertTrue(cancelled)
     }
 
-    private fun model() = CartViewModel(repository).also { store.put("cart", it) }
+    @Test fun `carga fotos del carrito existente sin alterar precios ni cantidades`() = runTest {
+        catalog.products.value = ApiResult.Success(listOf(Product(id = "product", businessId = "business",
+            name = "Nombre remoto", price = 999.0, imageUrl = "https://example.test/photo.jpg")))
+        val model = model(); runCurrent()
+        assertEquals(0, catalog.observations)
+        model.startImages(); model.startImages(); runCurrent()
+        assertEquals(1, catalog.activeCollectors)
+        assertEquals("https://example.test/photo.jpg", model.uiState.value.productImages["product"])
+        assertEquals(original, model.uiState.value.cart)
+        repository.states.value = CartState.Ready(original.withItems(listOf(item(quantity = 3))))
+        runCurrent()
+        assertEquals(1, catalog.observations)
+        assertEquals("https://example.test/photo.jpg", model.uiState.value.productImages["product"])
+        model.stopImages(); runCurrent(); assertEquals(0, catalog.activeCollectors)
+    }
+
+    @Test fun `fallo de fotos no bloquea carrito y borrar foto elimina miniatura`() = runTest {
+        val model = model(); model.startImages(); runCurrent()
+        catalog.products.value = ApiResult.Success(listOf(Product(id = "product", businessId = "business",
+            imageUrl = "https://example.test/photo.jpg"))); runCurrent()
+        assertTrue(model.uiState.value.productImages.isNotEmpty())
+        catalog.products.value = ApiResult.Success(listOf(Product(id = "product", businessId = "business", imageUrl = null)))
+        runCurrent(); assertTrue(model.uiState.value.productImages.isEmpty())
+        catalog.products.value = ApiResult.Failure("Sin conexión"); runCurrent()
+        assertEquals(original, model.uiState.value.cart)
+        assertNull(model.uiState.value.message)
+        assertTrue(model.uiState.value.productImages.isEmpty())
+    }
+
+    @Test fun `cambio de cuenta o negocio descarta fotos tardias y ajenas`() = runTest {
+        val gate = CompletableDeferred<Unit>()
+        catalog.customRead = { flow {
+            withContext(NonCancellable) { gate.await() }
+            emit(ApiResult.Success(listOf(Product(id = "product", businessId = "business",
+                imageUrl = "https://example.test/old.jpg"))))
+        } }
+        val model = model(); model.startImages(); runCurrent()
+        repository.states.value = CartState.SignedOut; runCurrent()
+        assertTrue(model.uiState.value.productImages.isEmpty())
+        catalog.customRead = null
+        repository.states.value = CartState.Ready(Cart("b", listOf(item().copy(businessId = "other-business"))))
+        runCurrent()
+        gate.complete(Unit); runCurrent()
+        catalog.products.value = ApiResult.Success(listOf(
+            Product(id = "product", businessId = "business", imageUrl = "https://example.test/wrong.jpg"),
+            Product(id = "other", businessId = "other-business", imageUrl = " "),
+        )); runCurrent()
+        assertTrue(model.uiState.value.productImages.isEmpty())
+        assertEquals("b", model.uiState.value.cart?.ownerUid)
+        model.stopImages(); runCurrent(); assertEquals(0, catalog.activeCollectors)
+    }
+
+    private fun model() = CartViewModel(repository, catalog).also { store.put("cart", it) }
 
     private fun confirmation() = CartOperationResult.ConfirmationRequired(
         "token-1", original, item(storeId = "other-store"),
@@ -428,6 +485,22 @@ class CartViewModelTest {
 
     private fun item(quantity: Int = 1, storeId: String = "store", price: Long = 1050) =
         CartProductSnapshot("business", storeId, "product", "Producto", price, quantity)
+}
+
+private class FakeCartCatalog : CatalogRepository {
+    val products = MutableStateFlow<ApiResult<List<Product>>>(ApiResult.Success(emptyList()))
+    var observations = 0
+    var activeCollectors = 0
+    var customRead: (() -> Flow<ApiResult<List<Product>>>)? = null
+    override fun getProducts(businessId: String): Flow<ApiResult<List<Product>>> = flow {
+        observations++; activeCollectors++
+        try { emitAll(customRead?.invoke() ?: products) } finally { activeCollectors-- }
+    }
+    override fun getCategories(businessId: String): Flow<ApiResult<List<ProductCategory>>> = error("unused")
+    override suspend fun saveCategory(category: ProductCategory): ApiResult<ProductCategory> = error("unused")
+    override suspend fun toggleCategoryStatus(categoryId: String, isActive: Boolean): ApiResult<Unit> = error("unused")
+    override suspend fun saveProduct(product: Product): ApiResult<Product> = error("unused")
+    override suspend fun toggleProductStatus(productId: String, isActive: Boolean): ApiResult<Unit> = error("unused")
 }
 
 private class FakeCartRepository(initial: CartState) : CartRepository {

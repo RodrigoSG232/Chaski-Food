@@ -3,6 +3,8 @@ package com.chaskifood.app.feature.cart.presentation
 import androidx.annotation.MainThread
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.chaskifood.app.core.common.ApiResult
+import com.chaskifood.app.feature.catalog.domain.CatalogRepository
 import com.chaskifood.app.feature.cart.domain.AddToCartRejectionReason
 import com.chaskifood.app.feature.cart.domain.CartChangeRejectionReason
 import com.chaskifood.app.feature.cart.domain.CartOperationResult
@@ -12,6 +14,11 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -20,18 +27,58 @@ import kotlinx.coroutines.launch
 @HiltViewModel
 class CartViewModel @Inject constructor(
     private val repository: CartRepository,
+    private val catalog: CatalogRepository,
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(CartUiState())
     val uiState: StateFlow<CartUiState> = _uiState.asStateFlow()
 
     private var observation: Job? = null
     private var operationJob: Job? = null
+    private var imageObservation: Job? = null
     private var contextVersion = 0L
     private var nextMessageId = 0L
 
     init {
         observeCart()
     }
+
+    /** Reuses catalog images for existing carts too; only the cart screen starts this listener. */
+    @MainThread
+    fun startImages() {
+        if (imageObservation?.isActive == true) return
+        imageObservation = viewModelScope.launch {
+            uiState.map { state ->
+                state.cart?.businessId?.let { ImageContext(contextVersion, state.cart!!.ownerUid, it) }
+            }.distinctUntilChanged().collectLatest { expected ->
+                _uiState.value = _uiState.value.copy(productImages = emptyMap())
+                if (expected == null) return@collectLatest
+                try {
+                    catalog.getProducts(expected.businessId).collect { result ->
+                        currentCoroutineContext().ensureActive()
+                        if (isCurrentImageContext(expected)) {
+                            val images = (result as? ApiResult.Success)?.data.orEmpty()
+                                .filter { it.businessId == expected.businessId && !it.imageUrl.isNullOrBlank() }
+                                .associate { it.id to it.imageUrl!!.trim() }
+                            _uiState.value = _uiState.value.copy(productImages = images)
+                        }
+                    }
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (_: Exception) {
+                    if (isCurrentImageContext(expected))
+                        _uiState.value = _uiState.value.copy(productImages = emptyMap())
+                }
+            }
+        }
+    }
+
+    @MainThread
+    fun stopImages() { imageObservation?.cancel(); imageObservation = null }
+
+    private data class ImageContext(val version: Long, val uid: String, val businessId: String)
+    private fun isCurrentImageContext(expected: ImageContext): Boolean =
+        expected.version == contextVersion && _uiState.value.cart?.ownerUid == expected.uid &&
+            _uiState.value.cart?.businessId == expected.businessId
 
     /** Una colección por ViewModel; se cancela al liberar su ViewModelStore. */
     private fun observeCart() {
@@ -62,6 +109,7 @@ class CartViewModel @Inject constructor(
             val stale = pending != null && pending.currentCart != source.cart
             _uiState.value = current.copy(
                 source = source,
+                productImages = if (current.cart?.businessId == source.cart.businessId) current.productImages else emptyMap(),
                 confirmation = pending.takeUnless { stale },
                 message = if (stale && !current.isBusy) message(
                     "El carrito cambió. Vuelve a agregar el producto para confirmar el cambio de local.",

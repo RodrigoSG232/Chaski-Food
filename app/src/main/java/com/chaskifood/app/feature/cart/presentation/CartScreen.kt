@@ -23,6 +23,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.AddPhotoAlternate
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.ShoppingCart
@@ -38,8 +39,13 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
@@ -50,6 +56,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.compose.LifecycleStartEffect
+import coil.compose.AsyncImage
 import com.chaskifood.app.feature.cart.domain.Cart
 import com.chaskifood.app.feature.cart.domain.CartProductSnapshot
 import com.chaskifood.app.feature.cart.domain.CartState
@@ -73,6 +81,10 @@ fun CartScreen(
     viewModel: CartViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    LifecycleStartEffect(viewModel) {
+        viewModel.startImages()
+        onStopOrDispose { viewModel.stopImages() }
+    }
     val purchase = LocalProtectedAction.current
     Scaffold(
         modifier = modifier,
@@ -248,6 +260,7 @@ private fun CartReadyContent(
             items(cart.items, key = { it.productId }) { item ->
                 CartLine(
                     item = item,
+                    imageUrl = state.productImages[item.productId],
                     enabled = !state.isBusy && state.confirmation == null,
                     onDecrease = { onChangeQuantity(item.productId, item.quantity - 1) },
                     onIncrease = { onChangeQuantity(item.productId, item.quantity + 1) },
@@ -261,8 +274,32 @@ private fun CartReadyContent(
 }
 
 @Composable
+internal fun CartProductImage(productName: String, imageUrl: String?) {
+    var loaded by remember(imageUrl) { mutableStateOf(false) }
+    Box(
+        Modifier.size(72.dp).clip(RoundedCornerShape(8.dp)).background(MaterialTheme.colorScheme.surfaceVariant),
+        contentAlignment = Alignment.Center,
+    ) {
+        if (!loaded) Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Icon(Icons.Filled.AddPhotoAlternate, contentDescription = "Imagen no disponible de " + productName,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("Sin imagen", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        if (!imageUrl.isNullOrBlank()) AsyncImage(
+            model = imageUrl,
+            contentDescription = if (loaded) "Imagen de " + productName else null,
+            modifier = Modifier.fillMaxSize(),
+            contentScale = ContentScale.Crop,
+            onSuccess = { loaded = true },
+            onError = { loaded = false },
+        )
+    }
+}
+
+@Composable
 private fun CartLine(
     item: CartProductSnapshot,
+    imageUrl: String?,
     enabled: Boolean,
     onDecrease: () -> Unit,
     onIncrease: () -> Unit,
@@ -277,15 +314,7 @@ private fun CartLine(
     ) {
         Column(Modifier.padding(ChaskiDimens.SpacingMd)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(ChaskiDimens.SpacingMd)) {
-                Box(
-                    modifier = Modifier.size(72.dp).background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(8.dp)),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    // El snapshot local todavía no guarda URL de imagen; el icono también funciona sin conexión.
-                    Icon(Icons.Filled.ShoppingCart,
-                        contentDescription = "Imagen no disponible de ${item.productName}",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
+                CartProductImage(item.productName, imageUrl)
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(ChaskiDimens.SpacingXs)) {
                     Text(item.productName, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold,
                         maxLines = 2, overflow = TextOverflow.Ellipsis)

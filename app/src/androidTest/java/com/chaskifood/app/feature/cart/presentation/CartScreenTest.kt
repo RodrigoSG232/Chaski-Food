@@ -6,6 +6,7 @@ import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -27,6 +28,26 @@ class CartScreenTest {
 
     private val cookie = CartProductSnapshot("business", "store", "cookie", "Cookie Sandwich", 1050, 2)
     private val cart = Cart("uid", listOf(cookie))
+
+    @Test fun fotoDelCatalogoSeMuestraEnCarritoExistente() {
+        val state = mutableStateOf(CartUiState(source = CartState.Ready(cart)))
+        show(state.value, stateOverride = state)
+        compose.onNodeWithText("Sin imagen").assertIsDisplayed()
+        compose.runOnIdle {
+            state.value = state.value.copy(productImages = mapOf(
+                "cookie" to "android.resource://android/" + android.R.drawable.ic_menu_gallery))
+        }
+        compose.waitUntil(5_000) {
+            compose.onAllNodesWithContentDescription("Imagen de Cookie Sandwich").fetchSemanticsNodes().isNotEmpty()
+        }
+        compose.onNodeWithContentDescription("Imagen de Cookie Sandwich").assertIsDisplayed()
+        compose.onNodeWithText("Sin imagen").assertDoesNotExist()
+        compose.onNodeWithText("Cantidad: 2").assertIsDisplayed()
+        compose.runOnIdle { assertEquals(cart, state.value.cart) }
+        compose.runOnIdle { state.value = state.value.copy(productImages = emptyMap()) }
+        compose.onNodeWithText("Sin imagen").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Imagen de Cookie Sandwich").assertDoesNotExist()
+    }
 
     @Test fun accesoMuestraUnidadesRealesYOcultaContadorSinSesion() {
         val units = mutableStateOf<Long?>(3)
