@@ -44,7 +44,8 @@ internal fun BuyerTrackingCard(state: BuyerTrackingUiState, onRetry: () -> Unit)
                     else -> buyerOrderStatusUi(tracking.status, true, tracking.deliveryOutcome).label
                 })
                 tracking.riderName?.let { Text("Repartidor: " + it) }
-                if (!tracking.terminal && !tracking.assigned) Text("Todavía no hay un repartidor asignado.")
+                if (!tracking.terminal && !tracking.assigned && tracking.status != "IN_DELIVERY")
+                    Text("Todavía no hay un repartidor asignado.")
                 if (!tracking.terminal && tracking.status != "IN_DELIVERY")
                     Text("La ubicación estará disponible después del recojo.")
                 if (tracking.status == "IN_DELIVERY") {
@@ -61,7 +62,8 @@ internal fun BuyerTrackingCard(state: BuyerTrackingUiState, onRetry: () -> Unit)
                         if (mapFailed) Text("No se pudo cargar el mapa. La ubicación recibida se conserva.")
                         Text(String.format(Locale.ROOT, "Coordenadas: %.5f, %.5f · Precisión: %.0f m",
                             point.latitude, point.longitude, point.accuracyMeters), style = MaterialTheme.typography.bodySmall)
-                    } ?: Text("Esperando la primera ubicación del repartidor.")
+                    } ?: Text(if(tracking.assigned)"Esperando la primera ubicación del repartidor."
+                        else "Entrega simulada: ubicación del repartidor no disponible.")
                 }
             }
         }

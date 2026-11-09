@@ -7,6 +7,7 @@ import { parseOrderDecision } from "./orders/orderDecisionPolicy";
 import { PreparationEstimateService } from "./orders/preparationEstimateService";
 import { parsePreparationEstimate } from "./orders/preparationEstimatePolicy";
 import { OrderReadyService } from "./orders/orderReadyService";
+import { FoodDeliverySimulationService } from "./orders/foodDeliverySimulationService";
 import { BuyerOrdersReader } from "./orders/buyerOrdersReader";
 import { OrderCancellationService } from "./orders/orderCancellationService";
 import { SimulatedPaymentService } from "./orders/simulatedPaymentService";
@@ -87,6 +88,27 @@ export function createFoodApiHandler(dependencies: FoodApiDependencies): FoodHtt
       }
       const estimatePath = /^\/api\/v1\/stores\/([^/]+)\/orders\/([^/]+)\/preparation-estimate\/?$/.exec(request.path);
       const readyPath = /^\/api\/v1\/stores\/([^/]+)\/orders\/([^/]+)\/ready-for-pickup\/?$/.exec(request.path);
+      const storeSimulationPath = /^\/api\/v1\/stores\/([^/]+)\/orders\/([^/]+)\/simulate-(pickup|arrival)\/?$/.exec(request.path);
+      if (storeSimulationPath) {
+        if (request.method !== "POST") { response.status(405).set("Allow", "POST").json({error:"METHOD_NOT_ALLOWED"}); return; }
+        try {
+          if (Object.keys(request.query).length || request.body && Object.keys(request.body).length)
+            throw new OrderHttpError("INVALID_REQUEST",400);
+          const app=dependencies.app(runtime),auth=getAuth(app);
+          const actor=await verifyCommercialIdentity(auth,request.get("authorization"));
+          response.status(200).json(await new FoodDeliverySimulationService(getFirestore(app),auth).storeAction(actor,
+            decodeURIComponent(storeSimulationPath[1]),decodeURIComponent(storeSimulationPath[2]),
+            storeSimulationPath[3] as "pickup"|"arrival"));
+        } catch(error) {
+          if(error instanceof AuthenticationRequired)response.status(401).json({error:"AUTHENTICATION_REQUIRED"});
+          else if(error instanceof OrderHttpError)response.status(error.status).json({error:error.code});
+          else if(error instanceof CommercialAccessError)response.status(error.status===403?403:503)
+            .json({error:error.status===403?"ACCESS_DENIED":"AUTHORIZATION_UNAVAILABLE"});
+          else if(error instanceof URIError)response.status(404).json({error:"ORDER_NOT_FOUND"});
+          else response.status(503).json({error:"SIMULATION_UNAVAILABLE"});
+        }
+        return;
+      }
       if (readyPath) {
         if (request.method !== "POST") { response.status(405).set("Allow", "POST").json({ error: "METHOD_NOT_ALLOWED" }); return; }
         try {
@@ -171,6 +193,23 @@ export function createFoodApiHandler(dependencies: FoodApiDependencies): FoodHtt
       const myOrderPath = /^\/api\/v1\/me\/orders\/([^/]+)\/?$/.exec(request.path);
       const cancelPath = /^\/api\/v1\/me\/orders\/([^/]+)\/cancel\/?$/.exec(request.path);
       const simulatedPaymentPath = /^\/api\/v1\/me\/orders\/([^/]+)\/simulate-payment\/?$/.exec(request.path);
+      const confirmReceivedPath = /^\/api\/v1\/me\/orders\/([^/]+)\/confirm-received\/?$/.exec(request.path);
+      if (confirmReceivedPath) {
+        if (request.method !== "POST") { response.status(405).set("Allow","POST").json({error:"METHOD_NOT_ALLOWED"}); return; }
+        try {
+          if (Object.keys(request.query).length || request.body && Object.keys(request.body).length)
+            throw new OrderHttpError("INVALID_REQUEST",400);
+          const app=dependencies.app(runtime),auth=getAuth(app),uid=await verifyBuyerToken(auth,request.get("authorization"));
+          response.status(200).json(await new FoodDeliverySimulationService(getFirestore(app),auth)
+            .buyerConfirm(uid,decodeURIComponent(confirmReceivedPath[1])));
+        } catch(error) {
+          if(error instanceof AuthenticationRequired)response.status(401).json({error:"AUTHENTICATION_REQUIRED"});
+          else if(error instanceof OrderHttpError)response.status(error.status).json({error:error.code});
+          else if(error instanceof URIError)response.status(404).json({error:"ORDER_NOT_FOUND"});
+          else response.status(503).json({error:"SIMULATION_UNAVAILABLE"});
+        }
+        return;
+      }
       if (simulatedPaymentPath) {
         if (request.method !== "POST") { response.status(405).set("Allow","POST").json({error:"METHOD_NOT_ALLOWED"}); return; }
         try {

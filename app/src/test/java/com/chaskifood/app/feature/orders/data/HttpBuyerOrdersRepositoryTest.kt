@@ -48,6 +48,8 @@ class HttpBuyerOrdersRepositoryTest {
             override suspend fun detail(authorization: String, orderId: String) = detail(orderId)
             override suspend fun cancel(authorization: String, orderId: String) = cancel(orderId)
             override suspend fun simulatePayment(authorization: String, orderId: String) = payment(orderId)
+            override suspend fun confirmReceived(authorization:String,orderId:String) =
+                Response.success(ConfirmReceivedResponse(1,"COMPLETED","COMPLETED","PAID"))
         }, tokens, sessions)
     private fun <T> error(code: Int): Response<T> = Response.error(code, "{}".toResponseBody())
 

@@ -12,6 +12,31 @@ internal class HttpStoreOrdersRepository @Inject constructor(private val api:Sto
     private val tokens:BuyerTokenSource,private val access:StoreOrdersAccessSource):StoreOrdersRepository {
     override fun observeAuthorization(target:StoreOrdersTarget)=access.observe(target)
     override fun isCurrent(context:StoreOrdersContext)=access.current(context.target)==StoreOrdersAuthorization.Allowed(context)
+    override suspend fun simulatePickup(context:StoreOrdersContext,orderId:String)=simulateDelivery(context,orderId,true)
+    override suspend fun simulateArrival(context:StoreOrdersContext,orderId:String)=simulateDelivery(context,orderId,false)
+    private suspend fun simulateDelivery(context:StoreOrdersContext,orderId:String,pickup:Boolean):SimulatedStoreDeliveryResult {
+        if(!isCurrent(context))return SimulatedStoreDeliveryResult.StaleContext
+        if(!orderId.matches(Regex("[0-9a-f]{64}")))return SimulatedStoreDeliveryResult.NotFound
+        return try { withTimeoutOrNull(15_000) {
+            val token=tokens.token(context.ownerUid,context.sessionGeneration)
+            val response=if(pickup)api.simulatePickup(context.target.storeId,orderId,"Bearer $token",buildJsonObject{})
+                else api.simulateArrival(context.target.storeId,orderId,"Bearer $token",buildJsonObject{})
+            if(!isCurrent(context)||!tokens.isCurrent(context.ownerUid,context.sessionGeneration))
+                return@withTimeoutOrNull SimulatedStoreDeliveryResult.StaleContext
+            when(response.code()){
+                200->{val body=requireNotNull(response.body());require(body.contractVersion==1&&body.status=="IN_DELIVERY"&&
+                    body.outcome in setOf("UPDATED","UNCHANGED"));SimulatedStoreDeliveryResult.Updated}
+                401->SimulatedStoreDeliveryResult.AuthenticationRequired
+                403->SimulatedStoreDeliveryResult.AccessDenied
+                404->SimulatedStoreDeliveryResult.NotFound
+                409->SimulatedStoreDeliveryResult.StateChanged
+                else->SimulatedStoreDeliveryResult.Unavailable
+            }
+        }?:SimulatedStoreDeliveryResult.Unavailable }catch(e:CancellationException){throw e}
+        catch(_:BuyerSessionChanged){SimulatedStoreDeliveryResult.StaleContext}
+        catch(_:BuyerAuthenticationRequired){SimulatedStoreDeliveryResult.AuthenticationRequired}
+        catch(_:Exception){SimulatedStoreDeliveryResult.Unavailable}
+    }
     override suspend fun markReady(context:StoreOrdersContext,orderId:String):MarkOrderReadyResult {
         if(!isCurrent(context))return MarkOrderReadyResult.StaleContext
         if(!orderId.matches(Regex("[0-9a-f]{64}")))return MarkOrderReadyResult.NotFound
@@ -105,7 +130,8 @@ internal class HttpStoreOrdersRepository @Inject constructor(private val api:Sto
                                 StoreOrderLine(i.productId,i.name,i.quantity,i.unitPriceMinor,i.lineTotalMinor)},
                                 OrderAmounts(o.subtotalMinor,o.deliveryFeeMinor,o.totalMinor,o.tipMinor),status,
                                 estimatedPreparationMinutes=o.estimatedPreparationMinutes,estimatedReadyAtEpochMillis=o.estimatedReadyAtEpochMillis,
-                                pickupCode=o.pickupCode,readyAtEpochMillis=o.readyAtEpochMillis)
+                                pickupCode=o.pickupCode,readyAtEpochMillis=o.readyAtEpochMillis,
+                                simulationStage=o.simulationStage)
                         }
                         require(cursor==null || body.nextCursor!=cursor)
                         StoreOrdersResult.Loaded(StoreOrdersPage(body.storeId,body.storeName,orders,body.nextCursor))

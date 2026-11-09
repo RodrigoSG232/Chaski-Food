@@ -110,6 +110,14 @@ sealed interface SimulatedPaymentResult {
     data object StaleSession : SimulatedPaymentResult
     data object Unavailable : SimulatedPaymentResult
 }
+sealed interface ConfirmReceivedResult {
+    data object Completed:ConfirmReceivedResult
+    data object NotAllowed:ConfirmReceivedResult
+    data object NotFound:ConfirmReceivedResult
+    data object AuthenticationRequired:ConfirmReceivedResult
+    data object StaleSession:ConfirmReceivedResult
+    data object Unavailable:ConfirmReceivedResult
+}
 
 interface BuyerOrdersRepository {
     /** Sesión Firebase vigente (null sin sesión); cambia también en un nuevo inicio con el mismo UID. */
@@ -121,4 +129,6 @@ interface BuyerOrdersRepository {
     suspend fun cancel(session: BuyerOrdersSession, orderId: String): BuyerOrderCancellationResult
     suspend fun simulatePayment(session: BuyerOrdersSession, orderId: String): SimulatedPaymentResult =
         SimulatedPaymentResult.Unavailable
+    suspend fun confirmReceived(session: BuyerOrdersSession, orderId: String): ConfirmReceivedResult =
+        ConfirmReceivedResult.Unavailable
 }

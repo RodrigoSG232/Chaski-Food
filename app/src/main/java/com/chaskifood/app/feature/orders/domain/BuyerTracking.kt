@@ -27,7 +27,7 @@ data class BuyerTracking(
             estimatedArrivalAtEpochMillis in position.recordedAtEpochMillis..MAX_ORDER_EPOCH_MILLIS))
         val allowedStages = when (status) {
             "READY_FOR_PICKUP" -> if (assigned) setOf("ACCEPTED", "AT_MERCHANT") else setOf("SEARCHING_RIDER")
-            "IN_DELIVERY" -> { require(assigned); setOf("ON_THE_WAY", "AT_CUSTOMER") }
+            "IN_DELIVERY" -> setOf("ON_THE_WAY", "AT_CUSTOMER")
             "PENDING_CONFIRMATION", "PREPARING", "COMPLETED", "CANCELLED", "REJECTED" -> setOf(status)
             else -> emptySet()
         }

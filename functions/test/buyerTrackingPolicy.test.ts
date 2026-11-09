@@ -55,3 +55,12 @@ test("optional ETA preserves old Rider payloads and validates the proposed exten
   for (const bad of ["soon", 15, new Date(now - 1).toISOString(), new Date(now + 86_400_001).toISOString()])
     assert.throws(() => parseRiderTracking({ ...body, estimatedArrivalAt: bad }));
 });
+
+test("la entrega simulada muestra etapa sin inventar ubicación ni Rider",()=>{
+  const simulated=projectBuyerTracking(id,{schemaVersion:1,orderId:id,status:"IN_DELIVERY",
+    fulfillmentSimulation:{stage:"AT_CUSTOMER"}},now);
+  assert.equal(simulated.stage,"AT_CUSTOMER");
+  assert.equal(simulated.assigned,false);
+  assert.equal(simulated.position,null);
+  assert.equal(simulated.riderName,null);
+});

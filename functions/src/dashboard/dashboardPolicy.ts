@@ -60,10 +60,12 @@ export function aggregateDashboard(input: {businessId:string;storeIds:string[];d
     if(!(completedAt instanceof Timestamp))throw new OrderHttpError("DATA_INCONSISTENT",503,true);
     const bucket=buckets.get(day(completedAt));
     if(!bucket)throw new OrderHttpError("DATA_INCONSISTENT",503,true);
-    const outcome=(d.riderIntegration as {deliveryOutcome?:unknown}|undefined)?.deliveryOutcome;
+    const outcome=(d.riderIntegration as {deliveryOutcome?:unknown}|undefined)?.deliveryOutcome ??
+      (d.fulfillmentSimulation as {outcome?:unknown}|undefined)?.outcome;
     if(d.status!=="COMPLETED" || !["SUCCESS","UNSUCCESSFUL"].includes(String(outcome)))
       throw new OrderHttpError("DATA_INCONSISTENT",503,true);
     if(outcome==="SUCCESS") {
+      if(d.paymentStatus!=="PAID")throw new OrderHttpError("DATA_INCONSISTENT",503,true);
       const next=bucket.salesMinor+(d.subtotalMinor as number);
       if(!Number.isSafeInteger(next))throw new OrderHttpError("DATA_INCONSISTENT",503,true);
       bucket.salesMinor=next;

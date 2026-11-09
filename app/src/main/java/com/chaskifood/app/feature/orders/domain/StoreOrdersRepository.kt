@@ -26,7 +26,7 @@ data class StoreOrderLine(val productId:String,val name:String,val quantity:Int,
 class StoreOrderSummary(val orderId:String,val createdAtEpochMillis:Long,items:List<StoreOrderLine>,val amounts:OrderAmounts,
     val status:OrderStatus=OrderStatus.PENDING_CONFIRMATION,val paymentMethod:OrderPaymentMethod=OrderPaymentMethod.CASH_ON_DELIVERY,
     val estimatedPreparationMinutes:Int?=null,val estimatedReadyAtEpochMillis:Long?=null,
-    val pickupCode:String?=null,val readyAtEpochMillis:Long?=null) {
+    val pickupCode:String?=null,val readyAtEpochMillis:Long?=null,val simulationStage:String?=null) {
     val items:List<StoreOrderLine> = frozenOrderList(items)
     init {
         orderId(orderId);require(createdAtEpochMillis in 1..MAX_ORDER_EPOCH_MILLIS)
@@ -38,6 +38,7 @@ class StoreOrderSummary(val orderId:String,val createdAtEpochMillis:Long,items:L
         if(status==OrderStatus.READY_FOR_PICKUP)require(pickupCode?.matches(Regex("[0-9]{4}"))==true &&
             readyAtEpochMillis!=null&&readyAtEpochMillis in 1..MAX_ORDER_EPOCH_MILLIS)
         else require(pickupCode==null&&readyAtEpochMillis==null)
+        require(simulationStage==null || (status==OrderStatus.IN_DELIVERY && simulationStage in setOf("ON_THE_WAY","AT_CUSTOMER")))
     }
 }
 class StoreOrdersPage(val storeId:String,val storeName:String,orders:List<StoreOrderSummary>,val nextCursor:String?) {
@@ -100,6 +101,15 @@ sealed interface MarkOrderReadyResult {
     data object StaleContext:MarkOrderReadyResult
     data object Unavailable:MarkOrderReadyResult
 }
+sealed interface SimulatedStoreDeliveryResult {
+    data object Updated:SimulatedStoreDeliveryResult
+    data object StateChanged:SimulatedStoreDeliveryResult
+    data object AccessDenied:SimulatedStoreDeliveryResult
+    data object AuthenticationRequired:SimulatedStoreDeliveryResult
+    data object NotFound:SimulatedStoreDeliveryResult
+    data object StaleContext:SimulatedStoreDeliveryResult
+    data object Unavailable:SimulatedStoreDeliveryResult
+}
 interface StoreOrdersRepository {
     fun observeAuthorization(target:StoreOrdersTarget):Flow<StoreOrdersAuthorization>
     fun isCurrent(context:StoreOrdersContext):Boolean
@@ -107,4 +117,6 @@ interface StoreOrdersRepository {
     suspend fun respond(context:StoreOrdersContext,orderId:String,decision:StoreOrderDecision):StoreOrderDecisionResult
     suspend fun updateEstimate(context:StoreOrdersContext,orderId:String,minutes:Int):PreparationEstimateResult
     suspend fun markReady(context:StoreOrdersContext,orderId:String):MarkOrderReadyResult
+    suspend fun simulatePickup(context:StoreOrdersContext,orderId:String):SimulatedStoreDeliveryResult = SimulatedStoreDeliveryResult.Unavailable
+    suspend fun simulateArrival(context:StoreOrdersContext,orderId:String):SimulatedStoreDeliveryResult = SimulatedStoreDeliveryResult.Unavailable
 }

@@ -74,7 +74,7 @@ class StoreOrdersViewModel @Inject constructor(private val repository:StoreOrder
                 is MarkOrderReadyResult.Ready->mutable.update{it.copy(orders=it.orders.filterNot{o->o.orderId==orderId},
                     respondingOrderId=null,message="Pedido listo. Código de recojo: ${result.pickupCode}")}
                 MarkOrderReadyResult.PaymentRequired->mutable.update{it.copy(respondingOrderId=null,
-                    message="El cliente debe completar el pago simulado antes de marcar el pedido como listo.")}
+                    message="El servidor aún exige la regla anterior de pago anticipado. Actualiza foodApi para usar efectivo contra entrega.")}
                 MarkOrderReadyResult.StateChanged,MarkOrderReadyResult.NotFound->mutable.update{it.copy(
                     orders=it.orders.filterNot{o->o.orderId==orderId},respondingOrderId=null,
                     message="El pedido cambió y ya no está en preparación.")}
@@ -82,6 +82,33 @@ class StoreOrdersViewModel @Inject constructor(private val repository:StoreOrder
                     context=null;mutable.value=StoreOrdersUiState(loading=false,accessDenied=true,message="Tu autorización cambió.")}
                 MarkOrderReadyResult.Unavailable->mutable.update{it.copy(respondingOrderId=null,
                     message="No pudimos marcar el pedido como listo. Inténtalo nuevamente.")}
+            }
+        }
+    }
+    fun simulatePickup(orderId:String)=simulateDelivery(orderId,true)
+    fun simulateArrival(orderId:String)=simulateDelivery(orderId,false)
+    private fun simulateDelivery(orderId:String,pickup:Boolean){
+        val expected=usableContext()?:return
+        if(decisionJob?.isActive==true || mutable.value.respondingOrderId!=null ||
+            mutable.value.orders.none{it.orderId==orderId &&
+                (if(pickup)it.status==OrderStatus.READY_FOR_PICKUP
+                else it.status==OrderStatus.IN_DELIVERY&&it.simulationStage=="ON_THE_WAY")})return
+        val ticket=request
+        mutable.update{it.copy(respondingOrderId=orderId,message=null)}
+        decisionJob=viewModelScope.launch{
+            val result=try{if(pickup)repository.simulatePickup(expected,orderId)else repository.simulateArrival(expected,orderId)}
+                catch(e:CancellationException){throw e}catch(_:Exception){SimulatedStoreDeliveryResult.Unavailable}
+            currentCoroutineContext().ensureActive()
+            if(ticket!=request||context!=expected)return@launch
+            when(result){
+                SimulatedStoreDeliveryResult.Updated->{mutable.update{it.copy(respondingOrderId=null)};fetch(expected,null)}
+                SimulatedStoreDeliveryResult.StateChanged,SimulatedStoreDeliveryResult.NotFound->
+                    mutable.update{it.copy(respondingOrderId=null,message="El pedido cambió. Actualiza la bandeja.")}
+                SimulatedStoreDeliveryResult.AccessDenied,SimulatedStoreDeliveryResult.AuthenticationRequired,
+                SimulatedStoreDeliveryResult.StaleContext->{context=null;mutable.value=StoreOrdersUiState(loading=false,
+                    accessDenied=true,message="Tu autorización cambió.")}
+                SimulatedStoreDeliveryResult.Unavailable->mutable.update{it.copy(respondingOrderId=null,
+                    message="No pudimos registrar la simulación. Inténtalo nuevamente.")}
             }
         }
     }

@@ -5,7 +5,7 @@ import { validId, digest } from "../access/commercialAccessPolicy";
 
 export const DEFAULT_INBOX_PAGE_SIZE = 20;
 export const MAX_INBOX_PAGE_SIZE = 50; // Transport bound, never a business/order limit.
-export type StoreOrderStatus = "PENDING_CONFIRMATION"|"PREPARING"|"READY_FOR_PICKUP";
+export type StoreOrderStatus = "PENDING_CONFIRMATION"|"PREPARING"|"READY_FOR_PICKUP"|"IN_DELIVERY";
 export type InboxCursor = Readonly<{v:1;subject:string;storeId:string;status:StoreOrderStatus;anchorId:string}>;
 export function encodeInboxCursor(uid:string,storeId:string,anchorId:string,status:StoreOrderStatus="PENDING_CONFIRMATION"):string {
   return Buffer.from(JSON.stringify({v:1,subject:digest(["inbox-cursor-v1",uid]),storeId,status,anchorId})).toString("base64url");
@@ -13,7 +13,7 @@ export function encodeInboxCursor(uid:string,storeId:string,anchorId:string,stat
 export function parseInboxQuery(query:Record<string,unknown>,uid:string,storeId:string):{pageSize:number;cursor:InboxCursor|null;status:StoreOrderStatus} {
   if(!validId(storeId)||Object.keys(query).some(k=>!["pageSize","cursor","status"].includes(k)))throw new OrderHttpError("INVALID_REQUEST",400);
   const status=query.status??"PENDING_CONFIRMATION";
-  if(status!=="PENDING_CONFIRMATION"&&status!=="PREPARING"&&status!=="READY_FOR_PICKUP")throw new OrderHttpError("INVALID_REQUEST",400);
+  if(status!=="PENDING_CONFIRMATION"&&status!=="PREPARING"&&status!=="READY_FOR_PICKUP"&&status!=="IN_DELIVERY")throw new OrderHttpError("INVALID_REQUEST",400);
   const size=query.pageSize;
   if(size!==undefined && (typeof size!=="string"||!/^[1-9][0-9]?$/.test(size)||Number(size)>MAX_INBOX_PAGE_SIZE))
     throw new OrderHttpError("INVALID_REQUEST",400);
@@ -64,15 +64,20 @@ export function projectPendingOrder(id:string,data:Record<string,any>) {
 export function projectStoreOrder(id:string,data:Record<string,any>,status:StoreOrderStatus) {
   if(status==="PENDING_CONFIRMATION")return projectPendingOrder(id,data);
   try {
-    if(data.status!==status||!(data.estimatedReadyAt instanceof Timestamp)||
-      !Number.isInteger(data.estimatedPreparationMinutes)||data.estimatedPreparationMinutes<5||data.estimatedPreparationMinutes>180)throw new Error();
+    if(data.status!==status)throw new Error();
+    if(status!=="IN_DELIVERY" && (!(data.estimatedReadyAt instanceof Timestamp)||
+      !Number.isInteger(data.estimatedPreparationMinutes)||data.estimatedPreparationMinutes<5||data.estimatedPreparationMinutes>180))throw new Error();
     const core=validatedOrderCore(id,data);
     const ready=status==="READY_FOR_PICKUP";
     if(ready&&(!(data.readyAt instanceof Timestamp)||typeof data.pickupCode!=="string"||!/^\d{4}$/.test(data.pickupCode)))throw new Error();
+    const simulationStage=status==="IN_DELIVERY" ? data.fulfillmentSimulation?.stage ?? null : null;
+    if(simulationStage!==null && !["ON_THE_WAY","AT_CUSTOMER"].includes(simulationStage))throw new Error();
     return {orderId:id,createdAtEpochMillis:core.createdAtEpochMillis,status,items:core.items,
       subtotalMinor:core.subtotalMinor,deliveryFeeMinor:core.deliveryFeeMinor,tipMinor:core.tipMinor,totalMinor:core.totalMinor,currency:core.currency,
-      paymentMethod:core.paymentMethod,estimatedPreparationMinutes:data.estimatedPreparationMinutes,
-      estimatedReadyAtEpochMillis:data.estimatedReadyAt.toMillis(),
+      paymentMethod:core.paymentMethod,
+      ...(status!=="IN_DELIVERY"?{estimatedPreparationMinutes:data.estimatedPreparationMinutes,
+        estimatedReadyAtEpochMillis:data.estimatedReadyAt.toMillis()}:{}),
+      ...(status==="IN_DELIVERY"?{simulationStage}:{}),
       ...(ready?{pickupCode:data.pickupCode,readyAtEpochMillis:data.readyAt.toMillis()}:{})};
   }catch{throw new OrderHttpError("DATA_INCONSISTENT",503,true);}
 }

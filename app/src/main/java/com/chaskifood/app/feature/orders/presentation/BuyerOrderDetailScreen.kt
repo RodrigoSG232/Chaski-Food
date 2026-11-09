@@ -64,27 +64,28 @@ fun BuyerOrderDetailScreen(onBack: () -> Unit, notificationRefresh: String? = nu
         }
     }
     BuyerOrderDetailContent(state, onBack, onRefresh = { viewModel.refresh(); trackingModel.refresh() }, onCancel = viewModel::cancel,
-        onSimulatePayment = viewModel::simulatePayment, trackingState = trackingState, onTrackingRefresh = trackingModel::refresh)
+        onConfirmReceived = { viewModel.confirmReceived(); trackingModel.refresh() }, trackingState = trackingState,
+        onTrackingRefresh = trackingModel::refresh)
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun BuyerOrderDetailContent(state: BuyerOrderDetailUiState, onBack: () -> Unit, onRefresh: () -> Unit,
-    onCancel: () -> Unit = {}, onSimulatePayment: () -> Unit = {},
+    onCancel: () -> Unit = {}, onConfirmReceived: () -> Unit = {},
     trackingState: BuyerTrackingUiState? = null, onTrackingRefresh: () -> Unit = {}) {
     val detail = state.detail
     var confirmCancellation by remember { mutableStateOf(false) }
-    var confirmPayment by remember { mutableStateOf(false) }
+    var confirmDelivery by remember { mutableStateOf(false) }
     if (confirmCancellation) AlertDialog(onDismissRequest = { confirmCancellation = false },
         title = { Text("Cancelar pedido") },
         text = { Text("¿Confirmas que deseas cancelar este pedido?") },
         confirmButton = { TextButton(onClick = { confirmCancellation = false; onCancel() }) { Text("Confirmar") } },
         dismissButton = { TextButton(onClick = { confirmCancellation = false }) { Text("Volver") } })
-    if (confirmPayment) AlertDialog(onDismissRequest = { confirmPayment = false },
-        title = { Text("Simular pago") },
-        text = { Text("Esta acción educativa no realiza ningún cobro real. Confirmará el pago y generará el código de recojo del pedido.") },
-        confirmButton = { TextButton(onClick = { confirmPayment = false; onSimulatePayment() }) { Text("Simular pago") } },
-        dismissButton = { TextButton(onClick = { confirmPayment = false }) { Text("Volver") } })
+    if (confirmDelivery) AlertDialog(onDismissRequest = { confirmDelivery = false },
+        title = { Text("Confirmar recepción") },
+        text = { Text("Esta simulación registra la entrega y el pago en efectivo. No se realiza ningún cobro real.") },
+        confirmButton = { TextButton(onClick = { confirmDelivery = false; onConfirmReceived() }) { Text("Confirmar") } },
+        dismissButton = { TextButton(onClick = { confirmDelivery = false }) { Text("Volver") } })
     Scaffold(containerColor = ChaskiBackground, topBar = {
         ChaskiAppBar(title = detail?.let { "Pedido #${shortOrderId(it.summary.orderId)}" } ?: "Detalle del pedido", onBackClick = onBack)
     }) { padding ->
@@ -96,7 +97,7 @@ internal fun BuyerOrderDetailContent(state: BuyerOrderDetailUiState, onBack: () 
                 state.notFound -> OrdersMessage(Icons.Filled.SearchOff, "No encontramos este pedido",
                     "Puede que no exista o que no pertenezca a esta cuenta.", "Volver a mis pedidos", ChaskiButtonVariant.Outlined, onBack)
                 detail != null -> DetailBody(detail, state.message, state.notice, state.cancelling, state.paying, onRefresh,
-                    { confirmCancellation = true }, { confirmPayment = true }, trackingState, onTrackingRefresh)
+                    { confirmCancellation = true }, { confirmDelivery = true }, trackingState, onTrackingRefresh)
                 state.message != null -> OrdersMessage(Icons.Filled.WifiOff, "No pudimos cargar el pedido", state.message,
                     "Reintentar", ChaskiButtonVariant.Primary, onRefresh)
                 else -> OrdersLoading("Cargando el pedido…")
@@ -107,7 +108,7 @@ internal fun BuyerOrderDetailContent(state: BuyerOrderDetailUiState, onBack: () 
 
 @Composable
 private fun DetailBody(detail: BuyerOrderDetail, message: String?, notice: String?, cancelling: Boolean, paying: Boolean,
-    onRetry: () -> Unit, onCancel: () -> Unit, onSimulatePayment: () -> Unit,
+    onRetry: () -> Unit, onCancel: () -> Unit, onConfirmReceived: () -> Unit,
     trackingState: BuyerTrackingUiState?, onTrackingRefresh: () -> Unit) {
     val summary = detail.summary
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(ChaskiDimens.SpacingLg),
@@ -209,13 +210,13 @@ private fun DetailBody(detail: BuyerOrderDetail, message: String?, notice: Strin
             DetailCard {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(ChaskiDimens.SpacingSm)) {
                     Icon(Icons.Filled.Payments, contentDescription = null, tint = ChaskiTextPrimary, modifier = Modifier.size(20.dp))
-                    Text(if (detail.paymentStatus == OrderPaymentStatus.PAID) "Pagado · simulación educativa" else "Pago pendiente",
+                    Text(if (detail.paymentStatus == OrderPaymentStatus.PAID) "Efectivo registrado · simulación" else "Efectivo pendiente hasta la entrega",
                         style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold, color = ChaskiTextPrimary)
                 }
                 Text("No se realiza ningún cobro real.", style = MaterialTheme.typography.bodySmall, color = ChaskiTextTertiary)
-                if (summary.status == "PREPARING" && detail.paymentStatus == OrderPaymentStatus.PENDING)
-                    ChaskiButton(if (paying) "Procesando…" else "Simular pago", onClick = onSimulatePayment,
-                        enabled = !paying, variant = ChaskiButtonVariant.Primary)
+                if (summary.status == "IN_DELIVERY" && trackingState?.tracking?.stage == "AT_CUSTOMER")
+                    ChaskiButton(if (paying) "Confirmando…" else "Pedido recibido y efectivo entregado",
+                        onClick = onConfirmReceived, enabled = !paying, variant = ChaskiButtonVariant.Primary)
             }
         }
     }

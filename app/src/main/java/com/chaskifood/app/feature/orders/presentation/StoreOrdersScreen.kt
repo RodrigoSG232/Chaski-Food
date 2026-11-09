@@ -31,13 +31,15 @@ fun StoreOrdersScreen(onBack:()->Unit,viewModel:StoreOrdersViewModel=hiltViewMod
     StoreOrdersContent(state,onBack,{authorize{viewModel.refresh()}},{authorize{viewModel.loadMore()}},
         {id,minutes->authorize{viewModel.accept(id,minutes)}},{id,reason,text->authorize{viewModel.reject(id,reason,text)}},
         {authorize{viewModel.selectStatus(it)}},{id,minutes->authorize{viewModel.updateEstimate(id,minutes)}},
-        {id->authorize{viewModel.markReady(id)}})
+        {id->authorize{viewModel.markReady(id)}},{id->authorize{viewModel.simulatePickup(id)}},
+        {id->authorize{viewModel.simulateArrival(id)}})
 }
 
 @Composable
 internal fun StoreOrdersContent(state:StoreOrdersUiState,onBack:()->Unit={},onRefresh:()->Unit={},onMore:()->Unit={},
     onAccept:(String,Int)->Unit={_,_->},onReject:(String,StoreOrderRejectionReason,String?)->Unit={_,_,_->},
-    onStatus:(OrderStatus)->Unit={},onEstimate:(String,Int)->Unit={_,_->},onReady:(String)->Unit={}) {
+    onStatus:(OrderStatus)->Unit={},onEstimate:(String,Int)->Unit={_,_->},onReady:(String)->Unit={},
+    onPickup:(String)->Unit={},onArrival:(String)->Unit={}) {
     var expanded by remember(state.context){mutableStateOf<String?>(null)}
     var accepting by remember{mutableStateOf<String?>(null)}
     var rejecting by remember{mutableStateOf<String?>(null)}
@@ -45,14 +47,15 @@ internal fun StoreOrdersContent(state:StoreOrdersUiState,onBack:()->Unit={},onRe
     accepting?.let{id->AcceptOrderDialog({accepting=null}){minutes->accepting=null;onAccept(id,minutes)}}
     rejecting?.let{id->RejectOrderDialog({rejecting=null}){reason,text->rejecting=null;onReject(id,reason,text)}}
     estimating?.let{id->AcceptOrderDialog({estimating=null}){minutes->estimating=null;onEstimate(id,minutes)}}
-    Scaffold(containerColor=ChaskiBackground,topBar={ChaskiAppBar(title="Pedidos pendientes",onBackClick=onBack)}) {padding->
+    Scaffold(containerColor=ChaskiBackground,topBar={ChaskiAppBar(title="Pedidos del local",onBackClick=onBack)}) {padding->
         LazyColumn(Modifier.fillMaxSize().padding(padding),contentPadding=PaddingValues(ChaskiDimens.ScreenPadding),
             verticalArrangement=Arrangement.spacedBy(ChaskiDimens.SpacingMd)) {
             if(state.storeName.isNotBlank())item("store"){Text(state.storeName,style=MaterialTheme.typography.titleLarge)}
             item("queues"){Row(Modifier.horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(8.dp)){
                 FilterChip(state.selectedStatus==OrderStatus.PENDING_CONFIRMATION,{onStatus(OrderStatus.PENDING_CONFIRMATION)},{Text("Pendientes")})
                 FilterChip(state.selectedStatus==OrderStatus.PREPARING,{onStatus(OrderStatus.PREPARING)},{Text("En preparación")})
-                FilterChip(state.selectedStatus==OrderStatus.READY_FOR_PICKUP,{onStatus(OrderStatus.READY_FOR_PICKUP)},{Text("Listos")})}}
+                FilterChip(state.selectedStatus==OrderStatus.READY_FOR_PICKUP,{onStatus(OrderStatus.READY_FOR_PICKUP)},{Text("Listos")})
+                FilterChip(state.selectedStatus==OrderStatus.IN_DELIVERY,{onStatus(OrderStatus.IN_DELIVERY)},{Text("En reparto")})}}
             when {
                 state.loading->item("loading"){CircularProgressIndicator();Text("Consultando pedidos…")}
                 state.accessDenied->item("denied"){Text(state.message.orEmpty(),modifier=Modifier.semantics{liveRegion=LiveRegionMode.Polite})}
@@ -63,11 +66,12 @@ internal fun StoreOrdersContent(state:StoreOrdersUiState,onBack:()->Unit={},onRe
                         }
                     }
                     state.message?.let{message->item("error"){Text(message,modifier=Modifier.semantics{liveRegion=LiveRegionMode.Polite})}}
-                    if(state.orders.isEmpty() && state.message==null)item("empty"){Text("No hay pedidos pendientes en este local.")}
+                    if(state.orders.isEmpty() && state.message==null)item("empty"){Text("No hay pedidos en esta sección.")}
                     items(state.orders,key={it.orderId}){order->
                         OrderInboxCard(order,expanded==order.orderId,state.respondingOrderId==null,
                             {expanded=if(expanded==order.orderId)null else order.orderId},{accepting=order.orderId},
-                            {rejecting=order.orderId},{estimating=order.orderId},{onReady(order.orderId)})
+                            {rejecting=order.orderId},{estimating=order.orderId},{onReady(order.orderId)},
+                            {onPickup(order.orderId)},{onArrival(order.orderId)})
                     }
                     if(state.loadingMore)item("more-loading"){CircularProgressIndicator()}
                     if(state.nextCursor!=null)item("more"){ChaskiButton("Cargar más",onClick=onMore,enabled=!state.loadingMore,
@@ -78,23 +82,27 @@ internal fun StoreOrdersContent(state:StoreOrdersUiState,onBack:()->Unit={},onRe
     }
 }
 @Composable private fun OrderInboxCard(order:StoreOrderSummary,expanded:Boolean,actionsEnabled:Boolean,onToggle:()->Unit,
-    onAccept:()->Unit,onReject:()->Unit,onEstimate:()->Unit,onReady:()->Unit) {
+    onAccept:()->Unit,onReject:()->Unit,onEstimate:()->Unit,onReady:()->Unit,
+    onPickup:()->Unit,onArrival:()->Unit) {
     val date=remember(order.createdAtEpochMillis){SimpleDateFormat("dd/MM/yyyy HH:mm",Locale.forLanguageTag("es-PE")).apply{
         timeZone=TimeZone.getTimeZone("America/Lima")}.format(Date(order.createdAtEpochMillis))}
     val statusText=when(order.status) {
         OrderStatus.PENDING_CONFIRMATION->"Pendiente de confirmación"
         OrderStatus.PREPARING->"En preparación"
         OrderStatus.READY_FOR_PICKUP->"Listo para recojo"
+        OrderStatus.IN_DELIVERY->if(order.simulationStage=="AT_CUSTOMER")"Repartidor llegó" else "En reparto"
     }
     val statusBackground=when(order.status) {
         OrderStatus.PENDING_CONFIRMATION->ChaskiStatusPendingBg
         OrderStatus.PREPARING->ChaskiAdminCardBg
         OrderStatus.READY_FOR_PICKUP->ChaskiStatusApprovedBg
+        OrderStatus.IN_DELIVERY->ChaskiStatusApprovedBg
     }
     val statusForeground=when(order.status) {
         OrderStatus.PENDING_CONFIRMATION->ChaskiStatusPendingFg
         OrderStatus.PREPARING->ChaskiAdminAccent
         OrderStatus.READY_FOR_PICKUP->ChaskiStatusApprovedFg
+        OrderStatus.IN_DELIVERY->ChaskiStatusApprovedFg
     }
     Surface(modifier=Modifier.fillMaxWidth(),color=MaterialTheme.colorScheme.surface,
         shape=MaterialTheme.shapes.large,tonalElevation=1.dp,shadowElevation=1.dp) {
@@ -151,6 +159,13 @@ internal fun StoreOrdersContent(state:StoreOrdersUiState,onBack:()->Unit={},onRe
                     ChaskiButton("Marcar pedido listo",onClick=onReady,enabled=actionsEnabled)
                     ChaskiButton("Actualizar estimación",onClick=onEstimate,enabled=actionsEnabled,
                         variant=ChaskiButtonVariant.Outlined)
+                } else if(order.status==OrderStatus.READY_FOR_PICKUP) {
+                    ChaskiButton("Pedido recogido",onClick=onPickup,enabled=actionsEnabled)
+                    Text("Simulación temporal desde Food.",style=MaterialTheme.typography.bodySmall,color=ChaskiTextMuted)
+                } else if(order.status==OrderStatus.IN_DELIVERY && order.simulationStage=="ON_THE_WAY") {
+                    ChaskiButton("Simular llegada del repartidor",onClick=onArrival,enabled=actionsEnabled)
+                } else if(order.status==OrderStatus.IN_DELIVERY && order.simulationStage=="AT_CUSTOMER") {
+                    Text("Esperando confirmación de recepción del cliente.",style=MaterialTheme.typography.bodySmall)
                 }
             }
         }

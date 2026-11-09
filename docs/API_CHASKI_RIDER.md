@@ -21,7 +21,7 @@ Food no crea ni administra repartidores. Rider conserva la autoridad sobre su se
 GET /integration/v1/orders?limit=20
 ```
 
-Devuelve como máximo 50 pedidos `READY_FOR_PICKUP`, pagados mediante la simulación educativa y sin asignación vigente. Cada pedido contiene:
+El contrato actual devuelve como máximo 50 pedidos `READY_FOR_PICKUP`, pagados mediante la simulación educativa anterior y sin asignación vigente. Los pedidos nuevos de efectivo pendiente siguen el flujo provisional de Food y no aparecen aquí. Chaski Rider y Food deben acordar después el contrato de efectivo contra entrega antes de sustituir esa simulación. Cada pedido devuelto contiene:
 
 - cliente: identificador, nombre, teléfono y destino;
 - local: identificador, nombre, teléfono, dirección y coordenadas;

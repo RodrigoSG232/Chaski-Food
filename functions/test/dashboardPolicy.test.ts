@@ -23,11 +23,11 @@ test("Lima calendar window counts successful deliveries independently of creatio
     row("two","store","2026-11-08T05:30:00Z",{rejectedAt:date("2026-11-08T05:45:00Z")}),
     row("foreign","other","2026-11-08T06:00:00Z",{acceptedAt:date("2026-11-08T07:00:00Z")})];
   const completed=[row("old","store","2026-10-30T12:00:00Z",{completedAt:date("2026-11-08T15:00:00Z"),
-    status:"COMPLETED",riderIntegration:{deliveryOutcome:"SUCCESS"},subtotalMinor:2500}),
+    status:"COMPLETED",paymentStatus:"PAID",riderIntegration:{deliveryOutcome:"SUCCESS"},subtotalMinor:2500}),
     row("failed","store","2026-11-03T12:00:00Z",{completedAt:date("2026-11-08T16:00:00Z"),
       status:"COMPLETED",riderIntegration:{deliveryOutcome:"UNSUCCESSFUL"}}),
     row("foreign","other","2026-11-04T12:00:00Z",{completedAt:date("2026-11-08T17:00:00Z"),
-      status:"COMPLETED",riderIntegration:{deliveryOutcome:"SUCCESS"}})];
+      status:"COMPLETED",paymentStatus:"PAID",riderIntegration:{deliveryOutcome:"SUCCESS"}})];
   const metrics=aggregateDashboard({businessId:"business",storeIds:["store"],dates:window.dates,created,completed});
   assert.equal(metrics.orders,2);
   assert.equal(metrics.salesMinor,2500);
@@ -41,10 +41,20 @@ test("authorized malformed or overflowing amounts fail instead of showing partia
   const base={businessId:"business",storeIds:["store"],dates,created:[]};
   const completed=(more:Record<string,unknown>)=>[row("one","store","2026-11-08T12:00:00Z",{
     completedAt:date("2026-11-08T13:00:00Z"),status:"COMPLETED",
-    riderIntegration:{deliveryOutcome:"SUCCESS"},...more})];
+    paymentStatus:"PAID",riderIntegration:{deliveryOutcome:"SUCCESS"},...more})];
   assert.throws(()=>aggregateDashboard({...base,completed:completed({subtotalMinor:"1000"})}));
   assert.throws(()=>aggregateDashboard({...base,completed:completed({completedAt:"bad"})}));
   assert.throws(()=>aggregateDashboard({...base,completed:completed({riderIntegration:{}})}));
   assert.throws(()=>aggregateDashboard({...base,completed:[...completed({subtotalMinor:Number.MAX_SAFE_INTEGER}),
     ...completed({subtotalMinor:1})]}));
+});
+
+test("la entrega simulada suma ventas solo después de registrar efectivo",()=>{
+  const base={businessId:"business",storeIds:["store"],dates:["2026-11-08"],created:[]};
+  const completed=[row("cash","store","2026-11-08T12:00:00Z",{
+    completedAt:date("2026-11-08T13:00:00Z"),status:"COMPLETED",paymentStatus:"PAID",
+    fulfillmentSimulation:{outcome:"SUCCESS"},subtotalMinor:1800})];
+  assert.equal(aggregateDashboard({...base,completed}).salesMinor,1800);
+  assert.throws(()=>aggregateDashboard({...base,completed:[{...completed[0],
+    data:{...completed[0].data,paymentStatus:"PENDING"}}]}));
 });

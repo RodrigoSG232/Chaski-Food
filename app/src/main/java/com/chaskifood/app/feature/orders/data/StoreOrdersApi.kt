@@ -10,7 +10,7 @@ import retrofit2.http.*
 @Serializable internal data class StoreOrderResponse(val orderId:String,val createdAtEpochMillis:Long,val status:String,
     val items:List<StoreOrderLineResponse>,val subtotalMinor:Long,val deliveryFeeMinor:Long,val totalMinor:Long,
     val currency:String,val paymentMethod:String,val estimatedPreparationMinutes:Int?=null,val estimatedReadyAtEpochMillis:Long?=null,
-    val pickupCode:String?=null,val readyAtEpochMillis:Long?=null,val tipMinor:Long=0)
+    val pickupCode:String?=null,val readyAtEpochMillis:Long?=null,val tipMinor:Long=0,val simulationStage:String?=null)
 @Serializable internal data class StoreOrderLineResponse(val productId:String,val name:String,val quantity:Int,
     val unitPriceMinor:Long,val lineTotalMinor:Long)
 @Serializable internal data class StoreOrderDecisionResponse(val contractVersion:Int,val outcome:String,val status:String,
@@ -27,5 +27,11 @@ internal interface StoreOrdersApi {
         @Header("Authorization") authorization:String,@Body body:JsonObject):Response<StoreOrderDecisionResponse>
     @POST("stores/{storeId}/orders/{orderId}/ready-for-pickup")
     suspend fun markReady(@Path("storeId") storeId:String,@Path("orderId") orderId:String,
+        @Header("Authorization") authorization:String,@Body body:JsonObject):Response<StoreOrderDecisionResponse>
+    @POST("stores/{storeId}/orders/{orderId}/simulate-pickup")
+    suspend fun simulatePickup(@Path("storeId") storeId:String,@Path("orderId") orderId:String,
+        @Header("Authorization") authorization:String,@Body body:JsonObject):Response<StoreOrderDecisionResponse>
+    @POST("stores/{storeId}/orders/{orderId}/simulate-arrival")
+    suspend fun simulateArrival(@Path("storeId") storeId:String,@Path("orderId") orderId:String,
         @Header("Authorization") authorization:String,@Body body:JsonObject):Response<StoreOrderDecisionResponse>
 }

@@ -114,6 +114,23 @@ internal class HttpBuyerOrdersRepository @Inject constructor(private val api: Bu
             }
         }
 
+    override suspend fun confirmReceived(session:BuyerOrdersSession,orderId:String):ConfirmReceivedResult =
+        guarded(ConfirmReceivedResult.StaleSession,ConfirmReceivedResult.AuthenticationRequired,
+            ConfirmReceivedResult.Unavailable,session){bearer->
+            if(!orderId.matches(Regex("[0-9a-f]{64}")))return@guarded ConfirmReceivedResult.NotFound
+            val response=api.confirmReceived(bearer,orderId)
+            if(!isCurrent(session))return@guarded ConfirmReceivedResult.StaleSession
+            when(response.code()){
+                200->{val body=requireNotNull(response.body());require(body.contractVersion==1&&
+                    body.outcome in setOf("COMPLETED","UNCHANGED")&&body.status=="COMPLETED"&&body.paymentStatus=="PAID")
+                    ConfirmReceivedResult.Completed}
+                409->ConfirmReceivedResult.NotAllowed
+                404->ConfirmReceivedResult.NotFound
+                401->ConfirmReceivedResult.AuthenticationRequired
+                else->ConfirmReceivedResult.Unavailable
+            }
+        }
+
     /** Token por sesión, timeout y traducción de fallos; un contrato inesperado nunca se presenta como dato válido. */
     private suspend fun <T> guarded(stale: T, auth: T, unavailable: T, session: BuyerOrdersSession, call: suspend (String) -> T): T {
         if (!isCurrent(session)) return stale

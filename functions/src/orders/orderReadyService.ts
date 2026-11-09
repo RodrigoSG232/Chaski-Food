@@ -1,3 +1,4 @@
+import { randomInt } from "node:crypto";
 import { Auth } from "firebase-admin/auth";
 import { Firestore, Timestamp } from "firebase-admin/firestore";
 import { CommercialAccessService } from "../access/commercialAccessService";
@@ -10,7 +11,8 @@ import { createBuyerNoticeEvent } from "../notifications/buyerNoticeEvent";
 
 export class OrderReadyService {
   private readonly access: CommercialAccessService;
-  constructor(private readonly db: Firestore, auth: Auth, private readonly now: () => number = Date.now) {
+  constructor(private readonly db: Firestore, auth: Auth, private readonly now: () => number = Date.now,
+    private readonly nextCode: () => number = () => randomInt(0, 10_000)) {
     this.access = new CommercialAccessService(db, auth);
   }
 
@@ -30,21 +32,20 @@ export class OrderReadyService {
           pickupCode: order.pickupCode, readyAtEpochMillis: order.readyAt.toMillis() };
       }
       if (!orderCanBeMarkedReady(order.status)) throw new OrderHttpError("ORDER_STATE_CHANGED", 409);
-      if(order.paymentStatus!=="PAID"||order.paymentSimulation!==true||typeof order.pickupCode!=="string"||
-          !/^[0-9]{4}$/.test(order.pickupCode))throw new OrderHttpError("PAYMENT_REQUIRED",402);
+      const legacyPaid=order.paymentStatus==="PAID"&&order.paymentSimulation===true&&
+        typeof order.pickupCode==="string"&&/^[0-9]{4}$/.test(order.pickupCode);
+      if(order.paymentMethod!=="CASH_ON_DELIVERY" ||
+          !(legacyPaid || (order.paymentStatus==="PENDING"&&order.pickupCode==null)))
+        throw new OrderHttpError("ORDER_STATE_CHANGED",409);
       const previous = order.updatedAt instanceof Timestamp ? order.updatedAt.toMillis() : 0;
       const at = Timestamp.fromMillis(Math.max(this.now(), previous + 1));
-      const code = order.pickupCode;
+      const code = legacyPaid ? order.pickupCode : this.nextCode().toString().padStart(4,"0");
+      if(!/^[0-9]{4}$/.test(code))throw new OrderHttpError("READY_UPDATE_UNAVAILABLE",503,true);
       tx.update(orderRef, { status: "READY_FOR_PICKUP", readyAt: at,
-        readyByUid: actor.uid, updatedAt: at });
+        readyByUid: actor.uid, pickupCode:code, updatedAt: at });
       tx.create(orderRef.collection("status_history").doc("ready_for_pickup"), { schemaVersion: 1,
         fromStatus: "PREPARING", toStatus: "READY_FOR_PICKUP", actorUid: actor.uid, occurredAt: at });
       createBuyerNoticeEvent(tx, this.db, {orderId, buyerUid: order.buyerUid, type:"ORDER_READY_FOR_PICKUP", sequence:2, at});
-      if (typeof order.deliveryId === "string" && order.deliveryId.length) {
-        tx.create(this.db.doc(`rider_events/ready_${orderId}`), { schemaVersion: 1, type: "ORDER_READY_FOR_PICKUP",
-          orderId, deliveryId: order.deliveryId, businessId: scope.businessId, storeId,pickupCode:code,
-          status: "PENDING", occurredAt: at });
-      }
       return { contractVersion: 1, outcome: "UPDATED", status: "READY_FOR_PICKUP",
         pickupCode: code, readyAtEpochMillis: at.toMillis() };
     });

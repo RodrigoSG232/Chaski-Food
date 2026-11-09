@@ -95,7 +95,20 @@ class NotificationCoordinator @Inject internal constructor(@ApplicationContext p
             if(registered!=session)registered=null
             val eligible=NoticePolicy.canRegister(session.uid,state)
             if(eligible && registered==null){
-                if(registrar.register(session)==RegistrationOutcome.REGISTERED && sessions.isCurrent(session))registered=session
+                var retryDelayMs=15_000L
+                while(sessions.isCurrent(session) && registered!=session){
+                    when(registrar.register(session)){
+                        RegistrationOutcome.REGISTERED->{
+                            if(sessions.isCurrent(session))registered=session
+                            break
+                        }
+                        RegistrationOutcome.FAILED->{
+                            delay(retryDelayMs)
+                            retryDelayMs=(retryDelayMs*2).coerceAtMost(60_000L)
+                        }
+                        RegistrationOutcome.NOT_ELIGIBLE,RegistrationOutcome.SESSION_CHANGED->break
+                    }
+                }
             }else if(!eligible && state.phase==AccessContextPhase.RESOLVED && registered==session){
                 registrar.unregister(session,signOut=false);registered=null
             }

@@ -106,6 +106,31 @@ class BuyerOrderDetailViewModel @Inject constructor(private val repository: Buye
         }
     }
 
+    fun confirmReceived() {
+        val id=orderId?:return
+        val expected=session?:return
+        val detail=mutable.value.detail?:return
+        if(mutable.value.paying || detail.summary.status!="IN_DELIVERY")return
+        val mine=++ticket
+        job?.cancel()
+        mutable.update{it.copy(paying=true,message=null,notice=null)}
+        paymentJob=viewModelScope.launch{
+            val result=try{repository.confirmReceived(expected,id)}catch(e:CancellationException){throw e}
+                catch(_:Exception){ConfirmReceivedResult.Unavailable}
+            currentCoroutineContext().ensureActive()
+            if(mine!=ticket||session!=expected)return@launch
+            mutable.update{it.copy(paying=false)}
+            when(result){
+                ConfirmReceivedResult.Completed->{load(expected,id);mutable.update{it.copy(notice="Entrega y pago en efectivo simulados correctamente.")}}
+                ConfirmReceivedResult.NotAllowed->{load(expected,id);mutable.update{it.copy(notice="El pedido cambió. Actualiza el seguimiento.")}}
+                ConfirmReceivedResult.NotFound->mutable.update{it.copy(detail=null,notFound=true)}
+                ConfirmReceivedResult.AuthenticationRequired->mutable.update{it.copy(message="Vuelve a iniciar sesión.")}
+                ConfirmReceivedResult.StaleSession->{session=null;mutable.value=BuyerOrderDetailUiState(loading=false,signedIn=false)}
+                ConfirmReceivedResult.Unavailable->mutable.update{it.copy(message="No pudimos confirmar la entrega. Comprueba la conexión y vuelve a intentarlo.")}
+            }
+        }
+    }
+
     private fun load(expected: BuyerOrdersSession, id: String) {
         val mine = ++ticket
         mutable.update { it.copy(loading = true, message = null) }

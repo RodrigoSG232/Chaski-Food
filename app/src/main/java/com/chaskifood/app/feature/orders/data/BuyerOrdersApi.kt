@@ -22,6 +22,8 @@ import retrofit2.http.*
     val paymentStatus:String="PENDING", val deliveryOutcome: String? = null)
 @Serializable internal data class BuyerOrderCancellationResponse(val contractVersion: Int, val outcome: String, val status: String)
 @Serializable internal data class SimulatedPaymentResponse(val contractVersion: Int, val outcome: String, val paymentStatus: String)
+@Serializable internal data class ConfirmReceivedResponse(val contractVersion:Int,val outcome:String,
+    val status:String,val paymentStatus:String)
 @Serializable internal data class BuyerOrderDeliveryResponse(val label: String?, val addressText: String, val reference: String?,
     val instructions: String?)
 @Serializable internal data class BuyerOrderStatusResponse(val status: String, val statusKnown: Boolean, val occurredAtEpochMillis: Long)
@@ -39,6 +41,9 @@ internal interface BuyerOrdersApi {
     @POST("me/orders/{orderId}/simulate-payment")
     suspend fun simulatePayment(@Header("Authorization") authorization: String,
         @Path("orderId") orderId: String): Response<SimulatedPaymentResponse>
+    @POST("me/orders/{orderId}/confirm-received")
+    suspend fun confirmReceived(@Header("Authorization") authorization:String,
+        @Path("orderId") orderId:String):Response<ConfirmReceivedResponse>
 }
 
 @Serializable internal data class BuyerTrackingResponse(

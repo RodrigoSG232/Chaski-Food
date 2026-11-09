@@ -138,6 +138,27 @@ test("marking a paid order ready creates one buyer notice atomically",async()=>{
   assert.equal(notice.get("buyerUid"),"PRIVATE_BUYER");
   assert.equal((await db.collection("order_events").where("orderId","==",id).get()).size,2);
 });
+test("Food simula recojo, llegada y efectivo solo al confirmar el cliente",async()=>{
+  const f=await fixture(),id="fd".repeat(32),send=connectedHttp(app);
+  await seedOrder(f.store,f.owner.uid,id);
+  await db.doc(`food_orders/${id}`).update({buyerUid:f.buyer.uid,paymentStatus:"PENDING"});
+  assert.equal((await decide(f.manager,f.store,id,{action:"ACCEPT",estimatedPreparationMinutes:20})).body.status,"PREPARING");
+  const ready=await send(f.manager.token,`/stores/${f.store}/orders/${id}/ready-for-pickup`,{},"POST");
+  assert.equal(ready.status,200);
+  assert.equal((await db.doc(`food_orders/${id}`).get()).get("paymentStatus"),"PENDING");
+  assert.equal((await send(f.buyer.token,`/me/orders/${id}/confirm-received`,{},"POST")).status,409);
+  assert.equal((await send(f.manager.token,`/stores/${f.store}/orders/${id}/simulate-pickup`,{},"POST")).status,200);
+  assert.equal((await page(f.manager,f.store,"?status=IN_DELIVERY")).body.orders[0].simulationStage,"ON_THE_WAY");
+  assert.equal((await send(f.buyer.token,`/me/orders/${id}/confirm-received`,{},"POST")).status,409);
+  assert.equal((await send(f.manager.token,`/stores/${f.store}/orders/${id}/simulate-arrival`,{},"POST")).status,200);
+  assert.equal((await send(f.buyer.token,`/me/orders/${id}/confirm-received`,{},"POST")).status,200);
+  assert.equal((await send(f.buyer.token,`/me/orders/${id}/confirm-received`,{},"POST")).body.outcome,"UNCHANGED");
+  const completed=(await db.doc(`food_orders/${id}`).get()).data()!;
+  assert.equal(completed.status,"COMPLETED");assert.equal(completed.paymentStatus,"PAID");
+  assert.equal(completed.fulfillmentSimulation.outcome,"SUCCESS");
+  assert.equal((await db.doc(`order_events/${buyerNoticeEventId(id,"ORDER_PICKED_UP",1)}`).get()).get("buyerUid"),f.buyer.uid);
+  assert.equal((await db.collection(`food_orders/${id}/payment_history`).get()).size,1);
+});
 test("suspension keeps read and rejection but blocks acceptance",async()=>{
   const f=await fixture(),acceptId="ce".repeat(32),rejectId="df".repeat(32);
   await seedOrder(f.store,f.owner.uid,acceptId);await seedOrder(f.store,f.owner.uid,rejectId);

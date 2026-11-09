@@ -8,27 +8,29 @@ export function projectBuyerTracking(orderId: string, data: Record<string, any>,
   const statuses = ["PENDING_CONFIRMATION", "PREPARING", "READY_FOR_PICKUP", "IN_DELIVERY", "COMPLETED", "CANCELLED", "REJECTED"];
   if (data.orderId !== orderId || data.schemaVersion !== 1 || !statuses.includes(data.status)) invalid();
   const integration = data.riderIntegration;
+  const simulation = data.fulfillmentSimulation;
   const assignment = integration?.assignment;
   const assigned = assignment != null;
+  if (simulation && assigned) invalid();
   if (assigned && (typeof assignment.id !== "string" || !Number.isSafeInteger(assignment.version) ||
       assignment.version < 1 || typeof integration.rider?.displayName !== "string" || !integration.rider.displayName.trim())) invalid();
   const moving = data.status === "IN_DELIVERY";
-  if (moving && !assigned) invalid();
-  const outcome = data.status === "COMPLETED" ? integration?.deliveryOutcome ?? null : null;
+  if (moving && !assigned && !simulation) invalid();
+  const outcome = data.status === "COMPLETED" ? integration?.deliveryOutcome ?? simulation?.outcome ?? null : null;
   if (outcome !== null && outcome !== "SUCCESS" && outcome !== "UNSUCCESSFUL") invalid();
   let stage: string = data.status;
   if (data.status === "READY_FOR_PICKUP") {
     stage = assigned ? integration.status : "SEARCHING_RIDER";
     if (!["SEARCHING_RIDER", "ACCEPTED", "AT_MERCHANT"].includes(stage)) invalid();
   } else if (moving) {
-    stage = integration.status;
+    stage = simulation?.stage ?? integration?.status;
     if (!["ON_THE_WAY", "AT_CUSTOMER"].includes(stage)) invalid();
   }
   const sample = data.riderTracking;
   let position = null;
   let estimatedArrivalAtEpochMillis: number | null = null;
   // Hide coordinates before pickup, after termination, and from any former assignment.
-  if (moving && sample && sample.assignmentId === assignment.id && sample.assignmentVersion === assignment.version &&
+  if (moving && assigned && sample && sample.assignmentId === assignment.id && sample.assignmentVersion === assignment.version &&
       sample.riderId === integration.rider?.id) {
     if (!validCoordinates(sample) || !(sample.recordedAt instanceof Timestamp) || !(sample.receivedAt instanceof Timestamp) ||
         typeof sample.accuracyMeters !== "number" || !Number.isFinite(sample.accuracyMeters) ||
