@@ -1,5 +1,7 @@
 # Estado de implementación de Chasqui Food
 
+**Actualización Cloud — 08-11-2026:** se publicó exclusivamente `foodApi` del commit `f989166` en `chaski-food-9adba`, región `southamerica-west1`, con autorización del usuario. Firebase informó `Successful update operation` y `Deploy complete`. La ruta `GET /api/v1/me/orders/{orderId}/tracking` pasó de `404 NOT_FOUND` a `401 AUTHENTICATION_REQUIRED` en una consulta anónima de comprobación: existe y exige sesión. Falta la prueba autenticada del pedido en el celular. `riderApi`, reglas e índices no se desplegaron en esta operación. Antes de publicar se aprobaron nuevamente 150 unitarias y 31 pruebas de integración LOCAL con Node 22.23.4; queda resuelta la limitación de runtime indicada en la evidencia anterior. Registro local: `functions/.artifacts/hu23-foodapi-deploy.log`.
+
 Última revisión: **08-11-2026**. Código integrado: `main` hasta HU17. HU18–HU21 y el pago simulado educativo continúan en `ramaMax`. Esta rama requiere PR y publicación autorizada. Cómo funciona: [ARCHITECTURE](ARCHITECTURE.md). Cómo trabajar: [GUIA_DESARROLLO](GUIA_DESARROLLO.md).
 
 Vocabulario: **implementado** = código integrado; **verificado** = hay evidencia de ejecución; **validado en Cloud** = probado con el APK CONECTADO contra `chaski-food-9adba`. Una pantalla o un commit no cierran una historia por sí solos.
