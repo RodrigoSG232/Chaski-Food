@@ -1,4 +1,6 @@
 import { DeviceRegistry } from "./notifications/deviceRegistry";
+import { DashboardReader } from "./dashboard/dashboardReader";
+import { parseDashboardQuery } from "./dashboard/dashboardPolicy";
 import { StoreOrdersReader } from "./orders/storeOrdersReader";
 import { OrderDecisionService } from "./orders/orderDecisionService";
 import { parseOrderDecision } from "./orders/orderDecisionPolicy";
@@ -42,21 +44,34 @@ export function createFoodApiHandler(dependencies: FoodApiDependencies): FoodHtt
     try {
       const runtime = dependencies.runtime();
       const orderPath = /^\/api\/v1\/orders\/?$/.test(request.path);
+      if (/^\/api\/v1\/commercial\/dashboard\/?$/.test(request.path)) {
+        if (request.method !== "GET") { response.status(405).set("Allow","GET").json({error:"METHOD_NOT_ALLOWED"}); return; }
+        try {
+          const query=parseDashboardQuery(request.query);
+          const app=dependencies.app(runtime),auth=getAuth(app);
+          const actor=await verifyCommercialIdentity(auth,request.get("authorization"));
+          response.status(200).json(await new DashboardReader(getFirestore(app),auth).read(actor,query));
+        } catch(error) {
+          if(error instanceof AuthenticationRequired)response.status(401).json({error:"AUTHENTICATION_REQUIRED"});
+          else if(error instanceof OrderHttpError)response.status(error.status).json({error:error.code});
+          else if(error instanceof CommercialAccessError)response.status(error.status===403?403:error.status===400?400:503)
+            .json({error:error.status===403?"ACCESS_DENIED":error.status===400?"INVALID_REQUEST":"AUTHORIZATION_UNAVAILABLE"});
+          else response.status(503).json({error:"DASHBOARD_UNAVAILABLE"});
+        }
+        return;
+      }
       const attemptPath = /^\/api\/v1\/order-attempts\/([^/]+)\/?$/.exec(request.path);
       const devicePath = /^\/api\/v1\/devices\/([^/]+)\/?$/.exec(request.path);
       if(devicePath) {
         if(!["PUT","DELETE"].includes(request.method)){response.status(405).set("Allow","PUT, DELETE").end();return;}
         try {
           const app=dependencies.app(runtime),auth=getAuth(app),db=getFirestore(app);
-          // Only a current store manager may store a token; unbinding stays open to any authenticated UID.
-          const actor=request.method==="PUT"?await verifyCommercialIdentity(auth,request.get("authorization")):null;
-          const uid=actor?.uid??await verifyBuyerToken(auth,request.get("authorization"));
+          // Any authenticated account may bind its own token. Dispatch rechecks buyer ownership or store scope.
+          const uid=await verifyBuyerToken(auth,request.get("authorization"));
           const registry=new DeviceRegistry(db),id=decodeURIComponent(devicePath[1]);
           if(Object.keys(request.query).some(k=>request.method!=="DELETE"||k!=="bindingVersion"))throw new OrderHttpError("INVALID_REQUEST",400);
-          if(actor){
-            await db.runTransaction(tx=>new CommercialAccessService(db,auth).requireAnyStoreOrderReader(tx,actor),{readOnly:true});
-            await registry.put(uid,id,request.body);
-          }else await registry.remove(uid,id,Number(request.query.bindingVersion));
+          if(request.method==="PUT") await registry.put(uid,id,request.body);
+          else await registry.remove(uid,id,Number(request.query.bindingVersion));
           response.status(204).end();
         }catch(error){
           if(error instanceof AuthenticationRequired)response.status(401).json({error:"AUTHENTICATION_REQUIRED"});
@@ -152,6 +167,7 @@ export function createFoodApiHandler(dependencies: FoodApiDependencies): FoodHtt
       }
       // HU17: own purchases of the authenticated UID, whatever its commercial experience; never a purchase permission.
       const myOrdersPath = /^\/api\/v1\/me\/orders\/?$/.test(request.path);
+      const trackingPath = /^\/api\/v1\/me\/orders\/([^/]+)\/tracking\/?$/.exec(request.path);
       const myOrderPath = /^\/api\/v1\/me\/orders\/([^/]+)\/?$/.exec(request.path);
       const cancelPath = /^\/api\/v1\/me\/orders\/([^/]+)\/cancel\/?$/.exec(request.path);
       const simulatedPaymentPath = /^\/api\/v1\/me\/orders\/([^/]+)\/simulate-payment\/?$/.exec(request.path);
@@ -187,14 +203,15 @@ export function createFoodApiHandler(dependencies: FoodApiDependencies): FoodHtt
         }
         return;
       }
-      if (myOrdersPath || myOrderPath) {
+      if (myOrdersPath || myOrderPath || trackingPath) {
         if (request.method !== "GET") { response.status(405).set("Allow","GET").json({error:"METHOD_NOT_ALLOWED"}); return; }
         try {
           const app=dependencies.app(runtime);
           const uid=await verifyBuyerToken(getAuth(app),request.get("authorization"));
           const reader=new BuyerOrdersReader(getFirestore(app));
-          if(myOrderPath && Object.keys(request.query).length>0) throw new OrderHttpError("INVALID_REQUEST",400);
-          response.status(200).json(myOrderPath ? await reader.detail(uid,decodeURIComponent(myOrderPath[1])) : await reader.page(uid,request.query));
+          if((myOrderPath || trackingPath) && Object.keys(request.query).length>0) throw new OrderHttpError("INVALID_REQUEST",400);
+          response.status(200).json(trackingPath ? await reader.tracking(uid,decodeURIComponent(trackingPath[1])) :
+            myOrderPath ? await reader.detail(uid,decodeURIComponent(myOrderPath[1])) : await reader.page(uid,request.query));
         } catch(error) {
           if(error instanceof AuthenticationRequired) response.status(401).json({error:"AUTHENTICATION_REQUIRED"});
           else if(error instanceof OrderHttpError) response.status(error.status).json({error:error.code});

@@ -36,8 +36,12 @@ class HttpBuyerOrdersRepositoryTest {
     private fun repo(page: (String, String?) -> Response<BuyerOrdersResponse> = { _, _ -> Response.success(BuyerOrdersResponse(1, "ACTIVE", listOf(summary()), null)) },
         detail: (String) -> Response<BuyerOrderDetailEnvelope> = { Response.success(BuyerOrderDetailEnvelope(1, detail())) },
         cancel: (String) -> Response<BuyerOrderCancellationResponse> = { Response.success(BuyerOrderCancellationResponse(1, "CANCELLED", "CANCELLED")) },
-        payment: (String) -> Response<SimulatedPaymentResponse> = { Response.success(SimulatedPaymentResponse(1, "PAID", "PAID")) }) =
+        payment: (String) -> Response<SimulatedPaymentResponse> = { Response.success(SimulatedPaymentResponse(1, "PAID", "PAID")) },
+        tracking: (String) -> Response<BuyerTrackingResponse> = { error(503) }) =
         HttpBuyerOrdersRepository(object : BuyerOrdersApi {
+            override suspend fun tracking(authorization: String, orderId: String): Response<BuyerTrackingResponse> {
+                assertEquals("Bearer fixture-token", authorization); return tracking(orderId)
+            }
             override suspend fun page(authorization: String, phase: String, cursor: String?, pageSize: Int): Response<BuyerOrdersResponse> {
                 assertEquals("Bearer fixture-token", authorization); assertEquals(20, pageSize); return page(phase, cursor)
             }
@@ -46,6 +50,24 @@ class HttpBuyerOrdersRepositoryTest {
             override suspend fun simulatePayment(authorization: String, orderId: String) = payment(orderId)
         }, tokens, sessions)
     private fun <T> error(code: Int): Response<T> = Response.error(code, "{}".toResponseBody())
+
+    @Test fun trackingValidatesIdentityPrivacyAndContract() = runTest {
+        val body = BuyerTrackingResponse(1, id, "IN_DELIVERY", "ON_THE_WAY", true, "Ana", null,
+            BuyerTrackingPositionResponse(-12.1, -77.1, 10.0, 1_800_000_000_000, 1_800_000_000_000),
+            1_800_000_600_000, 1_800_000_000_000)
+        val loaded = repo(tracking = { Response.success(body) }).tracking(session, id) as BuyerTrackingResult.Loaded
+        assertEquals(-12.1, loaded.tracking.position!!.latitude, 0.0)
+        for (invalid in listOf(body.copy(orderId = "d".repeat(64)), body.copy(contractVersion = 2),
+            body.copy(status = "READY_FOR_PICKUP", stage = "ACCEPTED"), body.copy(assigned = false),
+            body.copy(position = body.position!!.copy(latitude = 91.0))))
+            assertEquals(BuyerTrackingResult.Unavailable, repo(tracking = { Response.success(invalid) }).tracking(session, id))
+        assertEquals(BuyerTrackingResult.NotFound, repo().tracking(session, "../x"))
+        assertEquals(BuyerTrackingResult.NotFound, repo(tracking = { error(404) }).tracking(session, id))
+        assertEquals(BuyerTrackingResult.AuthenticationRequired, repo(tracking = { error(401) }).tracking(session, id))
+        assertEquals(BuyerTrackingResult.Unavailable, repo(tracking = { error(503) }).tracking(session, id))
+        val changed = repo(tracking = { sessions.state.value = CartSession("other", 4); Response.success(body) })
+        assertEquals(BuyerTrackingResult.StaleSession, changed.tracking(session, id))
+    }
 
     @Test fun cancellationMapsServerOutcomesAndConflicts() = runTest {
         assertEquals(BuyerOrderCancellationResult.Cancelled, repo().cancel(session, id))
@@ -85,6 +107,14 @@ class HttpBuyerOrdersRepositoryTest {
             assertEquals(BuyerOrderDetailResult.Unavailable, repo(detail = { Response.success(BuyerOrderDetailEnvelope(1, body)) }).detail(session, id))
         assertEquals(BuyerOrdersResult.Unavailable, repo(page = { _, c -> Response.success(BuyerOrdersResponse(1, "ACTIVE", listOf(s), c)) })
             .page(session, BuyerOrderPhase.ACTIVE, "same"))
+    }
+
+    @Test fun readyForPickupDetailAcceptsThePreparationEstimateSentByFood() = runTest {
+        val body = detail().copy(status = "READY_FOR_PICKUP", estimatedPreparationMinutes = 20,
+            estimatedReadyAtEpochMillis = 1_800_001_200_000)
+        val result = repo(detail = { Response.success(BuyerOrderDetailEnvelope(1, body)) }).detail(session, id)
+        assertTrue(result is BuyerOrderDetailResult.Loaded)
+        assertEquals(20, (result as BuyerOrderDetailResult.Loaded).detail.estimatedPreparationMinutes)
     }
 
     @Test fun httpCodesMapToTypedResults() = runTest {

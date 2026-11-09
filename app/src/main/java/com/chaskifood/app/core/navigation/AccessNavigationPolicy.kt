@@ -48,6 +48,8 @@ object AccessNavigationPolicy {
             route in personalPurchaseRoutes -> has(AccessCapability.READ_PERSONAL_PURCHASES)
             route?.startsWith(ChaskiDestinations.STORE_ORDERS + "/") == true ->
                 businessId != null && storeId != null && has(AccessCapability.READ_STORE_ORDERS)
+            route == ChaskiDestinations.COMMERCIAL_DASHBOARD ->
+                businessId != null && has(AccessCapability.READ_BUSINESS_METRICS)
             route in purchaseRoutes -> has(AccessCapability.START_PURCHASE)
             route in adminRoutes -> access.identity.isAdmin
             route in personalRoutes -> true

@@ -8,7 +8,8 @@ import retrofit2.http.*
     val orders: List<BuyerOrderSummaryResponse>, val nextCursor: String?)
 @Serializable internal data class BuyerOrderSummaryResponse(val orderId: String, val createdAtEpochMillis: Long, val status: String,
     val phase: String, val statusKnown: Boolean, val storeName: String, val businessName: String, val itemCount: Int,
-    val totalMinor: Long, val currency: String, val itemPreview: List<BuyerOrderItemPreviewResponse>, val itemLineCount: Int)
+    val totalMinor: Long, val currency: String, val itemPreview: List<BuyerOrderItemPreviewResponse>, val itemLineCount: Int,
+    val deliveryOutcome: String? = null)
 @Serializable internal data class BuyerOrderItemPreviewResponse(val name: String, val quantity: Int)
 @Serializable internal data class BuyerOrderDetailEnvelope(val contractVersion: Int, val order: BuyerOrderDetailResponse)
 @Serializable internal data class BuyerOrderDetailResponse(val orderId: String, val createdAtEpochMillis: Long, val status: String,
@@ -18,7 +19,7 @@ import retrofit2.http.*
     val deliveryFeeMinor: Long, val paymentMethod: String, val statusHistory: List<BuyerOrderStatusResponse>,
     val itemPreview: List<BuyerOrderItemPreviewResponse>, val itemLineCount: Int,
     val estimatedPreparationMinutes:Int?=null,val estimatedReadyAtEpochMillis:Long?=null,val tipMinor:Long=0,
-    val paymentStatus:String="PENDING")
+    val paymentStatus:String="PENDING", val deliveryOutcome: String? = null)
 @Serializable internal data class BuyerOrderCancellationResponse(val contractVersion: Int, val outcome: String, val status: String)
 @Serializable internal data class SimulatedPaymentResponse(val contractVersion: Int, val outcome: String, val paymentStatus: String)
 @Serializable internal data class BuyerOrderDeliveryResponse(val label: String?, val addressText: String, val reference: String?,
@@ -26,6 +27,8 @@ import retrofit2.http.*
 @Serializable internal data class BuyerOrderStatusResponse(val status: String, val statusKnown: Boolean, val occurredAtEpochMillis: Long)
 
 internal interface BuyerOrdersApi {
+    @GET("me/orders/{orderId}/tracking")
+    suspend fun tracking(@Header("Authorization") authorization: String, @Path("orderId") orderId: String): Response<BuyerTrackingResponse>
     @GET("me/orders")
     suspend fun page(@Header("Authorization") authorization: String, @Query("phase") phase: String,
         @Query("cursor") cursor: String?, @Query("pageSize") pageSize: Int = 20): Response<BuyerOrdersResponse>
@@ -37,3 +40,13 @@ internal interface BuyerOrdersApi {
     suspend fun simulatePayment(@Header("Authorization") authorization: String,
         @Path("orderId") orderId: String): Response<SimulatedPaymentResponse>
 }
+
+@Serializable internal data class BuyerTrackingResponse(
+    val contractVersion: Int, val orderId: String, val status: String, val stage: String, val assigned: Boolean,
+    val riderName: String?, val deliveryOutcome: String?, val position: BuyerTrackingPositionResponse?,
+    val estimatedArrivalAtEpochMillis: Long?, val serverTimeEpochMillis: Long,
+)
+@Serializable internal data class BuyerTrackingPositionResponse(
+    val latitude: Double, val longitude: Double, val accuracyMeters: Double,
+    val recordedAtEpochMillis: Long, val receivedAtEpochMillis: Long,
+)

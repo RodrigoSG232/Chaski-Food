@@ -21,6 +21,7 @@ object ChaskiDestinations {
     const val LOCATION = "location"
     const val LOCATION_SEARCH = "location_search"
     const val MAIN = "main"
+    const val COMMERCIAL_DASHBOARD = "commercial_dashboard/{businessId}"
 
     const val RESTAURANTS = "restaurants"
     const val RESTAURANT_DETAIL = "restaurant/{storeId}"

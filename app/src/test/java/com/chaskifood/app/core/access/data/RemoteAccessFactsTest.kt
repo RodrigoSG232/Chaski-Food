@@ -42,7 +42,8 @@ class RemoteAccessFactsTest {
         response = Response.success(empty.copy(ownership = owner("SUSPENDED")))
         val r = ResolveAccess()(user, reader().read(state).facts) as AccessResolution.Resolved
         assertEquals(CommercialExperience.OWNER, r.experience)
-        assertEquals(setOf(AccessCapability.READ_PERSONAL_PURCHASES, AccessCapability.READ_OWN_BUSINESS_STATUS), r.capabilities.grants.map { it.capability }.toSet())
+        assertEquals(setOf(AccessCapability.READ_PERSONAL_PURCHASES, AccessCapability.READ_OWN_BUSINESS_STATUS,
+            AccessCapability.READ_BUSINESS_METRICS), r.capabilities.grants.map { it.capability }.toSet())
     }
     @Test fun `pendiente no convierte en propietario aprobado`() = runBlocking {
         response = Response.success(empty.copy(ownership = owner("PENDING_REVIEW")))

@@ -35,6 +35,7 @@ fun CommercialHomeScreen(
     onOffers: (String?, String?) -> Unit,
     viewModel: BusinessViewModel = hiltViewModel(),
     onOrders: (String, String) -> Unit = { _, _ -> },
+    onDashboard: (String) -> Unit = {},
 ) {
     val state by viewModel.commercialHome.collectAsStateWithLifecycle()
     val access = LocalNavigationAccess.current
@@ -50,7 +51,8 @@ fun CommercialHomeScreen(
         { business, store -> dispatch(ChaskiDestinations.STORE_OPERATIONS, business, store) { onHours(business, store) } },
         { business, store -> dispatch(ChaskiDestinations.STORE_PRODUCT_CONFIGURATION, business, store) { onOffers(business, store) } },
         { access?.refresh() },
-        { business, store -> dispatch(ChaskiDestinations.STORE_ORDERS + "/{businessId}/{storeId}", business, store) { onOrders(business,store) } })
+        { business, store -> dispatch(ChaskiDestinations.STORE_ORDERS + "/{businessId}/{storeId}", business, store) { onOrders(business,store) } },
+        { business -> dispatch(ChaskiDestinations.COMMERCIAL_DASHBOARD,business) { onDashboard(business) } })
 }
 
 @Composable
@@ -63,6 +65,7 @@ internal fun CommercialHomeContent(
     onOffers: (String?, String?) -> Unit = { _, _ -> },
     onRetry: () -> Unit = {},
     onOrders: (String, String) -> Unit = { _, _ -> },
+    onDashboard: (String) -> Unit = {},
 ) {
     when (state) {
         CommercialHomeState.Loading -> LoadingState()
@@ -77,6 +80,7 @@ internal fun CommercialHomeContent(
                         Text("Autorización: propietario")
                         Text(if (state.suspended) "Conservas tu condición de propietario" else "Negocio propio verificado")
                     }
+                    CommercialRow(Icons.Default.BarChart, "Dashboard comercial", "Pedidos, ventas y aceptación", { onDashboard(state.business.id) })
                     if (state.suspended) {
                         Text("Gestión comercial suspendida", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                         Text(state.suspensionReason?.takeIf { it.isNotBlank() } ?: "No se ha registrado un motivo de suspensión.")
@@ -117,6 +121,8 @@ internal fun CommercialHomeContent(
                         }
                         if (selected.canReadOrders) CommercialRow(Icons.AutoMirrored.Filled.ReceiptLong, "Pedidos pendientes",
                             "Bandeja de solo lectura de este local", { onOrders(store.businessId, store.id) })
+                        if (selected.canReadOrders) CommercialRow(Icons.Default.BarChart,"Dashboard comercial",
+                            "Indicadores de tus locales autorizados",{onDashboard(store.businessId)})
                         Text("Horario de hoy", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                         Text(selected.todayHours)
                         Text(if (selected.withinSchedule) "Dentro del horario de atención" else "Fuera del horario de atención")

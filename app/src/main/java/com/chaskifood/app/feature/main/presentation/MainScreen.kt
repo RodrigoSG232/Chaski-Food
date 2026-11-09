@@ -62,6 +62,7 @@ fun MainScreen(
     onOpenAdminAuditLog: () -> Unit = {},
     onOpenManageStores: () -> Unit = {},
     onOpenStoreOrders: (String, String) -> Unit = { _, _ -> },
+    onOpenDashboard: (String) -> Unit = {},
     onOpenSelectedHours: (String?, String?) -> Unit = { _, _ -> },
     onOpenSelectedOffers: (String?, String?) -> Unit = { _, _ -> },
     onSignOut: () -> Unit = {},
@@ -99,7 +100,8 @@ fun MainScreen(
             modifier = Modifier.padding(innerPadding).consumeWindowInsets(innerPadding),
         ) {
             composable(ChaskiTab.HOME.route) {
-                if (commercial) CommercialHomeScreen(onOpenManageStores, onOpenManageCatalog, onOpenSelectedHours, onOpenSelectedOffers, onOrders = onOpenStoreOrders)
+                if (commercial) CommercialHomeScreen(onOpenManageStores, onOpenManageCatalog, onOpenSelectedHours, onOpenSelectedOffers,
+                    onOrders = onOpenStoreOrders,onDashboard=onOpenDashboard)
                 else if (access == null || access.allows(ChaskiDestinations.CART)) HomeScreen(
                     deliveryAddress = deliveryAddress,
                     deliveryAddressUnavailable = deliveryAddressUnavailable,

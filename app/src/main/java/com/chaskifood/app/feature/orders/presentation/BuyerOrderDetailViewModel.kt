@@ -45,6 +45,9 @@ class BuyerOrderDetailViewModel @Inject constructor(private val repository: Buye
         load(current, id)
     }
 
+    /** Opening an old push must issue a new HTTP read, even when a prior refresh is still in flight. */
+    fun refreshFromNotification() { job?.cancel(); job = null; refresh() }
+
     fun cancel() {
         val id = orderId ?: return
         val expected = session ?: return

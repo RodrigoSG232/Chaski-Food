@@ -1,6 +1,6 @@
 # API Chaski Food → Chaski Rider — v1
 
-Estado: implementada en `ramaMax`, pendiente de despliegue y de autorizar la cuenta de servicio del backend Rider.
+Estado verificado el 08-11-2026: `riderApi` está ACTIVE en `chaski-food-9adba` (`southamerica-west1`) y el servicio Cloud Run `riderapi` tiene `roles/run.invoker` para la cuenta de servicio facilitada por Rider. El servicio no es público (petición anónima: 403). Falta una invocación autenticada desde el backend Rider y una prueba con un pedido listo real. La ampliación opcional de ETA aún requiere confirmación del equipo Rider.
 
 ## Seguridad
 
@@ -144,7 +144,29 @@ Solo acepta la asignación vigente cuando el pedido está `IN_DELIVERY`:
 }
 ```
 
-Una posición anterior no reemplaza la vigente. El seguimiento visible al cliente pertenece a HU23.
+Una posición anterior no reemplaza la vigente, aunque tenga una secuencia mayor. Se rechazan muestras con `recordedAt` más de 60 segundos adelantado respecto al servidor. Una asignación activa debe liberarse antes de aceptar otra; después del recojo no se permite reasignar.
+
+### Extensión opcional de ETA (HU23, pendiente de confirmar con Rider)
+
+El mismo cuerpo puede añadir `"estimatedArrivalAt": "2026-11-08T15:30:00.000Z"`. Es la **hora estimada de llegada calculada por Rider**, no una duración ni un cálculo de Food. Puede omitirse o ser `null`; el contrato anterior sigue siendo válido. Cada muestra reemplaza el ETA anterior; omitirlo deja el ETA no disponible.
+
+Fechas en UTC con formato ISO canónico y milisegundos (`YYYY-MM-DDTHH:mm:ss.sssZ`). La llegada no puede preceder a `recordedAt` ni superar 24 horas después de la muestra. Son límites de validación provisionales de Food que deben revisarse al acordar el contrato.
+
+Food conserva la última posición si no llegan muestras. La app oculta el ETA cuando venció, la muestra tiene más de 120 segundos o falla la consulta; conserva mapa, hora de captura y aviso de ubicación sin actualizar. El umbral de 120 segundos es provisional, no una frecuencia acordada con Rider.
+
+El evento equivalente a «DELIVERED» de la HU es `COMPLETED_SUCCESSFULLY` con `deliveryOutcome=SUCCESS`. No se acepta un alias `DELIVERED`. Solo completa desde `IN_DELIVERY`, con asignación vigente y secuencia válida. `COMPLETED_UNSUCCESSFULLY` se presenta como entrega no exitosa.
+
+### Consulta del comprador
+
+`GET /api/v1/me/orders/{orderId}/tracking` en **foodApi**, con Firebase ID token del comprador. Solo permite `buyerUid == UID autenticado`; ajeno e inexistente devuelven el mismo 404. Respuesta v1:
+
+- `orderId`, `status`, `stage`, `assigned`, `riderName`, `deliveryOutcome`;
+- `position`: latitude, longitude, accuracyMeters, recordedAtEpochMillis, receivedAtEpochMillis; o `null`;
+- `estimatedArrivalAtEpochMillis`: número o `null`; `serverTimeEpochMillis`.
+
+Solo expone coordenadas/ETA durante `IN_DELIVERY` y para la asignación vigente. No incluye PIN, teléfono, placa, ID del Rider ni datos privados del pedido. `Cache-Control: no-store`. Sin parámetros de consulta. 401 sin sesión, 405 para métodos distintos de GET, 503 ante datos inconsistentes/fallo temporal.
+
+Simulación y pasos de validación: [HU23_SEGUIMIENTO.md](HU23_SEGUIMIENTO.md).
 
 ## Publicación
 
@@ -155,5 +177,5 @@ pnpm --dir functions exec firebase deploy \
   --non-interactive
 ```
 
-Después del despliegue se debe otorgar `roles/run.invoker` exclusivamente a la cuenta de servicio que entregue el equipo Rider. Hasta recibir ese correo, la función debe permanecer privada.
+El rol `roles/run.invoker` se otorgó a la cuenta facilitada por Rider únicamente sobre `riderapi`, y se comprobó con `gcloud run services get-iam-policy`. La URL del servicio obtenida con `gcloud run services describe` debe usarse como audiencia OIDC y como base de las rutas `/integration/v1/...`. El siguiente paso es una llamada desde el backend Rider; no se necesita incorporar credenciales de servicio en Android.
 

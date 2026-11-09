@@ -1,6 +1,7 @@
 import { Firestore,Timestamp } from "firebase-admin/firestore";
 import { OrderHttpError } from "../orders/orderRequest";
 import { payloadHash,projectRiderOrder,RiderEvent,riderOrderId,RiderTracking } from "./riderIntegrationPolicy";
+import { BuyerNoticeType,createBuyerNoticeEvent } from "../notifications/buyerNoticeEvent";
 
 export class RiderIntegrationService{
   constructor(private readonly db:Firestore,private readonly now:()=>number=Date.now){}
@@ -40,7 +41,7 @@ export class RiderIntegrationService{
       const sameAssignment=assignment?.id===event.assignmentId&&assignment.version===event.assignmentVersion;
       let nextStatus=order.status,nextAssignment=assignment,nextRider=integration.rider,nextDeliveryStatus=event.status;
       if(event.eventType==="ASSIGNMENT_ACCEPTED"){
-        if(order.status!=="READY_FOR_PICKUP"||event.assignmentVersion!==(integration.lastAssignmentVersion??0)+1)
+        if(order.status!=="READY_FOR_PICKUP"||assignment!==null||event.assignmentVersion!==(integration.lastAssignmentVersion??0)+1)
           throw new OrderHttpError("ASSIGNMENT_CONFLICT",409);
         nextAssignment={id:event.assignmentId,version:event.assignmentVersion};nextRider=event.rider;
       }else{
@@ -69,6 +70,12 @@ export class RiderIntegrationService{
       tx.create(eventRef,{schemaVersion:1,...event,payloadHash:hash,receivedAt});
       if(nextStatus!==order.status)tx.create(orderRef.collection("status_history").doc(`rider_${event.eventSequence}`),{
         schemaVersion:1,fromStatus:order.status,toStatus:nextStatus,actorUid:"CHASKI_RIDER",occurredAt:at});
+      const noticeType:Partial<Record<RiderEvent["eventType"],BuyerNoticeType>>={
+        ASSIGNMENT_ACCEPTED:"RIDER_ASSIGNED",PICKED_UP:"ORDER_PICKED_UP",
+        COMPLETED_SUCCESSFULLY:"ORDER_DELIVERED",COMPLETED_UNSUCCESSFULLY:"ORDER_DELIVERY_FAILED"};
+      const type=noticeType[event.eventType];
+      if(type)createBuyerNoticeEvent(tx,this.db,{orderId:event.orderId,buyerUid:order.buyerUid,type,
+        sequence:event.eventSequence,at,assignmentId:event.assignmentId,assignmentVersion:event.assignmentVersion});
       return {contractVersion:1,eventId:event.eventId,orderId:event.orderId,applied:true,lastEventSequence:event.eventSequence};
     });
   }
@@ -83,12 +90,15 @@ export class RiderIntegrationService{
       if(order.status!=="IN_DELIVERY"||assignment?.id!==tracking.assignmentId||assignment.version!==tracking.assignmentVersion||
         integration.rider?.id!==tracking.riderId)throw new OrderHttpError("ASSIGNMENT_STALE",409);
       const current=order.riderTracking;
+      if(tracking.recordedAt.toMillis()>receivedAt.toMillis()+60_000)throw new OrderHttpError("INVALID_REQUEST",422);
       if(current&&tracking.sequence<current.sequence)return {contractVersion:1,orderId,assignmentVersion:tracking.assignmentVersion,
         acceptedSequence:current.sequence,received:false};
       if(current&&tracking.sequence===current.sequence){
         if(current.payloadHash!==hash)throw new OrderHttpError("IDEMPOTENCY_CONFLICT",409);
         return {contractVersion:1,orderId,assignmentVersion:tracking.assignmentVersion,acceptedSequence:tracking.sequence,received:true};
       }
+      if(current && tracking.recordedAt.toMillis()<current.recordedAt.toMillis())
+        return {contractVersion:1,orderId,assignmentVersion:tracking.assignmentVersion,acceptedSequence:current.sequence,received:false};
       tx.update(ref,{riderTracking:{...tracking,payloadHash:hash,receivedAt}});
       return {contractVersion:1,orderId,assignmentVersion:tracking.assignmentVersion,acceptedSequence:tracking.sequence,received:true};
     });

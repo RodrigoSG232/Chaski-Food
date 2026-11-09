@@ -29,6 +29,14 @@ Decisiones **aprobadas** por el equipo que siguen aplicando y condicionan las pr
 - **Para recibir pedidos** basta al menos un responsable asignado válido; no se exige que esté conectado. Sin responsables se bloquean confirmaciones nuevas (HU16-05, HU16-12).
 
 ## Consultas propias (HU17)
+### Seguimiento HU23 (08-11-2026)
+- **Aprobado por el usuario:** ETA proporcionado por Rider. Avanzar con simulación LOCAL mientras se recibe el contrato definitivo; actualizar después. En ausencia de ETA real, mostrar «ETA no disponible».
+- **Implementación:** consulta propia en foodApi, fases sin mapa antes del recojo, última posición persistida y cierre solo por transición válida. Se usa el evento existente `COMPLETED_SUCCESSFULLY`; no se crea un evento `DELIVERED` incompatible.
+- **Resultado de entrega:** `UNSUCCESSFUL` se muestra «Entrega no exitosa»; pedidos antiguos sin resultado, «Finalizado». Solo `SUCCESS` se etiqueta «Entregado».
+- **Valores provisionales de implementación:** polling de 10 segundos (20/30 ante fallos), muestra desactualizada después de 120 segundos, extensión opcional `estimatedArrivalAt`. La fuente Rider está aprobada; estos detalles de intercambio aún deben confirmarse con su equipo.
+- Sin cambios Cloud, IAM, PIN ni chat en esta historia. El simulador está bajo `functions/test/lab`, fuera del paquete de despliegue.
+
+### Consulta e historial
 - **Acceso:** el cliente usa la pestaña **Pedidos**; propietario y responsable, **Cuenta → «Mis compras»**, con la misma lista y detalle. Las rutas usan `verifyBuyerToken` y filtran por `buyerUid`: no exigen experiencia comercial ni conceden `START_PURCHASE` (D1, HU34-01/07).
 - **Estados:** una sola tabla en foodApi. Activos: `PENDING_CONFIRMATION`, `PREPARING`, `READY_FOR_PICKUP`, `IN_DELIVERY`; históricos: `COMPLETED`, `CANCELLED`, `REJECTED`. Un estado válido desconocido se muestra como activo («Estado en actualización») y se registra; `status` ausente/nulo o documento corrupto → `503 DATA_INCONSISTENT` (D2, N1).
 - **Refresco:** HTTP al abrir, al volver a la app y al deslizar; sin tiempo real ni caché local (D3).
@@ -37,11 +45,20 @@ Decisiones **aprobadas** por el equipo que siguen aplicando y condicionan las pr
 - **Lista:** ID visible de 8 caracteres (consultas y navegación usan los 64); hasta dos productos con cantidad y «+N más» desde el snapshot; pago descrito de forma neutral («Efectivo contra entrega»).
 - **Checkout:** el carrito muestra «Continuar»; la pantalla siguiente se titula «Confirmar pedido» y, tras el éxito (directo o recuperado), «Pedido enviado» con «Recibimos tu pedido» y «Ver mi pedido» (D4). Tras la compra, Atrás lleva a Pedidos y no vuelve a la revisión. Desde Cuenta → «Recuperar compra pendiente» el título es «Recuperar compra».
 
+## Dashboard comercial (HU28, 08-11-2026)
+- **Aprobado por el usuario:** tres indicadores/gráficos; MPAndroidChart 4.0.1. Ventas significa subtotal de productos entregados con éxito, nunca tarifa de reparto ni propina.
+- **Período:** 7, 30 o 90 días calendario de Lima, incluido el actual; pedidos y tasa de aceptación por fecha de creación, ventas por fecha de entrega exitosa. Pendientes y cancelados no entran al denominador de aceptación.
+- **Permisos:** propietario APPROVED o SUSPENDED consulta únicamente su negocio; responsable VERIFIED consulta únicamente locales asignados. El claim `admin` no concede dashboard. El filtro por local se valida en `foodApi`.
+- **Precisión:** se rechazan datos inconsistentes y ventanas que superen 3000 pedidos en cualquiera de las dos consultas, en vez de mostrar agregados parciales. El pago sigue siendo simulado; el gráfico describe ventas registradas de productos, no cobros bancarios.
+
 ## Bandeja y avisos
 - **La bandeja es la fuente de verdad**; FCM es solo aviso, puede duplicarse o perderse (HU16-04, HU16-13).
 - Los pedidos se asocian al **local (`storeId`)**, no a una persona; un nuevo responsable autorizado ve los existentes (HU34-03).
 - Avisos con evento persistente `NEW_ORDER`, procesador independiente, reintentos acotados, dispositivos por UID, destinatarios reautorizados en cada envío y payload mínimo; el **propietario no recibe** avisos de pedidos (HU16-04, HU16-21).
 - Lecturas por HTTP autorizadas por foodApi; los documentos privados no se abren al cliente (HU16-19).
+- **HU24:** la aceptación, el rechazo y el pedido listo crean un evento de aviso al comprador en la misma transacción que cambia el pedido. Los eventos válidos de Rider crean los avisos de asignación, recojo y resultado de entrega. Cada evento conserva un ID estable para reintentos e idempotencia.
+- El dispositivo se registra para cualquier cuenta autenticada con acceso a sus compras; al enviar, el backend revalida la titularidad del pedido o la asignación del responsable. El push lleva solo tipo de evento, ID de evento, ID de pedido y UID destinatario. Un aviso antiguo puede llegar después de un cambio posterior: abrirlo siempre pide el pedido vigente a foodApi.
+- Los avisos son de mejor esfuerzo: FCM puede retrasarlos, duplicarlos o perderlos. `NO_RECIPIENTS` es terminal y no existe replay operativo aprobado; el detalle y la bandeja siguen disponibles por HTTP.
 
 ## Roles y permisos
 - **Una experiencia comercial por cuenta**: cliente, propietario o responsable. Sin autorizaciones comerciales se es cliente; la aprobación del negocio convierte en propietario (HU34-02, HU34-04).

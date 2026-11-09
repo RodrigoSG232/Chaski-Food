@@ -1,6 +1,7 @@
 package com.chaskifood.app.core.navigation
 
 import com.chaskifood.app.feature.orders.presentation.StoreOrdersScreen
+import com.chaskifood.app.feature.dashboard.presentation.DashboardScreen
 import com.chaskifood.app.feature.orders.presentation.BuyerOrderDetailScreen
 import com.chaskifood.app.feature.orders.presentation.MyOrdersScreen
 
@@ -99,15 +100,25 @@ fun ChaskiNavHost(
         if(accessState.phase==com.chaskifood.app.core.access.data.AccessContextPhase.RESOLVED){
             val notice=noticeModel.notifications.takeAuthorized()
             if(notice!=null){
-                val route=ChaskiDestinations.STORE_ORDERS+"/${Uri.encode(notice.businessId)}/${Uri.encode(notice.storeId)}"
-                access.runIfAllowedFrom(access.current().origin,route,notice.businessId,notice.storeId){
-                    navController.navigate(route){launchSingleTop=true}
-                    navController.currentBackStackEntry?.savedStateHandle?.set("notificationRefresh",java.util.UUID.randomUUID().toString())
+                when(notice){
+                    is com.chaskifood.app.core.notifications.NewOrderNotice -> {
+                        val route=ChaskiDestinations.STORE_ORDERS+"/${Uri.encode(notice.businessId)}/${Uri.encode(notice.storeId)}"
+                        access.runIfAllowedFrom(access.current().origin,route,notice.businessId,notice.storeId){
+                            navController.navigate(route){launchSingleTop=true}
+                            navController.currentBackStackEntry?.savedStateHandle?.set("notificationRefresh",java.util.UUID.randomUUID().toString())
+                        }
+                    }
+                    is com.chaskifood.app.core.notifications.BuyerOrderNotice -> {
+                        access.runIfAllowedFrom(access.current().origin,ChaskiDestinations.ORDER_DETAIL){
+                            navController.navigateToOrderDetail(notice.orderId)
+                            navController.currentBackStackEntry?.savedStateHandle?.set("notificationRefresh",java.util.UUID.randomUUID().toString())
+                        }
+                    }
                 }
             }
             val resolved=accessState.resolution as? com.chaskifood.app.core.access.domain.AccessResolution.Resolved
             if(android.os.Build.VERSION.SDK_INT>=33 && access.enabled && resolved?.capabilities?.grants?.any {
-                it.capability==com.chaskifood.app.core.access.domain.AccessCapability.READ_STORE_ORDERS}==true){
+                it.capability==com.chaskifood.app.core.access.domain.AccessCapability.READ_PERSONAL_PURCHASES}==true){
                 val prefs=permissionContext.getSharedPreferences("notification_permission",android.content.Context.MODE_PRIVATE)
                 if(!prefs.getBoolean("asked",false)){
                     prefs.edit().putBoolean("asked",true).apply()
@@ -348,6 +359,9 @@ fun ChaskiNavHost(
                     onOpenManageStores = { navController.navigate(ChaskiDestinations.MANAGE_STORES) },
                     onOpenStoreOrders = { business, store ->
                         navController.navigate(ChaskiDestinations.STORE_ORDERS + "/${Uri.encode(business)}/${Uri.encode(store)}") { launchSingleTop = true }
+                    },
+                    onOpenDashboard = { business ->
+                        navController.navigate("commercial_dashboard/${Uri.encode(business)}") { launchSingleTop = true }
                     },
                     onOpenSelectedHours = { _, store ->
                         navController.navigate(ChaskiDestinations.STORE_OPERATIONS + (store?.let { "?storeId=${Uri.encode(it)}" } ?: ""))
@@ -649,6 +663,10 @@ fun ChaskiNavHost(
                 val notificationRefresh by it.savedStateHandle.getStateFlow<String?>("notificationRefresh",null).collectAsStateWithLifecycle()
                 StoreOrdersScreen(onBack = { navController.popBackStack() },notificationRefresh=notificationRefresh)
             }
+            protectedComposable(access, navController, ChaskiDestinations.COMMERCIAL_DASHBOARD,
+                arguments = listOf(navArgument("businessId") { type = NavType.StringType })) {
+                DashboardScreen(onBack = { navController.popBackStack() })
+            }
             protectedComposable(access, navController, ChaskiDestinations.CHECKOUT_RECOVERY) {
                 RealCheckoutScreen(onBack = { navController.popBackStack() },
                     onOpenCart = {}, onSelectAddress = {}, recoveryOnly = true,
@@ -662,7 +680,8 @@ fun ChaskiNavHost(
             }
             protectedComposable(access, navController, ChaskiDestinations.ORDER_DETAIL,
                 arguments = listOf(navArgument("orderId") { type = NavType.StringType })) {
-                BuyerOrderDetailScreen(onBack = { navController.popBackStack() })
+                val notificationRefresh by it.savedStateHandle.getStateFlow<String?>("notificationRefresh",null).collectAsStateWithLifecycle()
+                BuyerOrderDetailScreen(onBack = { navController.popBackStack() },notificationRefresh=notificationRefresh)
             }
             protectedComposable(access, navController, ChaskiDestinations.CHECKOUT) {
                 RealCheckoutScreen(

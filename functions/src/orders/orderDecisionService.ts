@@ -6,6 +6,7 @@ import { CommercialIdentity } from "../auth/verifyBuyerToken";
 import { buyerOrderId } from "./buyerOrdersPolicy";
 import { OrderDecision, orderCanBeResponded } from "./orderDecisionPolicy";
 import { OrderHttpError } from "./orderRequest";
+import { createBuyerNoticeEvent } from "../notifications/buyerNoticeEvent";
 
 function responseForExisting(order: Record<string, any>, actorUid: string, decision: OrderDecision) {
   if (decision.action === "ACCEPT" && order.status === "PREPARING" && order.acceptedByUid === actorUid &&
@@ -53,6 +54,7 @@ export class OrderDecisionService {
           estimatedPreparationMinutes: decision.estimatedPreparationMinutes, estimatedReadyAt: readyAt, updatedAt: at });
         tx.create(historyRef, { schemaVersion: 1, fromStatus: "PENDING_CONFIRMATION", toStatus: "PREPARING",
           actorUid: actor.uid, occurredAt: at, estimatedReadyAt: readyAt });
+        createBuyerNoticeEvent(tx, this.db, {orderId, buyerUid: order.buyerUid, type:"ORDER_ACCEPTED", sequence:1, at});
         return { contractVersion: 1, outcome: "ACCEPTED", status: "PREPARING",
           estimatedReadyAtEpochMillis: readyAt.toMillis() };
       }
@@ -60,6 +62,7 @@ export class OrderDecisionService {
         rejectionReason: decision.reason, rejectionExplanation: decision.explanation, updatedAt: at });
       tx.create(historyRef, { schemaVersion: 1, fromStatus: "PENDING_CONFIRMATION", toStatus: "REJECTED",
         actorUid: actor.uid, occurredAt: at, reason: decision.reason, explanation: decision.explanation });
+      createBuyerNoticeEvent(tx, this.db, {orderId, buyerUid: order.buyerUid, type:"ORDER_REJECTED", sequence:1, at});
       return { contractVersion: 1, outcome: "REJECTED", status: "REJECTED" };
     });
   }

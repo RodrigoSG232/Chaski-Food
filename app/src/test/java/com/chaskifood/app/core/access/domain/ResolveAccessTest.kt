@@ -35,12 +35,12 @@ class ResolveAccessTest {
 
     @Test
     fun `propietario suspendido sin listado ni gestion`() {
-        val r = result(facts(owner(AccessBusinessStatus.SUSPENDED), stores = listOf(store()))); assertEquals(CommercialExperience.OWNER, r.experience); assertTrue(allows(r, AccessCapability.READ_OWN_BUSINESS_STATUS, AccessScope.Business("business"))); assertEquals(2, r.capabilities.grants.size)
+        val r = result(facts(owner(AccessBusinessStatus.SUSPENDED), stores = listOf(store()))); assertEquals(CommercialExperience.OWNER, r.experience); assertTrue(allows(r, AccessCapability.READ_OWN_BUSINESS_STATUS, AccessScope.Business("business"))); assertTrue(allows(r, AccessCapability.READ_BUSINESS_METRICS, AccessScope.Business("business"))); assertEquals(3, r.capabilities.grants.size)
     }
 
     @Test
     fun `responsable de un local`() {
-        val r = result(facts(assignments = listOf(assignment()), stores = listOf(store()))); assertEquals(CommercialExperience.MANAGER, r.experience); assertTrue(allows(r, AccessCapability.READ_STORE_ORDERS, storeScope)); assertTrue(allows(r, AccessCapability.OPERATE_HOURS_AND_OFFERS, storeScope))
+        val r = result(facts(assignments = listOf(assignment()), stores = listOf(store()))); assertEquals(CommercialExperience.MANAGER, r.experience); assertTrue(allows(r, AccessCapability.READ_STORE_ORDERS, storeScope)); assertTrue(allows(r, AccessCapability.READ_BUSINESS_METRICS, storeScope)); assertTrue(allows(r, AccessCapability.OPERATE_HOURS_AND_OFFERS, storeScope))
     }
 
     @Test

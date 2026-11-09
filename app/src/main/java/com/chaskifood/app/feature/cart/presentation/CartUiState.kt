@@ -10,6 +10,8 @@ data class CartUiState(
     val operation: CartUiOperation? = null,
     val confirmation: CartOperationResult.ConfirmationRequired? = null,
     val message: CartUiMessage? = null,
+    /** Visual metadata only; never changes the persisted purchase snapshot or its revision. */
+    val productImages: Map<String, String> = emptyMap(),
 ) {
     val cart: Cart? get() = (source as? CartState.Ready)?.cart
     val totalUnits: Long? get() = cart?.items?.sumOf { it.quantity.toLong() }

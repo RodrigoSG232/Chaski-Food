@@ -2,15 +2,18 @@ import { getMessaging, Message } from "firebase-admin/messaging";
 import { App } from "firebase-admin/app";
 import { RuntimeConfigurationError, RuntimeEnvironment } from "../runtimeEnvironment";
 export type NewOrderNotice=Readonly<{type:"NEW_ORDER";eventId:string;orderId:string;storeId:string;businessId:string;recipientUid:string}>;
+import { BuyerNoticeType } from "./buyerNoticeEvent";
+export type BuyerOrderNotice=Readonly<{type:BuyerNoticeType;eventId:string;orderId:string;recipientUid:string}>;
+export type OrderNotice=NewOrderNotice|BuyerOrderNotice;
 export type SendResult="ACCEPTED"|"INVALID_TOKEN"|"PERMANENT_FAILURE";
-export interface NoticeSender {send(token:string,data:NewOrderNotice):Promise<SendResult>}
+export interface NoticeSender {send(token:string,data:OrderNotice):Promise<SendResult>}
 /** LOCAL never contacts Messaging. Accepted means transport acceptance, not delivery. */
 export class SimulatedNoticeSender implements NoticeSender {
-  async send(_token:string,_data:NewOrderNotice):Promise<SendResult>{return "ACCEPTED";}
+  async send(_token:string,_data:OrderNotice):Promise<SendResult>{return "ACCEPTED";}
 }
 export class FirebaseNoticeSender implements NoticeSender {
   constructor(app:App,private readonly sendMessage:(message:Message)=>Promise<string> = message=>getMessaging(app).send(message)){}
-  async send(token:string,data:NewOrderNotice):Promise<SendResult>{
+  async send(token:string,data:OrderNotice):Promise<SendResult>{
     try {
       await this.sendMessage({token,data:{...data},android:{priority:"high",ttl:300000}});
       return "ACCEPTED";

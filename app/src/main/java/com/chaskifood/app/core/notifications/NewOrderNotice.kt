@@ -1,7 +1,14 @@
 package com.chaskifood.app.core.notifications
 
 /** A push is only a hint. No address, contact, products or prices are consumed from it. */
-data class NewOrderNotice(val eventId: String, val orderId: String, val businessId: String, val storeId: String, val recipientUid: String) {
+sealed interface OrderNotice {
+    val eventId: String
+    val orderId: String
+    val recipientUid: String
+}
+
+data class NewOrderNotice(override val eventId: String, override val orderId: String,
+    val businessId: String, val storeId: String, override val recipientUid: String) : OrderNotice {
     companion object {
         fun parse(data: Map<String,String>): NewOrderNotice? {
             if(data.keys != setOf("type","eventId","orderId","businessId","storeId","recipientUid") || data["type"]!="NEW_ORDER") return null

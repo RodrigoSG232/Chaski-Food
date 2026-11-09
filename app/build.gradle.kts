@@ -24,8 +24,8 @@ require(chaskiConnectedProjectId.isEmpty() || chaskiConnectedProjectId.matches(R
     "Identificador de proyecto Firebase inválido"
 }
 val chaskiCheckoutApiBaseUrl = providers.gradleProperty("chaskiCheckoutApiBaseUrl").orNull
-if (chaskiCheckoutApiBaseUrl != null) {
-    require(chaskiFirebaseMode == "CONECTADO" && chaskiConnectedProjectId == "chaski-food-9adba" &&
+if (chaskiCheckoutApiBaseUrl != null && chaskiFirebaseMode == "CONECTADO") {
+    require(chaskiConnectedProjectId == "chaski-food-9adba" &&
         chaskiCheckoutApiBaseUrl == "https://foodapi-u65lcqarqa-tl.a.run.app/api/v1/") {
         "Checkout CONECTADO requiere foodApi HTTPS y el proyecto Firebase autorizado"
     }
@@ -155,6 +155,7 @@ dependencies {
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.compose.material.icons)
+    implementation("com.github.PhilJay.MPAndroidChart:MPChartCompose:v4.0.1")
 
     // Lifecycle
     implementation(libs.androidx.lifecycle.runtime.ktx)

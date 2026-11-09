@@ -117,8 +117,8 @@ private fun PhaseTabs(selected: BuyerOrderPhase, onSelect: (BuyerOrderPhase) -> 
 }
 
 @Composable
-internal fun BuyerOrderStatusChip(status: String, known: Boolean) {
-    val ui = buyerOrderStatusUi(status, known)
+internal fun BuyerOrderStatusChip(status: String, known: Boolean, outcome: String? = null) {
+    val ui = buyerOrderStatusUi(status, known, outcome)
     Row(Modifier.clip(RoundedCornerShape(8.dp)).background(ui.background)
         .then(if (ui.outlined) Modifier.border(1.dp, ChaskiTextDisabled, RoundedCornerShape(8.dp)) else Modifier)
         .padding(horizontal = 10.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically,
@@ -134,7 +134,7 @@ private fun BuyerOrderRow(order: BuyerOrderSummary, onClick: () -> Unit) {
         .padding(ChaskiDimens.SpacingLg), verticalArrangement = Arrangement.spacedBy(ChaskiDimens.SpacingSm)) {
         Text("Pedido #${shortOrderId(order.orderId)}", style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.SemiBold, color = ChaskiTextPrimary)
-        BuyerOrderStatusChip(order.status, order.statusKnown)
+        BuyerOrderStatusChip(order.status, order.statusKnown, order.deliveryOutcome)
         Text(order.storeName, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium, color = ChaskiTextSecondary)
         Text("${formatOrderDateTime(order.createdAtEpochMillis)}  •  ${formatCartPrice(order.totalMinor)}",
             style = MaterialTheme.typography.bodySmall, color = ChaskiTextTertiary)
