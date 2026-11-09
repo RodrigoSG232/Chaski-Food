@@ -96,6 +96,7 @@ fun StoreProductConfigurationScreen(
         onSelectStore = { id -> authorize { viewModel.selectStore(id) } },
         onPriceChange = viewModel::editPrice,
         onAvailabilityChange = viewModel::editAvailability,
+        onPromotionChange = viewModel::editPromotion,
         onSaveAll = { authorize { viewModel.saveAll() } },
         onConfirmStoreSwitch = { authorize { viewModel.confirmStoreSwitch() } },
         onCancelStoreSwitch = viewModel::cancelStoreSwitch,
@@ -113,6 +114,7 @@ internal fun StoreProductConfigurationContent(
     onSelectStore: (String) -> Unit,
     onPriceChange: (String, String) -> Unit,
     onAvailabilityChange: (String, StoreProductAvailability) -> Unit,
+    onPromotionChange: (String, Boolean) -> Unit,
     onSaveAll: () -> Unit,
     onConfirmStoreSwitch: () -> Unit,
     onCancelStoreSwitch: () -> Unit,
@@ -197,12 +199,14 @@ internal fun StoreProductConfigurationContent(
                                     storeId = state.selectedStoreId,
                                     item = item,
                                     draft = drafts[item.product.id]
-                                        ?: ProductConfigurationDraft(formatProductPrice(item.price), item.availability),
+                                        ?: ProductConfigurationDraft(formatProductPrice(item.price),
+                                            item.availability, item.showInPromotions),
                                     dirty = item.product.id in pending,
                                     invalid = item.product.id in bulk.invalidProductIds,
                                     saving = bulk.saving,
                                     onPriceChange = { onPriceChange(item.product.id, it) },
                                     onAvailabilityChange = { onAvailabilityChange(item.product.id, it) },
+                                    onPromotionChange = { onPromotionChange(item.product.id, it) },
                                 )
                             }
                             item { Spacer(Modifier.height(ChaskiDimens.SpacingLg)) }
@@ -235,6 +239,7 @@ internal fun ProductConfigurationCard(
     saving: Boolean,
     onPriceChange: (String) -> Unit,
     onAvailabilityChange: (StoreProductAvailability) -> Unit,
+    onPromotionChange: (Boolean) -> Unit,
 ) {
     var expanded by rememberSaveable(storeId, item.product.id) { mutableStateOf(false) }
     val parsedPrice = remember(draft.priceInput) { parseProductPrice(draft.priceInput) }
@@ -265,6 +270,8 @@ internal fun ProductConfigurationCard(
                     Text("S/ ${parsedPrice.value?.let(::formatProductPrice) ?: draft.priceInput} · " +
                         if (draft.availability == StoreProductAvailability.AVAILABLE) "Disponible" else "Agotado",
                         style = MaterialTheme.typography.bodySmall, color = ChaskiTextMuted)
+                    if (draft.showInPromotions) Text("En promociones",
+                        style = MaterialTheme.typography.bodySmall, color = ChaskiPrimary)
                     if (dirty) Text("Cambios sin guardar", style = MaterialTheme.typography.bodySmall,
                         color = ChaskiPrimary)
                 }
@@ -306,6 +313,19 @@ internal fun ProductConfigurationCard(
                         },
                     )
                 }
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text("Mostrar en promociones", modifier = Modifier.weight(1f),
+                        fontWeight = FontWeight.Medium)
+                    Switch(
+                        checked = draft.showInPromotions,
+                        onCheckedChange = onPromotionChange,
+                        enabled = !saving,
+                        modifier = Modifier.semantics {
+                            contentDescription = "Promociones de ${item.product.name}"
+                        },
+                    )
+                }
             }
         }
     }
@@ -340,6 +360,7 @@ private fun businessStatusMessage(status: BusinessStatus): String = when (status
 @Composable private fun StoreProductConfigurationPreview() {
     com.chaskifood.app.ui.theme.ChaskiTheme {
         StoreProductConfigurationContent(StoreProductConfigurationUiState.NoStores, emptyMap(),
-            ProductConfigurationBulkState(), {}, {}, {}, { _, _ -> }, { _, _ -> }, {}, {}, {})
+            ProductConfigurationBulkState(), {}, {}, {}, { _, _ -> }, { _, _ -> },
+            { _, _ -> }, {}, {}, {})
     }
 }

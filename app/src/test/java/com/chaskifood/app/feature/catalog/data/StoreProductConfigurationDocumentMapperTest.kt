@@ -16,11 +16,12 @@ class StoreProductConfigurationDocumentMapperTest {
         val fields = StoreProductConfigurationDocumentMapper.toFields(configuration(), "user-1")
 
         assertEquals(
-            setOf("businessId", "storeId", "productId", "price", "availability", "updatedAt", "updatedBy"),
+            setOf("businessId", "storeId", "productId", "price", "availability", "updatedAt", "updatedBy", "showInPromotions"),
             fields.keys,
         )
         assertEquals(12.50, fields["price"])
         assertEquals("OUT_OF_STOCK", fields["availability"])
+        assertEquals(false, fields["showInPromotions"])
         assertEquals(FieldValue.serverTimestamp(), fields["updatedAt"])
         assertEquals("user-1", fields["updatedBy"])
     }
@@ -30,6 +31,8 @@ class StoreProductConfigurationDocumentMapperTest {
         val configuration = StoreProductConfigurationDocumentMapper.fromDocument("store-1_product-1", document())
 
         assertEquals(configuration(), configuration)
+        assertEquals(true, StoreProductConfigurationDocumentMapper.fromDocument(
+            "store-1_product-1", document() + ("showInPromotions" to true)).showInPromotions)
     }
 
     @Test
@@ -47,6 +50,7 @@ class StoreProductConfigurationDocumentMapperTest {
             document() + ("updatedBy" to ""),
             document() + ("updatedAt" to null),
             document() + ("extra" to true),
+            document() + ("showInPromotions" to "yes"),
         )
 
         invalidDocuments.forEach { invalid ->

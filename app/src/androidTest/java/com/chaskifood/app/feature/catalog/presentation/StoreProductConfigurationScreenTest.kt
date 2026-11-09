@@ -33,7 +33,8 @@ class StoreProductConfigurationScreenTest {
             ChaskiTheme {
                 ProductConfigurationCard("store-1", item, draft, dirty = true, invalid = false, saving = false,
                     onPriceChange = { draft = draft.copy(priceInput = it) },
-                    onAvailabilityChange = { draft = draft.copy(availability = it) })
+                    onAvailabilityChange = { draft = draft.copy(availability = it) },
+                    onPromotionChange = { draft = draft.copy(showInPromotions = it) })
             }
         }
         compose.onNodeWithContentDescription("Expandir Ají de gallina").performClick()

@@ -16,9 +16,12 @@ internal object StoreProductConfigurationDocumentMapper {
         "updatedAt",
         "updatedBy",
     )
+    private const val promotionField = "showInPromotions"
 
     fun fromDocument(id: String, data: Map<String, Any?>): StoreProductConfiguration {
-        require(data.keys == fields) { "La configuración del producto tiene campos inválidos." }
+        require(data.keys == fields || data.keys == fields + promotionField) {
+            "La configuración del producto tiene campos inválidos."
+        }
         val configuration = StoreProductConfiguration(
             businessId = data["businessId"] as? String ?: invalidDocument(),
             storeId = data["storeId"] as? String ?: invalidDocument(),
@@ -27,6 +30,9 @@ internal object StoreProductConfigurationDocumentMapper {
             availability = (data["availability"] as? String)?.let {
                 runCatching { StoreProductAvailability.valueOf(it) }.getOrNull()
             } ?: invalidDocument(),
+            showInPromotions = if (promotionField in data) {
+                data[promotionField] as? Boolean ?: invalidDocument()
+            } else false,
         )
         require(configuration.id == id && configuration.isValid()) {
             "La configuración del producto no es válida."
@@ -49,6 +55,7 @@ internal object StoreProductConfigurationDocumentMapper {
             "productId" to configuration.productId,
             "price" to configuration.price,
             "availability" to configuration.availability.name,
+            promotionField to configuration.showInPromotions,
             "updatedAt" to FieldValue.serverTimestamp(),
             "updatedBy" to updatedBy,
         )

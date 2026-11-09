@@ -47,6 +47,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import com.chaskifood.app.feature.search.domain.StoreOfferProduct
 import com.chaskifood.app.feature.search.domain.StoreOffer
+import com.chaskifood.app.feature.search.domain.productBelongsToCategory
 import com.chaskifood.app.ui.components.ChaskiAppBar
 import com.chaskifood.app.ui.components.collectChaskiState
 import com.chaskifood.app.ui.theme.ChaskiDimens
@@ -156,7 +157,7 @@ fun StoreOfferContent(
         if (offer.products.isEmpty()) item(key = "empty") {
             StoreOfferMessage("Este local no tiene productos disponibles por ahora.")
         } else visibleCategories.forEach { category ->
-            val categoryProducts = offer.products.filter { it.categoryId == category.id }
+            val categoryProducts = offer.products.filter { offer.productBelongsToCategory(it, category.id) }
             if (categoryProducts.isNotEmpty()) {
                 item(key = "title-${category.id}") {
                     Text(

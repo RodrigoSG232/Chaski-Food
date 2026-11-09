@@ -43,6 +43,7 @@ data class StoreProductItem(
     val availability: StoreProductAvailability
         get() = configuration?.availability ?: StoreProductAvailability.OUT_OF_STOCK
     val isConfigured: Boolean get() = configuration != null
+    val showInPromotions: Boolean get() = configuration?.showInPromotions ?: false
 }
 
 sealed interface StoreProductConfigurationUiState {
@@ -80,6 +81,7 @@ data class ProductConfigurationOperationState(
 data class ProductConfigurationDraft(
     val priceInput: String,
     val availability: StoreProductAvailability,
+    val showInPromotions: Boolean = false,
 )
 
 data class ProductConfigurationBulkState(
@@ -96,7 +98,8 @@ internal fun pendingProductIds(
 ): Set<String> = products.mapNotNull { item ->
     val draft = drafts[item.product.id] ?: return@mapNotNull null
     val price = parseProductPrice(draft.priceInput).value
-    item.product.id.takeIf { !item.isConfigured || price != item.price || draft.availability != item.availability }
+    item.product.id.takeIf { !item.isConfigured || price != item.price ||
+        draft.availability != item.availability || draft.showInPromotions != item.showInPromotions }
 }.toSet()
 
 @HiltViewModel
@@ -174,11 +177,15 @@ class StoreProductConfigurationViewModel @Inject constructor(
     fun editAvailability(productId: String, availability: StoreProductAvailability) =
         editDraft(productId) { it.copy(availability = availability) }
 
+    fun editPromotion(productId: String, showInPromotions: Boolean) =
+        editDraft(productId) { it.copy(showInPromotions = showInPromotions) }
+
     private fun editDraft(productId: String, change: (ProductConfigurationDraft) -> ProductConfigurationDraft) {
         if (_bulk.value.saving) return
         val state = _uiState.value as? StoreProductConfigurationUiState.Success ?: return
         val item = state.products.singleOrNull { it.product.id == productId } ?: return
-        val current = _drafts.value[productId] ?: ProductConfigurationDraft(formatProductPrice(item.price), item.availability)
+        val current = _drafts.value[productId] ?: ProductConfigurationDraft(
+            formatProductPrice(item.price), item.availability, item.showInPromotions)
         _drafts.value += productId to change(current)
         _bulk.value = _bulk.value.copy(error = null, message = null,
             invalidProductIds = _bulk.value.invalidProductIds - productId)
@@ -199,7 +206,8 @@ class StoreProductConfigurationViewModel @Inject constructor(
         val changes = state.products.filter { it.product.id in changedIds }.map { item ->
             StoreProductConfiguration(store.businessId, store.id, item.product.id,
                 parseProductPrice(_drafts.value.getValue(item.product.id).priceInput).value!!,
-                _drafts.value.getValue(item.product.id).availability)
+                _drafts.value.getValue(item.product.id).availability,
+                _drafts.value.getValue(item.product.id).showInPromotions)
         }
         _bulk.value = _bulk.value.copy(saving = true, error = null, message = null, invalidProductIds = emptySet())
         viewModelScope.launch {
@@ -261,6 +269,7 @@ class StoreProductConfigurationViewModel @Inject constructor(
             productId = item.product.id,
             price = price,
             availability = availability,
+            showInPromotions = item.showInPromotions,
         )
         val key = configuration.id
         if (_operations.value[key]?.saving == true) return

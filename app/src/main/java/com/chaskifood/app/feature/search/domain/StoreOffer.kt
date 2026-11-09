@@ -15,6 +15,9 @@ data class OfferCategory(
     val displayOrder: Int,
 )
 
+const val PROMOTIONS_CATEGORY_ID = "__promotions__"
+private const val PROMOTIONS_CATEGORY_NAME = "Promociones"
+
 /** Producto comprable y contextualizado en un local concreto. */
 data class StoreOfferProduct(
     val id: String,
@@ -28,6 +31,7 @@ data class StoreOfferProduct(
     val price: Double,
     val imageUrl: String?,
     val prepTimeMinutes: Int,
+    val showInPromotions: Boolean = false,
 )
 
 data class StoreOffer(
@@ -79,17 +83,28 @@ fun buildStoreOffer(
             price = configuration.price,
             imageUrl = product.imageUrl,
             prepTimeMinutes = product.prepTimeMinutes,
+            showInPromotions = configuration.showInPromotions,
         )
     }.sortedWith(compareBy(StoreOfferProduct::categoryName, StoreOfferProduct::name))
 
     val availableCategoryIds = availableProducts.mapTo(mutableSetOf()) { it.categoryId }
+    val hasPromotions = availableProducts.any { it.showInPromotions ||
+        it.categoryName.equals(PROMOTIONS_CATEGORY_NAME, ignoreCase = true) }
     val offerCategories = activeCategories.values
-        .filter { it.id in availableCategoryIds }
+        .filter { it.id in availableCategoryIds && !it.name.equals(PROMOTIONS_CATEGORY_NAME, ignoreCase = true) }
         .sortedWith(compareBy(ProductCategory::displayOrder, ProductCategory::name))
         .map { OfferCategory(it.id, it.name, it.displayOrder) }
 
-    return StoreOffer(store, offerCategories, availableProducts)
+    val categoriesWithPromotions = if (hasPromotions) {
+        listOf(OfferCategory(PROMOTIONS_CATEGORY_ID, PROMOTIONS_CATEGORY_NAME, Int.MIN_VALUE)) + offerCategories
+    } else offerCategories
+    return StoreOffer(store, categoriesWithPromotions, availableProducts)
 }
+
+fun StoreOffer.productBelongsToCategory(product: StoreOfferProduct, categoryId: String): Boolean =
+    if (categoryId == PROMOTIONS_CATEGORY_ID) {
+        product.showInPromotions || product.categoryName.equals(PROMOTIONS_CATEGORY_NAME, ignoreCase = true)
+    } else product.categoryId == categoryId
 
 fun searchStoreOffers(
     offers: List<StoreOffer>,
@@ -97,18 +112,20 @@ fun searchStoreOffers(
     categoryId: String? = null,
 ): OfferSearchResults {
     val normalizedQuery = query.searchText()
-    val filteredProducts = offers.flatMap { it.products }.filter { product ->
-        (categoryId == null || product.categoryId == categoryId) &&
+    val filteredProducts = offers.flatMap { offer -> offer.products.filter { product ->
+        (categoryId == null || offer.productBelongsToCategory(product, categoryId)) &&
             (normalizedQuery.isEmpty() || listOf(
                 product.name,
                 product.description,
                 product.categoryName,
                 product.storeName,
             ).any { normalizedQuery in it.searchText() })
-    }
+    } }
     val matchingStoreIdsFromProducts = filteredProducts.mapTo(mutableSetOf()) { it.storeId }
     val filteredStores = offers.filter { offer ->
-        val supportsCategory = categoryId == null || offer.products.any { it.categoryId == categoryId }
+        val supportsCategory = categoryId == null || offer.products.any {
+            offer.productBelongsToCategory(it, categoryId)
+        }
         val directMatch = normalizedQuery.isEmpty() || listOf(
             offer.store.name,
             offer.store.businessName,

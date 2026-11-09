@@ -383,7 +383,12 @@ service cloud.firestore {
         /databases/$(database)/documents/products/$(data.productId);
 
       return data.keys().hasAll(fields)
-        && data.keys().hasOnly(fields)
+        && data.keys().hasOnly([
+          'businessId', 'storeId', 'productId', 'price', 'availability',
+          'updatedAt', 'updatedBy', 'showInPromotions'
+        ])
+        && (!data.keys().hasAny(['showInPromotions'])
+          || data.showInPromotions is bool)
         && data.businessId is string
         && validId(data.businessId)
         && data.storeId is string
@@ -654,6 +659,7 @@ service cloud.firestore {
           .hasOnly([
             'price',
             'availability',
+            'showInPromotions',
             'updatedAt',
             'updatedBy'
           ])

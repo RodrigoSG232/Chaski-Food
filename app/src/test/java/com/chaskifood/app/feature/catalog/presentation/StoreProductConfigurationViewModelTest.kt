@@ -181,6 +181,22 @@ class StoreProductConfigurationViewModelTest {
     }
 
     @Test
+    fun `promocion queda pendiente y se guarda solo para el local elegido`() = runTest {
+        prepareSuccessfulContent()
+        val model = model()
+        runCurrent()
+
+        model.editPromotion("product-1", true)
+        assertEquals(setOf("product-1"), model.drafts.value.keys)
+        model.saveAll()
+        runCurrent()
+
+        assertTrue(configurations.saved.single().showInPromotions)
+        assertEquals("store-1", configurations.saved.single().storeId)
+        assertTrue(model.drafts.value.isEmpty())
+    }
+
+    @Test
     fun `local suspendido no intenta consultar ni configurar productos`() = runTest {
         stores.owned.value = ApiResult.Success(listOf(BusinessStore(
             id = "store-1",

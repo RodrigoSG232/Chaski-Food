@@ -95,6 +95,21 @@ class StoreOfferTest {
         assertEquals(listOf("store-1"), results.stores.map { it.id })
     }
 
+    @Test
+    fun `producto promocionado aparece en su categoria y promociones sin duplicarse en la oferta`() {
+        val offer = offer(
+            categories = listOf(category(name = "Bebidas"), category(id = "category-promo", name = "Promociones")),
+            configurations = listOf(configuration(showInPromotions = true)),
+        )
+
+        assertEquals(1, offer.products.size)
+        assertEquals(listOf("Promociones", "Bebidas"), offer.categories.map { it.name })
+        assertEquals("product-1", offer.products.single { offer.productBelongsToCategory(it, "category-1") }.id)
+        assertEquals("product-1", offer.products.single { offer.productBelongsToCategory(it, PROMOTIONS_CATEGORY_ID) }.id)
+        assertEquals(listOf("product-1"), searchStoreOffers(listOf(offer), "", PROMOTIONS_CATEGORY_ID)
+            .products.map { it.id })
+    }
+
     private fun offer(
         categories: List<ProductCategory> = listOf(category()),
         products: List<Product> = listOf(product()),
@@ -143,5 +158,6 @@ class StoreOfferTest {
         productId: String = "product-1",
         price: Double = 18.50,
         availability: StoreProductAvailability = StoreProductAvailability.AVAILABLE,
-    ) = StoreProductConfiguration(businessId, storeId, productId, price, availability)
+        showInPromotions: Boolean = false,
+    ) = StoreProductConfiguration(businessId, storeId, productId, price, availability, showInPromotions)
 }

@@ -7,7 +7,7 @@ enum class StoreProductAvailability {
 }
 
 /**
- * Sobrescribe el precio y la disponibilidad del producto para un único local.
+ * Sobrescribe el precio, la disponibilidad y la visibilidad promocional para un único local.
  *
  * La pertenencia del negocio, local y producto se comprobará en la implementación
  * del repositorio antes de persistir cambios.
@@ -18,6 +18,7 @@ data class StoreProductConfiguration(
     val productId: String,
     val price: Double,
     val availability: StoreProductAvailability = StoreProductAvailability.AVAILABLE,
+    val showInPromotions: Boolean = false,
 ) {
     val id: String
         get() = storeProductConfigurationId(storeId, productId)
