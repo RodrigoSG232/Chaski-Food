@@ -112,4 +112,27 @@ class BuyerOrdersViewModelTest {
         assertTrue(vm.state.value.notFound); assertEquals(listOf(id(5)), repo.ids)
         repo.session.value = null; runCurrent(); assertFalse(vm.state.value.signedIn); assertNull(vm.state.value.detail)
     }
+
+    @Test fun openingNotificationStartsFreshDetailReadEvenDuringAnOlderRead() = runTest {
+        val gate = CompletableDeferred<Unit>()
+        val repo = object : BuyerOrdersRepository {
+            val session = MutableStateFlow<BuyerOrdersSession?>(buyer)
+            var reads = 0
+            override fun observeSession() = session
+            override fun isCurrent(session: BuyerOrdersSession) = this.session.value == session
+            override suspend fun page(session: BuyerOrdersSession, phase: BuyerOrderPhase, cursor: String?) = BuyerOrdersResult.Unavailable
+            override suspend fun detail(session: BuyerOrdersSession, orderId: String): BuyerOrderDetailResult {
+                reads++
+                if (reads == 2) withContext(NonCancellable) { gate.await() }
+                return BuyerOrderDetailResult.NotFound
+            }
+            override suspend fun cancel(session: BuyerOrdersSession, orderId: String) = BuyerOrderCancellationResult.Unavailable
+        }
+        val vm = BuyerOrderDetailViewModel(repo, SavedStateHandle(mapOf("orderId" to id(7))))
+        runCurrent(); assertEquals(1, repo.reads)
+        vm.refresh(); runCurrent(); assertEquals(2, repo.reads)
+        vm.refreshFromNotification(); runCurrent(); assertEquals(3, repo.reads)
+        gate.complete(Unit); runCurrent()
+        assertTrue(vm.state.value.notFound)
+    }
 }

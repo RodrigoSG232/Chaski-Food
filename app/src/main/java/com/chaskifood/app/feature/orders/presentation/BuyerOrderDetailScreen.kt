@@ -42,10 +42,14 @@ import com.chaskifood.app.ui.theme.*
 
 /** Detalle histórico de una compra propia (HU17). Se actualiza al abrir, al volver a la app y al deslizar hacia abajo. */
 @Composable
-fun BuyerOrderDetailScreen(onBack: () -> Unit, viewModel: BuyerOrderDetailViewModel = hiltViewModel(),
+fun BuyerOrderDetailScreen(onBack: () -> Unit, notificationRefresh: String? = null,
+    viewModel: BuyerOrderDetailViewModel = hiltViewModel(),
     trackingModel: BuyerTrackingViewModel = hiltViewModel()) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val trackingState by trackingModel.state.collectAsStateWithLifecycle()
+    LaunchedEffect(notificationRefresh) {
+        if (notificationRefresh != null) { viewModel.refreshFromNotification(); trackingModel.refresh() }
+    }
     var refreshedTrackingStatus by remember { mutableStateOf<String?>(null) }
     LifecycleResumeEffect(viewModel, trackingModel) {
         viewModel.refresh(); trackingModel.resume()

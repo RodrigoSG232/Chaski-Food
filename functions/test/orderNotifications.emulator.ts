@@ -173,34 +173,36 @@ test("device HTTP uses authenticated UID only, refuses body UID and denies direc
   assert.equal((await db.doc(`notification_devices/${digest(token)}`).get()).data()?.enabled,false);
 });
 
-test("device registration requires a current store manager; owner, buyer, admin, pending and revoked cannot store tokens",async()=>{
+test("device registration accepts authenticated buyers and managers, including former managers",async()=>{
   const f=await fixture(),pending=await fixture(false),suspended=await fixture();
   const put=(a:Actor,id=randomUUID())=>fetch(`http://127.0.0.1:5001/${project}/southamerica-west1/foodApi/api/v1/devices/${id}`,{method:"PUT",
     headers:{"Content-Type":"application/json",Authorization:`Bearer ${a.token}`},body:JSON.stringify({token:`fictional-${randomUUID()}`,bindingVersion:1,platform:"ANDROID"})});
-  for(const denied of [f.owner,f.buyer,admin,pending.manager]){
-    const response=await put(denied);assert.equal(response.status,403);assert.deepEqual(await response.json(),{error:"DEVICE_NOT_ELIGIBLE"});
+  for(const account of [f.owner,f.buyer,admin,pending.manager]){
+    const response=await put(account);assert.equal(response.status,204);
   }
-  // The shared admin already owns a device seeded directly by an earlier registry test; only fresh accounts are counted.
-  assert.equal((await db.collection("notification_devices").where("uid","in",[f.owner.uid,f.buyer.uid,pending.manager.uid]).get()).size,0);
-  // Suspension keeps the assigned manager's reading rights (DEC-HU16-05), so registration remains possible.
+  assert.equal((await db.collection("notification_devices").where("uid","in",[f.owner.uid,f.buyer.uid,pending.manager.uid]).get()).size,3);
   await db.doc(`business_requests/${suspended.owner.uid}`).update({status:"SUSPENDED"});
   assert.equal((await put(suspended.manager)).status,204);
   assert.equal((await put(f.manager)).status,204);
-  await revoke(f);const id=randomUUID();assert.equal((await put(f.manager,id)).status,403);
+  await revoke(f);const id=randomUUID();assert.equal((await put(f.manager,id)).status,204);
   assert.equal((await fetch(`http://127.0.0.1:5001/${project}/southamerica-west1/foodApi/api/v1/devices/${id}?bindingVersion=2`,
     {method:"DELETE",headers:{Authorization:`Bearer ${f.manager.token}`}})).status,204);
 });
-test("CLOUD handler policy registers devices through the same HU34 eligibility with demo SDK adapters",async()=>{
+test("CLOUD handler registers the authenticated UID for buyers and managers with demo SDK adapters",async()=>{
   const {connectedHttp}=await import("./connectedHandler.fixture");
   const send=connectedHttp(app),f=await fixture(),id=randomUUID(),token=`fictional-${randomUUID()}`;
   const body={token,bindingVersion:1,platform:"ANDROID"};
-  assert.equal((await send(f.buyer.token,`/devices/${id}`,body,"PUT")).status,403);
-  assert.equal((await send(f.owner.token,`/devices/${id}`,body,"PUT")).status,403);
+  assert.equal((await send(f.buyer.token,`/devices/${id}`,body,"PUT")).status,204);
+  assert.equal((await db.doc(`notification_devices/${digest(token)}`).get()).data()?.uid,f.buyer.uid);
+  const ownerId=randomUUID(),ownerToken=`fictional-${randomUUID()}`;
+  assert.equal((await send(f.owner.token,`/devices/${ownerId}`,{token:ownerToken,bindingVersion:1,platform:"ANDROID"},"PUT")).status,204);
+  assert.equal((await db.doc(`notification_devices/${digest(ownerToken)}`).get()).data()?.uid,f.owner.uid);
   assert.equal((await send(undefined,`/devices/${id}`,body,"PUT")).status,401);
-  assert.equal((await send(f.manager.token,`/devices/${id}`,body,"PUT")).status,204);
-  assert.equal((await db.doc(`notification_devices/${digest(token)}`).get()).data()?.uid,f.manager.uid);
-  assert.equal((await send(f.manager.token,`/devices/${id}?bindingVersion=2`,undefined,"DELETE")).status,204);
-  assert.equal((await db.doc(`notification_devices/${digest(token)}`).get()).data()?.enabled,false);
+  const managerId=randomUUID(),managerToken=`fictional-${randomUUID()}`;
+  assert.equal((await send(f.manager.token,`/devices/${managerId}`,{token:managerToken,bindingVersion:1,platform:"ANDROID"},"PUT")).status,204);
+  assert.equal((await db.doc(`notification_devices/${digest(managerToken)}`).get()).data()?.uid,f.manager.uid);
+  assert.equal((await send(f.manager.token,`/devices/${managerId}?bindingVersion=2`,undefined,"DELETE")).status,204);
+  assert.equal((await db.doc(`notification_devices/${digest(managerToken)}`).get()).data()?.enabled,false);
 });
 test("authorization is checked again between devices when assignment changes mid-attempt",async()=>{
   const f=await fixture(),e=await event(f),sender=new Sender();await device(f.manager.uid);await device(f.manager.uid);

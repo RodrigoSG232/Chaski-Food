@@ -38,27 +38,41 @@ class NotificationCoordinator @Inject internal constructor(@ApplicationContext p
     @Volatile private var registered:com.chaskifood.app.feature.cart.data.CartSession?=null
     private val tokenEpoch=MutableStateFlow(0)
     private var previousSession=sessions.current()
-    private val mutablePending=MutableStateFlow<NewOrderNotice?>(null)
-    val pending:StateFlow<NewOrderNotice?> = mutablePending.asStateFlow()
+    private val mutablePending=MutableStateFlow<OrderNotice?>(null)
+    val pending:StateFlow<OrderNotice?> = mutablePending.asStateFlow()
     private var pendingSession:com.chaskifood.app.feature.cart.data.CartSession?=null
     fun open(intent:Intent?){
-        if(intent?.action!="NEW_ORDER")return
-        val data=listOf("eventId","orderId","businessId","storeId","recipientUid").associateWith {intent.getStringExtra(it).orEmpty()} + ("type" to "NEW_ORDER")
-        val notice=NewOrderNotice.parse(data)?:return
+        val notice:OrderNotice=when(intent?.action){
+            "NEW_ORDER" -> {
+                val data=listOf("eventId","orderId","businessId","storeId","recipientUid")
+                    .associateWith {intent.getStringExtra(it).orEmpty()} + ("type" to "NEW_ORDER")
+                NewOrderNotice.parse(data)
+            }
+            "BUYER_ORDER_NOTICE" -> {
+                val data=listOf("eventId","orderId","recipientUid","type")
+                    .associateWith {intent.getStringExtra(it).orEmpty()}
+                BuyerOrderNotice.parse(data)
+            }
+            else -> null
+        }?:return
         val session=sessions.current()
         if(session.uid!=notice.recipientUid)return
         pendingSession=session;mutablePending.value=notice
     }
-    fun takeAuthorized():NewOrderNotice? {
+    fun takeAuthorized():OrderNotice? {
         val notice=mutablePending.value?:return null
         if(sessions.current()!=pendingSession){clearPending();return null}
-        var accepted:NewOrderNotice?=null
+        var accepted:OrderNotice?=null
         access.runIfCurrent {state->
             // A stale RESOLVED emission must not discard a hint while current facts are being refreshed.
             if(state.phase==AccessContextPhase.RESOLVED){
                 val resolved=state.resolution as? AccessResolution.Resolved
-                if(resolved?.identity?.session?.uid==notice.recipientUid &&
-                    resolved.capabilities.allows(AccessCapability.READ_STORE_ORDERS,AccessScope.Store(notice.businessId,notice.storeId)))accepted=notice
+                if(resolved?.identity?.session?.uid==notice.recipientUid && when(notice){
+                    is NewOrderNotice -> resolved.capabilities.allows(AccessCapability.READ_STORE_ORDERS,
+                        AccessScope.Store(notice.businessId,notice.storeId))
+                    is BuyerOrderNotice -> resolved.capabilities.allows(AccessCapability.READ_PERSONAL_PURCHASES,
+                        AccessScope.Account(notice.recipientUid))
+                })accepted=notice
                 clearPending()
             }
         }
@@ -71,11 +85,12 @@ class NotificationCoordinator @Inject internal constructor(@ApplicationContext p
         if(started)return
         started=true
         if(Build.VERSION.SDK_INT>=26)manager.createNotificationChannel(NotificationChannel(CHANNEL,"Nuevos pedidos",NotificationManager.IMPORTANCE_DEFAULT))
+        if(Build.VERSION.SDK_INT>=26)manager.createNotificationChannel(NotificationChannel(BUYER_CHANNEL,"Actualizaciones de pedidos",NotificationManager.IMPORTANCE_DEFAULT))
         scope.launch {sessions.sessions.collectLatest { session->
             if(previousSession!=session){manager.cancelAll();dedup.clear();if(pendingSession!=session)clearPending()}
             previousSession=session
         }}
-        // Only a resolved store manager binds this installation; the server checks eligibility again (403) and every send.
+        // Any resolved account can receive own-order hints; store scope is checked again for manager sends.
         scope.launch {combine(sessions.sessions,access.states,tokenEpoch){session,state,_->session to state}.collectLatest {(session,state)->
             if(registered!=session)registered=null
             val eligible=NoticePolicy.canRegister(session.uid,state)
@@ -86,7 +101,7 @@ class NotificationCoordinator @Inject internal constructor(@ApplicationContext p
             }
         }}
     }
-    /** FirebaseMessagingService.onNewToken: rebind the rotated token for the current eligible session only. */
+    /** FirebaseMessagingService.onNewToken: rebind the rotated token for the current resolved session only. */
     fun tokenChanged(@Suppress("UNUSED_PARAMETER") token:String){
         // LOCAL never provisions real tokens; the value is read again through PushTokenSource, never stored here.
         if(BuildConfig.FIREBASE_MODE=="LOCAL")return
@@ -123,17 +138,29 @@ class NotificationCoordinator @Inject internal constructor(@ApplicationContext p
      * The persisted Firebase Auth UID must match the recipient; opening the hint reauthorizes against the HTTP inbox.
      * Push delivery is never guaranteed, so nothing here is required for orders to remain available. */
     fun receive(data:Map<String,String>):Boolean {
-        val notice=NewOrderNotice.parse(data)?:return false
-        if(!NoticePolicy.canShow(sessions.current().uid,notice,access.currentState()))return false
+        val notice:OrderNotice=NewOrderNotice.parse(data)?:BuyerOrderNotice.parse(data)?:return false
+        val visible=when(notice){
+            is NewOrderNotice -> NoticePolicy.canShow(sessions.current().uid,notice,access.currentState())
+            is BuyerOrderNotice -> NoticePolicy.canShowBuyer(sessions.current().uid,notice,access.currentState())
+        }
+        if(!visible)return false
         if(Build.VERSION.SDK_INT>=33 && ContextCompat.checkSelfPermission(app,android.Manifest.permission.POST_NOTIFICATIONS)!=PackageManager.PERMISSION_GRANTED)return false
         if(!dedup.accept(notice.recipientUid,notice.eventId))return false
-        val intent=Intent(app,MainActivity::class.java).setAction("NEW_ORDER").setData(android.net.Uri.parse("chaski-notice://${notice.eventId}"))
-            .putExtra("eventId",notice.eventId).putExtra("orderId",notice.orderId).putExtra("businessId",notice.businessId)
-            .putExtra("storeId",notice.storeId).putExtra("recipientUid",notice.recipientUid).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+        val intent=Intent(app,MainActivity::class.java)
+            .setAction(if(notice is NewOrderNotice)"NEW_ORDER" else "BUYER_ORDER_NOTICE")
+            .setData(android.net.Uri.parse("chaski-notice://${notice.eventId}"))
+            .putExtra("eventId",notice.eventId).putExtra("orderId",notice.orderId)
+            .putExtra("recipientUid",notice.recipientUid)
+            .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+        if(notice is NewOrderNotice){intent.putExtra("businessId",notice.businessId).putExtra("storeId",notice.storeId)}
+        if(notice is BuyerOrderNotice)intent.putExtra("type",notice.type.name)
         val pending=PendingIntent.getActivity(app,notice.eventId.hashCode(),intent,PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-        manager.notify(notice.eventId,0,NotificationCompat.Builder(app,CHANNEL).setSmallIcon(R.drawable.ic_launcher_foreground)
-            .setContentTitle("Nuevo pedido").setContentText("Consulta la bandeja del establecimiento.").setAutoCancel(true).setContentIntent(pending).build())
+        val channel=if(notice is BuyerOrderNotice)BUYER_CHANNEL else CHANNEL
+        val title=if(notice is BuyerOrderNotice)notice.type.title else "Nuevo pedido"
+        val body=if(notice is BuyerOrderNotice)notice.type.body else "Consulta la bandeja del establecimiento."
+        manager.notify(notice.eventId,0,NotificationCompat.Builder(app,channel).setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setContentTitle(title).setContentText(body).setAutoCancel(true).setContentIntent(pending).build())
         return true
     }
-    companion object { const val CHANNEL="new_store_orders" }
+    companion object { const val CHANNEL="new_store_orders"; const val BUYER_CHANNEL="buyer_order_updates" }
 }

@@ -89,7 +89,7 @@ async function run() {
       await new DeviceRegistry(db).put(actors[3],deviceId,{token,platform:"ANDROID",bindingVersion:1});
       const emitted:NewOrderNotice[]=[],simulated=new SimulatedNoticeSender();
       const processor=new OrderEventProcessor(db,auth,{send:async(t,data)=>{
-        const result=await simulated.send(t,data);emitted.push(data);return result;
+        const result=await simulated.send(t,data);if(data.type!=="NEW_ORDER")throw new Error("UNEXPECTED_NOTICE");emitted.push(data);return result;
       }});
       try{
         await processor.process(eventId);await processor.process(eventId);

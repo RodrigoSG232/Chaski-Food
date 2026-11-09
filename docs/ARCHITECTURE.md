@@ -38,7 +38,7 @@ Dirección: Presentation → Domain ← Data. `core/` contiene infraestructura c
 |---|---|
 | `core/access` | **HU34**: identidad compartida (`SharedAccessIdentitySource`, `FirebaseAccessIdentityDriver`), hechos de acceso desde foodApi (`RemoteAccessFacts`), contexto con lease de 60 s (`SharedAccessContext`), resolución pura de permisos (`domain/ResolveAccess`) y puertos `PendingAssignmentBinder`/`SessionSignOut`. |
 | `core/navigation` | `ChaskiNavHost`, rutas (`ChaskiTab.kt`), guardas por permiso (`AccessNavigationGuard`, `AccessNavigationPolicy`), eventos de ciclo de vida/red (`AccessNavigationEvents`) y paneles restrictivos (`AuthorizationPanel`). |
-| `core/notifications` | **HU16** FCM: `ChaskiMessagingService`, `PushTokenSource`, `DeviceRegistrar` (registro en foodApi), `NotificationCoordinator`, `NoticePolicy`. |
+| `core/notifications` | **HU16/HU24** FCM: `ChaskiMessagingService`, `PushTokenSource`, `DeviceRegistrar`, `NotificationCoordinator`, `NoticePolicy` y contratos mínimos de avisos para responsable/comprador. |
 | `core/database`, `core/datastore`, `core/network`, `core/firebase` | Room, sesión DataStore, Retrofit/OkHttp, instancias Firebase y `FirebaseAccessControl` (claim admin y comprobaciones cliente). |
 | `feature/auth`, `profile`, `splash`, `onboarding` | Acceso (correo, Google, recuperación, vinculación de teléfono), perfil `users/{uid}`, cierre de sesión central con marca durable (`SignOutMarkerStore`). |
 | `feature/address` | Direcciones en Firestore, selección local por UID (DataStore), mapa y geocodificación. |
@@ -89,7 +89,7 @@ Estructura: `foodApiHandler.ts` (enrutado HTTP y traducción de errores) → ser
 | `POST me/orders/{orderId}/cancel` | HU18 | Cancelación idempotente del comprador únicamente desde `PENDING_CONFIRMATION`; transición e historial en una transacción. Ajeno = 404, estado no permitido = 409. |
 | `POST stores/{storeId}/orders/{orderId}/decision` | HU19 | Responsable asignado acepta con estimación (`PREPARING`) o rechaza con motivo (`REJECTED`). Compite atómicamente con HU18; suspensión bloquea aceptar, no consultar/rechazar. |
 | `PUT stores/{storeId}/orders/{orderId}/preparation-estimate` | HU20 | Responsable asignado actualiza la estimación de 5–180 minutos únicamente en `PREPARING`; registra historial e informa mediante outbox a una entrega existente. |
-| `PUT` / `DELETE devices/{installationId}` | HU16 | Registro/retirada del dispositivo FCM (PUT solo responsables con local asignado). |
+| `PUT` / `DELETE devices/{installationId}` | HU16/HU24 | Registro/retirada del dispositivo FCM para una cuenta autenticada; los destinatarios se reautorizan al enviar. |
 | `GET access/facts` | HU34 | Hechos de acceso de la cuenta (propiedad, asignaciones, locales). |
 | `GET access/revision`, `POST access/assignment-revision` | HU34 | Revisiones del índice para control de concurrencia. |
 | `POST access/operations` | HU34 | Operaciones comerciales: `REGISTER`, `RESUBMIT`, `APPROVE` (admin), `ASSIGN`, `REVOKE`, `BIND`, `PREPARE` (admin, sin UI). Idempotentes por `operationId` y auditadas. |
@@ -100,8 +100,8 @@ Estructura: `foodApiHandler.ts` (enrutado HTTP y traducción de errores) → ser
 ### Pedidos (HU16)
 `orders/orderService.ts` revalida en una transacción: identidad y compra solo como cliente, negocio/local habilitados y `OPEN`, horario, cobertura, cotización vigente del mismo UID, mínimo, productos/precios/categorías, responsable receptor y consentimiento (huella de lo que el cliente aceptó). Crea a la vez `food_orders/{id}` (estado `PENDING_CONFIRMATION`, `CASH_ON_DELIVERY`, PEN, propina separada y copias por valor de dirección y líneas), `food_orders/{id}/status_history/initial`, `order_attempts/{uid}/intents/{intentId}` (idempotencia duradera) y `order_events/{id}` (outbox). Android guarda la intención en Room **antes** de llamar y recupera con `order-attempts` si la respuesta se pierde.
 
-### Avisos (HU16)
-`newOrderNotifier` procesa cada `order_events` con lease (3 min), hasta 5 intentos con backoff (1, 5, 15, 15, 15 min) y progreso por dispositivo (`order_events/{id}/deliveries`). Reautoriza a cada responsable antes de enviar. FCM: prioridad alta, `ttl` 5 min. Estados finales: `SENT`, `NO_RECIPIENTS` (sin dispositivos; **no se reintenta**), `FAILED_PERMANENT`, `EXHAUSTED`. El aviso no es la fuente de verdad: **la bandeja sí**. Cerrar sesión retira el dispositivo (`DELETE devices`).
+### Avisos (HU16/HU24)
+`newOrderNotifier` procesa `NEW_ORDER` para el responsable y los eventos `buyer_notice_*` para el comprador. Cada cambio relevante crea el evento dentro de la misma transacción que modifica el pedido; la entrega FCM va aparte. El procesador usa lease (3 min), hasta 5 intentos con backoff y progreso por dispositivo (`order_events/{id}/deliveries`). Reautoriza la asignación del responsable o la propiedad del pedido y el dispositivo antes de enviar. FCM: prioridad alta, `ttl` 5 min; solo incluye identificadores y tipo. Estados finales: `SENT`, `NO_RECIPIENTS` (sin dispositivos; **no se reintenta**), `FAILED_PERMANENT`, `EXHAUSTED`. Cerrar sesión retira el dispositivo (`DELETE devices`). Al abrir el aviso, Android navega a la bandeja o al detalle y consulta foodApi; el push no determina el estado vigente.
 
 ## 4. Firestore
 

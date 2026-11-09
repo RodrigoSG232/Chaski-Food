@@ -4,6 +4,7 @@ import { getAuth } from "firebase-admin/auth";
 import { getFirestore } from "firebase-admin/firestore";
 import { initializeRuntimeApp, resolveRuntimeEnvironment, RuntimeConfigurationError } from "../runtimeEnvironment";
 import { OrderEventProcessor } from "./orderEventProcessor";
+import { BuyerOrderEventProcessor } from "./buyerOrderEventProcessor";
 import { noticeSenderForRuntime } from "./fcmSender";
 
 /** Never acknowledge a recoverable failure: retry:true redelivers the ORIGINAL creation event,
@@ -22,5 +23,7 @@ export const newOrderNotifier=onDocumentCreated({document:"order_events/{eventId
       throw error;
     }
     if(!sender)return;
-    await new OrderEventProcessor(getFirestore(app),getAuth(app),sender).process(event.params.eventId);
+    if(event.params.eventId.startsWith("buyer_notice_"))
+      await new BuyerOrderEventProcessor(getFirestore(app),getAuth(app),sender).process(event.params.eventId);
+    else await new OrderEventProcessor(getFirestore(app),getAuth(app),sender).process(event.params.eventId);
   });

@@ -9,6 +9,7 @@ import { CommercialAccessService } from "../src/access/commercialAccessService";
 import { CommercialIdentity } from "../src/auth/verifyBuyerToken";
 import { encodeInboxCursor } from "../src/orders/storeOrdersPolicy";
 import { StoreOrdersReader } from "../src/orders/storeOrdersReader";
+import { buyerNoticeEventId } from "../src/notifications/buyerNoticeEvent";
 process.env.FIRESTORE_EMULATOR_HOST="127.0.0.1:8089";
 process.env.FIREBASE_AUTH_EMULATOR_HOST="127.0.0.1:9099";
 const project="demo-chaski-hu15",app=initializeApp({projectId:project},"hu16-inbox-tests"),db=getFirestore(app),auth=getAuth(app);
@@ -79,6 +80,9 @@ test("manager accepts a pending order with an estimate and the transition is ide
   assert.equal(order.estimatedPreparationMinutes,25);assert.equal(order.acceptedByUid,f.manager.uid);
   const history=await db.doc(`food_orders/${id}/status_history/manager_decision`).get();
   assert.equal(history.get("fromStatus"),"PENDING_CONFIRMATION");assert.equal(history.get("toStatus"),"PREPARING");
+  const notice=await db.doc(`order_events/${buyerNoticeEventId(id,"ORDER_ACCEPTED",1)}`).get();
+  assert.equal(notice.get("buyerUid"),"PRIVATE_BUYER");assert.equal(notice.get("type"),"ORDER_ACCEPTED");
+  assert.equal((await db.collection("order_events").where("orderId","==",id).get()).size,1);
 });
 test("manager updates a preparing estimate and the preparing inbox exposes the latest value",async()=>{
   const f=await fixture(),id="ae".repeat(32);await seedOrder(f.store,f.owner.uid,id);
@@ -119,7 +123,20 @@ test("rejection records a required reason and removes the order from the pending
   assert.equal(result.status,200);assert.equal(result.body.status,"REJECTED");
   const order=(await db.doc(`food_orders/${id}`).get()).data()!;
   assert.equal(order.rejectionReason,"OTHER");assert.equal(order.rejectionExplanation,"Sin insumos frescos");
+  assert.equal((await db.doc(`order_events/${buyerNoticeEventId(id,"ORDER_REJECTED",1)}`).get()).get("buyerUid"),"PRIVATE_BUYER");
   assert.equal((await page(f.manager,f.store)).body.orders.some((row:any)=>row.orderId===id),false);
+});
+test("marking a paid order ready creates one buyer notice atomically",async()=>{
+  const f=await fixture(),id="f1".repeat(32);await seedOrder(f.store,f.owner.uid,id);
+  assert.equal((await decide(f.manager,f.store,id,{action:"ACCEPT",estimatedPreparationMinutes:20})).status,200);
+  await db.doc(`food_orders/${id}`).update({paymentStatus:"PAID",paymentSimulation:true,pickupCode:"1234"});
+  const send=connectedHttp(app),path=`/stores/${f.store}/orders/${id}/ready-for-pickup`;
+  assert.equal((await send(f.manager.token,path,{},"POST")).status,200);
+  assert.equal((await send(f.manager.token,path,{},"POST")).status,200);
+  assert.equal((await db.doc(`food_orders/${id}`).get()).get("status"),"READY_FOR_PICKUP");
+  const notice=await db.doc(`order_events/${buyerNoticeEventId(id,"ORDER_READY_FOR_PICKUP",2)}`).get();
+  assert.equal(notice.get("buyerUid"),"PRIVATE_BUYER");
+  assert.equal((await db.collection("order_events").where("orderId","==",id).get()).size,2);
 });
 test("suspension keeps read and rejection but blocks acceptance",async()=>{
   const f=await fixture(),acceptId="ce".repeat(32),rejectId="df".repeat(32);

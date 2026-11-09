@@ -50,6 +50,9 @@ Decisiones **aprobadas** por el equipo que siguen aplicando y condicionan las pr
 - Los pedidos se asocian al **local (`storeId`)**, no a una persona; un nuevo responsable autorizado ve los existentes (HU34-03).
 - Avisos con evento persistente `NEW_ORDER`, procesador independiente, reintentos acotados, dispositivos por UID, destinatarios reautorizados en cada envío y payload mínimo; el **propietario no recibe** avisos de pedidos (HU16-04, HU16-21).
 - Lecturas por HTTP autorizadas por foodApi; los documentos privados no se abren al cliente (HU16-19).
+- **HU24:** la aceptación, el rechazo y el pedido listo crean un evento de aviso al comprador en la misma transacción que cambia el pedido. Los eventos válidos de Rider crean los avisos de asignación, recojo y resultado de entrega. Cada evento conserva un ID estable para reintentos e idempotencia.
+- El dispositivo se registra para cualquier cuenta autenticada con acceso a sus compras; al enviar, el backend revalida la titularidad del pedido o la asignación del responsable. El push lleva solo tipo de evento, ID de evento, ID de pedido y UID destinatario. Un aviso antiguo puede llegar después de un cambio posterior: abrirlo siempre pide el pedido vigente a foodApi.
+- Los avisos son de mejor esfuerzo: FCM puede retrasarlos, duplicarlos o perderlos. `NO_RECIPIENTS` es terminal y no existe replay operativo aprobado; el detalle y la bandeja siguen disponibles por HTTP.
 
 ## Roles y permisos
 - **Una experiencia comercial por cuenta**: cliente, propietario o responsable. Sin autorizaciones comerciales se es cliente; la aprobación del negocio convierte en propietario (HU34-02, HU34-04).

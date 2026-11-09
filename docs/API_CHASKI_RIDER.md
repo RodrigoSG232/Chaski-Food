@@ -1,6 +1,6 @@
 # API Chaski Food → Chaski Rider — v1
 
-Estado del código: HU22 integrada en `main` (`722764f`); extensión HU23 en `feat/hu23-seguimiento`. Despliegue y autorización de la identidad Rider no verificados en esta revisión. La ampliación opcional de ETA propuesta aquí aún requiere confirmación del equipo Rider.
+Estado verificado el 08-11-2026: `riderApi` está ACTIVE en `chaski-food-9adba` (`southamerica-west1`) y el servicio Cloud Run `riderapi` tiene `roles/run.invoker` para la cuenta de servicio facilitada por Rider. El servicio no es público (petición anónima: 403). Falta una invocación autenticada desde el backend Rider y una prueba con un pedido listo real. La ampliación opcional de ETA aún requiere confirmación del equipo Rider.
 
 ## Seguridad
 
@@ -177,5 +177,5 @@ pnpm --dir functions exec firebase deploy \
   --non-interactive
 ```
 
-Después del despliegue se debe otorgar `roles/run.invoker` exclusivamente a la cuenta de servicio que entregue el equipo Rider. Hasta recibir ese correo, la función debe permanecer privada.
+El rol `roles/run.invoker` se otorgó a la cuenta facilitada por Rider únicamente sobre `riderapi`, y se comprobó con `gcloud run services get-iam-policy`. La URL del servicio obtenida con `gcloud run services describe` debe usarse como audiencia OIDC y como base de las rutas `/integration/v1/...`. El siguiente paso es una llamada desde el backend Rider; no se necesita incorporar credenciales de servicio en Android.
 

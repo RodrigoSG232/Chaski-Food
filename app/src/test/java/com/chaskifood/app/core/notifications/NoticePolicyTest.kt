@@ -24,17 +24,19 @@ class NoticePolicyTest {
     }
     private val reads = AccessGrant(AccessCapability.READ_STORE_ORDERS, AccessScope.Store("business", "store"))
     private val readsOther = AccessGrant(AccessCapability.READ_STORE_ORDERS, AccessScope.Store("business", "other"))
+    private val personal = AccessGrant(AccessCapability.READ_PERSONAL_PURCHASES, AccessScope.Account("manager"))
 
-    @Test fun onlyResolvedStoreManagersRegisterTheirOwnUid() {
-        assertTrue(NoticePolicy.canRegister("manager", state(AccessContextPhase.RESOLVED, reads)))
-        assertTrue(NoticePolicy.canRegister("manager", state(AccessContextPhase.RESOLVED, readsOther)))
+    @Test fun resolvedAccountsWithPersonalPurchasesRegisterTheirOwnUid() {
+        assertTrue(NoticePolicy.canRegister("manager", state(AccessContextPhase.RESOLVED, personal)))
+        assertTrue(NoticePolicy.canRegister("manager", state(AccessContextPhase.RESOLVED, personal, reads)))
+        assertFalse(NoticePolicy.canRegister("manager", state(AccessContextPhase.RESOLVED, readsOther)))
         assertFalse(NoticePolicy.canRegister("manager", state(AccessContextPhase.RESOLVED)))
         assertFalse(NoticePolicy.canRegister("manager", state(AccessContextPhase.RESOLVED,
             AccessGrant(AccessCapability.MANAGE_BUSINESS, AccessScope.Business("business")))))
-        assertFalse(NoticePolicy.canRegister("other", state(AccessContextPhase.RESOLVED, reads)))
-        assertFalse(NoticePolicy.canRegister(null, state(AccessContextPhase.RESOLVED, reads)))
+        assertFalse(NoticePolicy.canRegister("other", state(AccessContextPhase.RESOLVED, personal)))
+        assertFalse(NoticePolicy.canRegister(null, state(AccessContextPhase.RESOLVED, personal)))
         for (phase in listOf(AccessContextPhase.LOADING, AccessContextPhase.ERROR, AccessContextPhase.CONFLICT,
-            AccessContextPhase.SIGNED_OUT, AccessContextPhase.UNAVAILABLE)) assertFalse(NoticePolicy.canRegister("manager", state(phase, reads)))
+            AccessContextPhase.SIGNED_OUT, AccessContextPhase.UNAVAILABLE)) assertFalse(NoticePolicy.canRegister("manager", state(phase, personal)))
     }
 
     @Test fun visibleHintRequiresMatchingLocalUidAndNoCurrentDenial() {
@@ -55,5 +57,16 @@ class NoticePolicyTest {
         assertTrue(NoticePolicy.canShow("manager", notice, state(AccessContextPhase.LOADING)))
         assertTrue(NoticePolicy.canShow("manager", notice, state(AccessContextPhase.ERROR)))
         assertFalse(NoticePolicy.canShow("other", notice, state(AccessContextPhase.LOADING)))
+    }
+
+    @Test fun buyerHintRequiresOwnUidAndPersonalPurchaseAccess() {
+        val orderId = "b".repeat(64)
+        val notice = BuyerOrderNotice("buyer_notice_${orderId}_order_accepted_1", orderId, "manager", BuyerNoticeType.ORDER_ACCEPTED)
+        assertTrue(NoticePolicy.canShowBuyer("manager", notice, state(AccessContextPhase.RESOLVED, personal)))
+        assertFalse(NoticePolicy.canShowBuyer("manager", notice, state(AccessContextPhase.RESOLVED, reads)))
+        assertFalse(NoticePolicy.canShowBuyer("other", notice, state(AccessContextPhase.RESOLVED, personal)))
+        assertTrue(NoticePolicy.canShowBuyer("manager", notice, state(AccessContextPhase.LOADING)))
+        assertFalse(NoticePolicy.canShowBuyer("manager", notice, state(AccessContextPhase.CONFLICT, personal)))
+        assertFalse(NoticePolicy.canShowBuyer("manager", notice, state(AccessContextPhase.SIGNED_OUT)))
     }
 }

@@ -48,15 +48,12 @@ export function createFoodApiHandler(dependencies: FoodApiDependencies): FoodHtt
         if(!["PUT","DELETE"].includes(request.method)){response.status(405).set("Allow","PUT, DELETE").end();return;}
         try {
           const app=dependencies.app(runtime),auth=getAuth(app),db=getFirestore(app);
-          // Only a current store manager may store a token; unbinding stays open to any authenticated UID.
-          const actor=request.method==="PUT"?await verifyCommercialIdentity(auth,request.get("authorization")):null;
-          const uid=actor?.uid??await verifyBuyerToken(auth,request.get("authorization"));
+          // Any authenticated account may bind its own token. Dispatch rechecks buyer ownership or store scope.
+          const uid=await verifyBuyerToken(auth,request.get("authorization"));
           const registry=new DeviceRegistry(db),id=decodeURIComponent(devicePath[1]);
           if(Object.keys(request.query).some(k=>request.method!=="DELETE"||k!=="bindingVersion"))throw new OrderHttpError("INVALID_REQUEST",400);
-          if(actor){
-            await db.runTransaction(tx=>new CommercialAccessService(db,auth).requireAnyStoreOrderReader(tx,actor),{readOnly:true});
-            await registry.put(uid,id,request.body);
-          }else await registry.remove(uid,id,Number(request.query.bindingVersion));
+          if(request.method==="PUT") await registry.put(uid,id,request.body);
+          else await registry.remove(uid,id,Number(request.query.bindingVersion));
           response.status(204).end();
         }catch(error){
           if(error instanceof AuthenticationRequired)response.status(401).json({error:"AUTHENTICATION_REQUIRED"});

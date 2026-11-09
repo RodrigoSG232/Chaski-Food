@@ -6,6 +6,7 @@ import { CommercialIdentity } from "../auth/verifyBuyerToken";
 import { buyerOrderId } from "./buyerOrdersPolicy";
 import { OrderHttpError } from "./orderRequest";
 import { orderCanBeMarkedReady } from "./orderReadyPolicy";
+import { createBuyerNoticeEvent } from "../notifications/buyerNoticeEvent";
 
 export class OrderReadyService {
   private readonly access: CommercialAccessService;
@@ -38,6 +39,7 @@ export class OrderReadyService {
         readyByUid: actor.uid, updatedAt: at });
       tx.create(orderRef.collection("status_history").doc("ready_for_pickup"), { schemaVersion: 1,
         fromStatus: "PREPARING", toStatus: "READY_FOR_PICKUP", actorUid: actor.uid, occurredAt: at });
+      createBuyerNoticeEvent(tx, this.db, {orderId, buyerUid: order.buyerUid, type:"ORDER_READY_FOR_PICKUP", sequence:2, at});
       if (typeof order.deliveryId === "string" && order.deliveryId.length) {
         tx.create(this.db.doc(`rider_events/ready_${orderId}`), { schemaVersion: 1, type: "ORDER_READY_FOR_PICKUP",
           orderId, deliveryId: order.deliveryId, businessId: scope.businessId, storeId,pickupCode:code,

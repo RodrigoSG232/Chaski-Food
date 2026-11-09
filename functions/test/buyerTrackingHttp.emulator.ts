@@ -9,6 +9,7 @@ import { seedBase } from "./lab/labData";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { join } from "node:path";
+import { buyerNoticeEventId } from "../src/notifications/buyerNoticeEvent";
 
 process.env.FIRESTORE_EMULATOR_HOST = "127.0.0.1:8089";
 process.env.FIREBASE_AUTH_EMULATOR_HOST = "127.0.0.1:9099";
@@ -68,10 +69,12 @@ test("acceptance, pickup, GPS/ETA, temporary loss and valid delivery through rea
   const id = await seed(), accept = hu23Event(id, "ASSIGNMENT_ACCEPTED", 1);
   assert.equal((await event(accept)).status, 200);
   assert.equal((await event(accept)).status, 200);
+  assert.equal((await db.doc("order_events/" + buyerNoticeEventId(id,"RIDER_ASSIGNED",1)).get()).get("buyerUid"),uid);
   assert.equal((await read(id)).body.stage, "ACCEPTED");
   assert.equal((await gps(id, hu23Sample(1))).status, 409);
   assert.equal((await event(hu23Event(id, "COMPLETED_SUCCESSFULLY", 2))).status, 409);
   assert.equal((await event(hu23Event(id, "PICKED_UP", 2))).status, 200);
+  assert.equal((await db.doc("order_events/" + buyerNoticeEventId(id,"ORDER_PICKED_UP",2)).get()).get("buyerUid"),uid);
   assert.equal((await read(id)).body.position, null);
   const sample = hu23Sample(1);
   assert.equal((await gps(id, sample)).status, 200);
@@ -85,6 +88,7 @@ test("acceptance, pickup, GPS/ETA, temporary loss and valid delivery through rea
   assert.deepEqual((await read(id)).body.position, current.body.position);
   const delivered = hu23Event(id, "COMPLETED_SUCCESSFULLY", 4);
   assert.equal((await event(delivered)).status, 200); assert.equal((await event(delivered)).status, 200);
+  assert.equal((await db.doc("order_events/" + buyerNoticeEventId(id,"ORDER_DELIVERED",4)).get()).get("buyerUid"),uid);
   const done = await read(id);
   assert.equal(done.body.status, "COMPLETED"); assert.equal(done.body.deliveryOutcome, "SUCCESS");
   assert.equal(done.body.position, null); assert.equal(done.body.estimatedArrivalAtEpochMillis, null);
@@ -118,6 +122,7 @@ test("assignment replacement requires release and failed delivery is never label
   assert.equal((await gps(id, hu23Sample(1))).status, 409);
   assert.equal((await gps(id, hu23Sample(1, Date.now(), 2))).status, 200);
   assert.equal((await event(hu23Event(id, "COMPLETED_UNSUCCESSFULLY", 5, 2))).status, 200);
+  assert.equal((await db.doc("order_events/" + buyerNoticeEventId(id,"ORDER_DELIVERY_FAILED",5)).get()).get("buyerUid"),uid);
   assert.equal((await read(id)).body.deliveryOutcome, "UNSUCCESSFUL");
   const detail = await call("foodApi/api/v1/me/orders/" + id, "GET", undefined, token);
   assert.equal(detail.status, 200, JSON.stringify(detail.body));

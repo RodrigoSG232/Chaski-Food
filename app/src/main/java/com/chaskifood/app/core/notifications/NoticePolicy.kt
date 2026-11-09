@@ -8,11 +8,12 @@ import com.chaskifood.app.core.access.domain.AccessScope
 
 /** Pure local decisions. Neither grants commercial access: the server reauthorizes every send and the HTTP inbox every read. */
 internal object NoticePolicy {
-    /** Only a resolved store manager keeps a push token bound to its UID. */
+    /** A resolved account can receive notices for its own orders; store scope is rechecked for managers on send. */
     fun canRegister(uid: String?, state: AccessContextState): Boolean {
         if (uid == null || state.phase != AccessContextPhase.RESOLVED) return false
         val resolved = state.resolution as? AccessResolution.Resolved ?: return false
-        return resolved.identity.session.uid == uid && resolved.capabilities.grants.any { it.capability == AccessCapability.READ_STORE_ORDERS }
+        return resolved.identity.session.uid == uid &&
+            resolved.capabilities.allows(AccessCapability.READ_PERSONAL_PURCHASES, AccessScope.Account(uid))
     }
 
     /** onMessageReceived cannot wait for the network. The persisted local UID must match the recipient; a current
@@ -24,6 +25,19 @@ internal object NoticePolicy {
                 val resolved = state.resolution as? AccessResolution.Resolved ?: return false
                 resolved.identity.session.uid == sessionUid &&
                     resolved.capabilities.allows(AccessCapability.READ_STORE_ORDERS, AccessScope.Store(notice.businessId, notice.storeId))
+            }
+            AccessContextPhase.LOADING, AccessContextPhase.ERROR -> true
+            AccessContextPhase.SIGNED_OUT, AccessContextPhase.CONFLICT, AccessContextPhase.UNAVAILABLE -> false
+        }
+    }
+
+    fun canShowBuyer(sessionUid: String?, notice: BuyerOrderNotice, state: AccessContextState): Boolean {
+        if (sessionUid == null || sessionUid != notice.recipientUid) return false
+        return when (state.phase) {
+            AccessContextPhase.RESOLVED -> {
+                val resolved = state.resolution as? AccessResolution.Resolved ?: return false
+                resolved.identity.session.uid == sessionUid &&
+                    resolved.capabilities.allows(AccessCapability.READ_PERSONAL_PURCHASES, AccessScope.Account(sessionUid))
             }
             AccessContextPhase.LOADING, AccessContextPhase.ERROR -> true
             AccessContextPhase.SIGNED_OUT, AccessContextPhase.CONFLICT, AccessContextPhase.UNAVAILABLE -> false
