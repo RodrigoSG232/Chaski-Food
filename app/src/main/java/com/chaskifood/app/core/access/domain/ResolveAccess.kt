@@ -68,6 +68,7 @@ class ResolveAccess {
                 checkNotNull(owner)
                 val scope = AccessScope.Business(owner.businessId)
                 grants += AccessGrant(AccessCapability.READ_OWN_BUSINESS_STATUS, scope)
+                grants += AccessGrant(AccessCapability.READ_BUSINESS_METRICS, scope)
                 if (owner.status == AccessBusinessStatus.APPROVED) {
                     listOf(AccessCapability.MANAGE_BUSINESS, AccessCapability.LIST_OWN_STORES,
                         AccessCapability.MANAGE_OWN_STORES, AccessCapability.MANAGE_MANAGERS).forEach {
@@ -82,6 +83,7 @@ class ResolveAccess {
             CommercialExperience.MANAGER -> applicable.forEach { assignment ->
                 val scope = AccessScope.Store(assignment.businessId, assignment.storeId)
                 grants += AccessGrant(AccessCapability.READ_STORE_ORDERS, scope)
+                grants += AccessGrant(AccessCapability.READ_BUSINESS_METRICS, scope)
                 val store = facts.stores.singleOrNull { it.storeId == assignment.storeId && it.businessId == assignment.businessId }
                 if (store?.businessStatus == AccessBusinessStatus.APPROVED && store.status == AccessStoreStatus.ACTIVE) {
                     grants += AccessGrant(AccessCapability.OPERATE_HOURS_AND_OFFERS, scope)

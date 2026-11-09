@@ -45,6 +45,12 @@ Decisiones **aprobadas** por el equipo que siguen aplicando y condicionan las pr
 - **Lista:** ID visible de 8 caracteres (consultas y navegación usan los 64); hasta dos productos con cantidad y «+N más» desde el snapshot; pago descrito de forma neutral («Efectivo contra entrega»).
 - **Checkout:** el carrito muestra «Continuar»; la pantalla siguiente se titula «Confirmar pedido» y, tras el éxito (directo o recuperado), «Pedido enviado» con «Recibimos tu pedido» y «Ver mi pedido» (D4). Tras la compra, Atrás lleva a Pedidos y no vuelve a la revisión. Desde Cuenta → «Recuperar compra pendiente» el título es «Recuperar compra».
 
+## Dashboard comercial (HU28, 08-11-2026)
+- **Aprobado por el usuario:** tres indicadores/gráficos; MPAndroidChart 4.0.1. Ventas significa subtotal de productos entregados con éxito, nunca tarifa de reparto ni propina.
+- **Período:** 7, 30 o 90 días calendario de Lima, incluido el actual; pedidos y tasa de aceptación por fecha de creación, ventas por fecha de entrega exitosa. Pendientes y cancelados no entran al denominador de aceptación.
+- **Permisos:** propietario APPROVED o SUSPENDED consulta únicamente su negocio; responsable VERIFIED consulta únicamente locales asignados. El claim `admin` no concede dashboard. El filtro por local se valida en `foodApi`.
+- **Precisión:** se rechazan datos inconsistentes y ventanas que superen 3000 pedidos en cualquiera de las dos consultas, en vez de mostrar agregados parciales. El pago sigue siendo simulado; el gráfico describe ventas registradas de productos, no cobros bancarios.
+
 ## Bandeja y avisos
 - **La bandeja es la fuente de verdad**; FCM es solo aviso, puede duplicarse o perderse (HU16-04, HU16-13).
 - Los pedidos se asocian al **local (`storeId`)**, no a una persona; un nuevo responsable autorizado ve los existentes (HU34-03).

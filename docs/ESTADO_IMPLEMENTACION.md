@@ -109,3 +109,9 @@ Fuente única de pendientes. Cada elemento indica por qué se postergó, dónde 
 - Versionados: `README.md`, `docs/ARCHITECTURE.md`, `docs/GUIA_DESARROLLO.md`, `docs/DECISIONES.md` y este documento.
 - Compartidos internamente (no versionados): `AGENTS.md` y `CLAUDE.md`, instrucciones para asistentes de IA.
 - Locales, fuera de Git: `contexto/` (caso y planificación originales del curso, fuente de los criterios de aceptación), `docs/HU04_PLAN.md` y los registros históricos completos de HU16 y HU34.
+
+## 6. HU28 en desarrollo local (08-11-2026)
+
+Rama aislada `feat/hu28-dashboard`: backend autenticado y filtrado por negocio/local, tres indicadores calculados desde `food_orders`, filtros de 7/30/90 días y local, pantalla Compose con MPAndroidChart 4.0.1. Los índices de Firestore están declarados localmente. Definiciones y contrato: [HU28_DASHBOARD](HU28_DASHBOARD.md).
+
+Verificado: Functions compila y supera 153 pruebas unitarias; una prueba HTTP en Auth/Firestore Emulator cubre propietario, responsable, aislamiento de local, cliente, admin y autenticación; Android genera APK Debug LOCAL y supera 616 pruebas JVM. Pendientes: revisión visual en dispositivo, publicación de índices y `foodApi`, y prueba CONECTADO tras autorización. Ningún cambio de HU28 se desplegó ni se mezcló con la rama local de HU24.

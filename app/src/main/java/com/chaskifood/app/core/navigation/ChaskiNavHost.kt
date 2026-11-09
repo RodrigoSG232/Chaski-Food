@@ -1,6 +1,7 @@
 package com.chaskifood.app.core.navigation
 
 import com.chaskifood.app.feature.orders.presentation.StoreOrdersScreen
+import com.chaskifood.app.feature.dashboard.presentation.DashboardScreen
 import com.chaskifood.app.feature.orders.presentation.BuyerOrderDetailScreen
 import com.chaskifood.app.feature.orders.presentation.MyOrdersScreen
 
@@ -359,6 +360,9 @@ fun ChaskiNavHost(
                     onOpenStoreOrders = { business, store ->
                         navController.navigate(ChaskiDestinations.STORE_ORDERS + "/${Uri.encode(business)}/${Uri.encode(store)}") { launchSingleTop = true }
                     },
+                    onOpenDashboard = { business ->
+                        navController.navigate("commercial_dashboard/${Uri.encode(business)}") { launchSingleTop = true }
+                    },
                     onOpenSelectedHours = { _, store ->
                         navController.navigate(ChaskiDestinations.STORE_OPERATIONS + (store?.let { "?storeId=${Uri.encode(it)}" } ?: ""))
                     },
@@ -658,6 +662,10 @@ fun ChaskiNavHost(
                 arguments = listOf(navArgument("businessId") { type = NavType.StringType }, navArgument("storeId") { type = NavType.StringType })) {
                 val notificationRefresh by it.savedStateHandle.getStateFlow<String?>("notificationRefresh",null).collectAsStateWithLifecycle()
                 StoreOrdersScreen(onBack = { navController.popBackStack() },notificationRefresh=notificationRefresh)
+            }
+            protectedComposable(access, navController, ChaskiDestinations.COMMERCIAL_DASHBOARD,
+                arguments = listOf(navArgument("businessId") { type = NavType.StringType })) {
+                DashboardScreen(onBack = { navController.popBackStack() })
             }
             protectedComposable(access, navController, ChaskiDestinations.CHECKOUT_RECOVERY) {
                 RealCheckoutScreen(onBack = { navController.popBackStack() },

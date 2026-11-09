@@ -1,4 +1,6 @@
 import { DeviceRegistry } from "./notifications/deviceRegistry";
+import { DashboardReader } from "./dashboard/dashboardReader";
+import { parseDashboardQuery } from "./dashboard/dashboardPolicy";
 import { StoreOrdersReader } from "./orders/storeOrdersReader";
 import { OrderDecisionService } from "./orders/orderDecisionService";
 import { parseOrderDecision } from "./orders/orderDecisionPolicy";
@@ -42,6 +44,22 @@ export function createFoodApiHandler(dependencies: FoodApiDependencies): FoodHtt
     try {
       const runtime = dependencies.runtime();
       const orderPath = /^\/api\/v1\/orders\/?$/.test(request.path);
+      if (/^\/api\/v1\/commercial\/dashboard\/?$/.test(request.path)) {
+        if (request.method !== "GET") { response.status(405).set("Allow","GET").json({error:"METHOD_NOT_ALLOWED"}); return; }
+        try {
+          const query=parseDashboardQuery(request.query);
+          const app=dependencies.app(runtime),auth=getAuth(app);
+          const actor=await verifyCommercialIdentity(auth,request.get("authorization"));
+          response.status(200).json(await new DashboardReader(getFirestore(app),auth).read(actor,query));
+        } catch(error) {
+          if(error instanceof AuthenticationRequired)response.status(401).json({error:"AUTHENTICATION_REQUIRED"});
+          else if(error instanceof OrderHttpError)response.status(error.status).json({error:error.code});
+          else if(error instanceof CommercialAccessError)response.status(error.status===403?403:error.status===400?400:503)
+            .json({error:error.status===403?"ACCESS_DENIED":error.status===400?"INVALID_REQUEST":"AUTHORIZATION_UNAVAILABLE"});
+          else response.status(503).json({error:"DASHBOARD_UNAVAILABLE"});
+        }
+        return;
+      }
       const attemptPath = /^\/api\/v1\/order-attempts\/([^/]+)\/?$/.exec(request.path);
       const devicePath = /^\/api\/v1\/devices\/([^/]+)\/?$/.exec(request.path);
       if(devicePath) {

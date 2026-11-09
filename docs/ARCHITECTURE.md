@@ -121,6 +121,8 @@ HU22 incorpora `riderApi` como Cloud Function v2 separada y privada por IAM. El 
 
 HU23 añade `GET me/orders/{orderId}/tracking` a `foodApi`: autentica al comprador y proyecta una lista explícita de campos desde ese snapshot. La ubicación solo se entrega después del recojo y antes de terminar. No cambia las reglas de Firestore, los índices ni el esquema Room.
 
+HU28 añade `GET commercial/dashboard` a `foodApi`. El servidor valida propiedad o asignaciones VERIFIED mediante el índice comercial HU34 y devuelve únicamente métricas agregadas, sin documentos de pedido. Consulta pedidos creados y pedidos completados en ventanas independientes de 7, 30 o 90 días calendario de Lima. Ventas suma `subtotalMinor` solo cuando `status=COMPLETED` y `riderIntegration.deliveryOutcome=SUCCESS`; no incluye reparto ni propina. El indicador operativo es la proporción de decisiones aceptadas frente a rechazadas para pedidos creados en la ventana. Android usa MPAndroidChart 4.0.1 (Compose) y la misma URL de `foodApi`. Contrato y límites: [HU28_DASHBOARD](HU28_DASHBOARD.md).
+
 En Android, `BuyerTrackingViewModel → BuyerOrdersRepository ← HttpBuyerOrdersRepository` alimenta una tarjeta dentro del detalle existente. Consulta cada 10 segundos mientras la pantalla está RESUMED, retrocede a 20/30 segundos ante fallos y se detiene al finalizar. Conserva la última respuesta ante fallos transitorios y la borra al cambiar la sesión o perder autorización. El reloj monotónico anclado al tiempo del servidor evita rejuvenecer muestras al modificar el reloj del teléfono o recrear la tarjeta. Reutiliza MapLibre sin pedir ubicación del dispositivo; no interpola trayectos. ETA opcional de Rider y simulador exclusivamente LOCAL: [HU23_SEGUIMIENTO](HU23_SEGUIMIENTO.md).
 | `store_notices` | Bloque de reglas heredado sin datos ni código que lo use (ver pendientes) | — |
 
@@ -128,7 +130,7 @@ Las imágenes de locales/productos se guardan en Storage bajo `businesses/{busin
 
 ### Reglas e índices
 - `firestore.rules` (versionado) = reglas **publicadas** desde el 31-10-2026. Cierran a clientes toda escritura comercial que debe pasar por foodApi, exigen vinculación VERIFIED coherente con el índice para operar como responsable y terminan con una denegación general.
-- `firestore.indexes.json`: 3 índices compuestos (`delivery_quotes`; `food_orders` para la bandeja y para compras propias `buyerUid, createdAt desc, __name__ desc`).
+- `firestore.indexes.json`: 5 índices compuestos (`delivery_quotes`; `food_orders` para la bandeja, compras propias y las dos ventanas de HU28 por `businessId`/fecha).
 - Las pruebas de reglas están en `functions/test/commercialRules.emulator.ts` (y casos Android en `FirestoreRulesClientEmulatorTest`).
 
 ## 5. Entornos LOCAL y CONECTADO

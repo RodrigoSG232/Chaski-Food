@@ -252,6 +252,27 @@ export class CommercialAccessService {
     if (!(await this.orderReaderAssignments(tx, actor)).length) throw new CommercialAccessError("FORBIDDEN",403);
   }
 
+  /** HU28: owner sees only their business; a manager sees only verified assigned stores. */
+  async dashboardScope(tx: Transaction, actor: CommercialIdentity, businessId: string): Promise<{allStores: boolean; storeIds: string[]}> {
+    if (!validId(businessId)) throw new CommercialAccessError("INVALID_REQUEST",400);
+    const ctx = await this.context(tx, actor);
+    assertExclusive(ctx.business?.status, ctx.rows, actor.uid);
+    if (ownsCommercialBusiness(ctx.business?.status)) {
+      if (businessId !== actor.uid || ctx.business?.ownerUid !== actor.uid)
+        throw new CommercialAccessError("FORBIDDEN",403);
+      if (ctx.rows.some(row => ["LEGACY","RECONCILIATION_REQUIRED"].includes(row.bindingState)))
+        throw new CommercialAccessError("RECONCILIATION_REQUIRED",503);
+      return {allStores:true,storeIds:[]};
+    }
+    if (ctx.rows.some(row => !["VERIFIED","REVOKED"].includes(row.bindingState)))
+      throw new CommercialAccessError("RECONCILIATION_REQUIRED",503);
+    if (!actor.emailVerified || ctx.mail?.boundUid !== actor.uid) throw new CommercialAccessError("FORBIDDEN",403);
+    const ids = [...new Set(confirmedAssignments(ctx.rows, actor.uid)
+      .filter(row => row.businessId === businessId).flatMap(row => row.assignedStoreIds))].sort();
+    if (!ids.length) throw new CommercialAccessError("FORBIDDEN",403);
+    return {allStores:false,storeIds:ids};
+  }
+
   private async orderReaderAssignments(tx: Transaction, actor: CommercialIdentity): Promise<Assignment[]> {
     const ctx = await this.context(tx, actor);
     assertExclusive(ctx.business?.status, ctx.rows, actor.uid);

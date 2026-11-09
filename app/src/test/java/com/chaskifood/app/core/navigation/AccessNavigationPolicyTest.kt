@@ -14,6 +14,17 @@ class AccessNavigationPolicyTest {
             stores.map { AccessStore("business", it, AccessBusinessStatus.APPROVED, AccessStoreStatus.ACTIVE, AccessOperationalStatus.CLOSED) },
             AccessExclusivity.VERIFIED))
     private fun owner(status: AccessBusinessStatus = AccessBusinessStatus.APPROVED) = AccessOwnership("business", "buyer", status)
+    @Test fun `dashboard exige negocio propio o asignacion verificada`() {
+        val route=ChaskiDestinations.COMMERCIAL_DASHBOARD
+        assertTrue(AccessNavigationPolicy.allows(resolved(owner()),route,"business"))
+        assertTrue(AccessNavigationPolicy.allows(resolved(owner(AccessBusinessStatus.SUSPENDED)),route,"business"))
+        assertTrue(AccessNavigationPolicy.allows(resolved(stores=listOf("one"),manager=true),route,"business"))
+        for(denied in listOf(resolved(),resolved(admin=true),AccessResolution.SignedOut))
+            assertFalse(AccessNavigationPolicy.allows(denied,route,"business"))
+        assertFalse(AccessNavigationPolicy.allows(resolved(owner()),route,"other"))
+        assertFalse(AccessNavigationPolicy.allows(resolved(stores=listOf("one"),manager=true),route,"other"))
+        assertFalse(AccessNavigationPolicy.allows(resolved(owner()),route))
+    }
     @Test fun `recuperacion personal no concede compras nuevas ni ambitos ajenos`() {
         for (access in listOf(resolved(owner()), resolved(owner(AccessBusinessStatus.SUSPENDED)),
             resolved(stores=listOf("one"), manager=true))) {
