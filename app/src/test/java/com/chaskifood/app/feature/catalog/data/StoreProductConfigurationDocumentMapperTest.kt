@@ -36,6 +36,20 @@ class StoreProductConfigurationDocumentMapperTest {
     }
 
     @Test
+    fun `restaura configuraciones sembradas sin perder el contrato funcional`() {
+        val seeded = document() + mapOf(
+            "seedNamespace" to "marketplace-demo",
+            "seedVersion" to 1L,
+            "environment" to "PERMANENT_DEMO",
+            "showInPromotions" to true,
+        )
+
+        val configuration = StoreProductConfigurationDocumentMapper.fromDocument("store-1_product-1", seeded)
+
+        assertEquals(configuration().copy(showInPromotions = true), configuration)
+    }
+
+    @Test
     fun `rechaza documento cuyo id no corresponde a local y producto`() {
         assertThrows(IllegalArgumentException::class.java) {
             StoreProductConfigurationDocumentMapper.fromDocument("otro-id", document())
@@ -51,6 +65,13 @@ class StoreProductConfigurationDocumentMapperTest {
             document() + ("updatedAt" to null),
             document() + ("extra" to true),
             document() + ("showInPromotions" to "yes"),
+            document() + ("seedNamespace" to "marketplace-demo"),
+            document() + mapOf("seedNamespace" to "otro", "seedVersion" to 1L,
+                "environment" to "PERMANENT_DEMO"),
+            document() + mapOf("seedNamespace" to "marketplace-demo", "seedVersion" to 2L,
+                "environment" to "PERMANENT_DEMO"),
+            document() + mapOf("seedNamespace" to "marketplace-demo", "seedVersion" to 1L,
+                "environment" to "PRODUCTION"),
         )
 
         invalidDocuments.forEach { invalid ->

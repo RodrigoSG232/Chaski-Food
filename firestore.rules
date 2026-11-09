@@ -385,8 +385,14 @@ service cloud.firestore {
       return data.keys().hasAll(fields)
         && data.keys().hasOnly([
           'businessId', 'storeId', 'productId', 'price', 'availability',
-          'updatedAt', 'updatedBy', 'showInPromotions'
+          'updatedAt', 'updatedBy', 'showInPromotions',
+          'seedNamespace', 'seedVersion', 'environment'
         ])
+        && ( !data.keys().hasAny(['seedNamespace', 'seedVersion', 'environment'])
+          || (data.keys().hasAll(['seedNamespace', 'seedVersion', 'environment'])
+            && data.seedNamespace == 'marketplace-demo'
+            && data.seedVersion == 1
+            && data.environment in ['DEMO', 'PERMANENT_DEMO']) )
         && (!data.keys().hasAny(['showInPromotions'])
           || data.showInPromotions is bool)
         && data.businessId is string
@@ -647,7 +653,9 @@ service cloud.firestore {
       allow create: if validStoreProductConfig(
         id,
         request.resource.data
-      );
+      ) && !request.resource.data.keys().hasAny([
+        'seedNamespace', 'seedVersion', 'environment'
+      ]);
 
       allow update: if request.resource.data.businessId
           == resource.data.businessId

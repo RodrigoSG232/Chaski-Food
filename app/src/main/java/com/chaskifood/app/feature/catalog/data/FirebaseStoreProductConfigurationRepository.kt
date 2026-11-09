@@ -110,15 +110,25 @@ class FirebaseStoreProductConfigurationRepository @Inject constructor(
         firestore.runTransaction { transaction ->
             val store = transaction.get(storesRef.document(configuration.storeId))
             val product = transaction.get(productsRef.document(configuration.productId))
+            val existing = transaction.get(reference)
             requireConfigurationRelationships(
                 configuration = configuration,
                 storeBusinessId = store.getString("businessId"),
                 productBusinessId = product.getString("businessId"),
             )
-            transaction.set(
-                reference,
-                StoreProductConfigurationDocumentMapper.toFields(configuration, userId),
-            )
+            val fields = StoreProductConfigurationDocumentMapper.toFields(configuration, userId)
+            if (existing.exists()) {
+                val saved = StoreProductConfigurationDocumentMapper.fromDocument(
+                    existing.id,
+                    existing.getData(ServerTimestampBehavior.ESTIMATE)
+                        ?: error("Configuración de producto vacía."),
+                )
+                check(saved.businessId == configuration.businessId && saved.storeId == configuration.storeId &&
+                    saved.productId == configuration.productId) { "La configuración no corresponde al local y producto." }
+                transaction.update(reference, fields)
+            } else {
+                transaction.set(reference, fields)
+            }
         }.await()
         ApiResult.Success(configuration)
     } catch (cancelled: CancellationException) {

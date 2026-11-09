@@ -17,10 +17,20 @@ internal object StoreProductConfigurationDocumentMapper {
         "updatedBy",
     )
     private const val promotionField = "showInPromotions"
+    private val seedFields = setOf("seedNamespace", "seedVersion", "environment")
 
     fun fromDocument(id: String, data: Map<String, Any?>): StoreProductConfiguration {
-        require(data.keys == fields || data.keys == fields + promotionField) {
+        require(data.keys.containsAll(fields) &&
+            (data.keys - fields).all { it == promotionField || it in seedFields }) {
             "La configuración del producto tiene campos inválidos."
+        }
+        val presentSeedFields = data.keys.intersect(seedFields)
+        require(presentSeedFields.isEmpty() ||
+            (presentSeedFields == seedFields &&
+                data["seedNamespace"] == "marketplace-demo" &&
+                (data["seedVersion"] as? Number)?.toDouble() == 1.0 &&
+                data["environment"] in setOf("DEMO", "PERMANENT_DEMO"))) {
+            "La configuración del producto tiene metadatos de prueba inválidos."
         }
         val configuration = StoreProductConfiguration(
             businessId = data["businessId"] as? String ?: invalidDocument(),
