@@ -57,7 +57,11 @@ internal fun StoreOrdersContent(state:StoreOrdersUiState,onBack:()->Unit={},onRe
                 state.loading->item("loading"){CircularProgressIndicator();Text("Consultando pedidos…")}
                 state.accessDenied->item("denied"){Text(state.message.orEmpty(),modifier=Modifier.semantics{liveRegion=LiveRegionMode.Polite})}
                 else->{
-                    item("refresh"){ChaskiButton("Actualizar bandeja",onClick=onRefresh,enabled=!state.loadingMore)}
+                    item("refresh") {
+                        Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.End) {
+                            TextButton(onClick=onRefresh,enabled=!state.loadingMore) { Text("Actualizar bandeja") }
+                        }
+                    }
                     state.message?.let{message->item("error"){Text(message,modifier=Modifier.semantics{liveRegion=LiveRegionMode.Polite})}}
                     if(state.orders.isEmpty() && state.message==null)item("empty"){Text("No hay pedidos pendientes en este local.")}
                     items(state.orders,key={it.orderId}){order->
@@ -77,37 +81,86 @@ internal fun StoreOrdersContent(state:StoreOrdersUiState,onBack:()->Unit={},onRe
     onAccept:()->Unit,onReject:()->Unit,onEstimate:()->Unit,onReady:()->Unit) {
     val date=remember(order.createdAtEpochMillis){SimpleDateFormat("dd/MM/yyyy HH:mm",Locale.forLanguageTag("es-PE")).apply{
         timeZone=TimeZone.getTimeZone("America/Lima")}.format(Date(order.createdAtEpochMillis))}
-    Surface(color=MaterialTheme.colorScheme.surface,shape=MaterialTheme.shapes.medium) {
-        Column(Modifier.fillMaxWidth().padding(ChaskiDimens.SpacingMd),verticalArrangement=Arrangement.spacedBy(ChaskiDimens.SpacingSm)) {
-            Text("Pedido ${order.orderId.take(8)}",fontWeight=FontWeight.Bold)
-            Text(date);Text(when(order.status){
-                OrderStatus.PENDING_CONFIRMATION->"Pendiente de confirmación"
-                OrderStatus.PREPARING->"En preparación"
-                OrderStatus.READY_FOR_PICKUP->"Listo para recojo"
-            })
-            order.estimatedPreparationMinutes?.let{Text("Estimación: $it minutos")}
-            order.items.forEach{Text("${it.quantity} × ${it.name}")}
-            Text("Total: ${formatCartPrice(order.amounts.totalMinor)}",fontWeight=FontWeight.Bold)
-            TextButton(onClick=onToggle){Text(if(expanded)"Ocultar detalle" else "Ver detalle")}
-            if(expanded){
-                Text("Identificador: ${order.orderId}")
-                order.items.forEach{Text("${it.name}: ${formatCartPrice(it.unitPriceMinor)} × ${it.quantity} = ${formatCartPrice(it.lineTotalMinor)}")}
-                Text("Subtotal: ${formatCartPrice(order.amounts.subtotalMinor)}")
-                Text("Reparto: ${formatCartPrice(order.amounts.deliveryFeeMinor)}")
-                Text("Propina: ${formatCartPrice(order.amounts.tipMinor)}")
-                Text("Efectivo al recibir · PEN")
-                order.pickupCode?.let{Text("Código de recojo: $it",style=MaterialTheme.typography.titleMedium,fontWeight=FontWeight.Bold)}
-                if(order.status==OrderStatus.PENDING_CONFIRMATION)Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(ChaskiDimens.SpacingSm)) {
-                    ChaskiButton("Aceptar pedido",onClick=onAccept,enabled=actionsEnabled,modifier=Modifier.weight(1f))
-                    ChaskiButton("Rechazar pedido",onClick=onReject,enabled=actionsEnabled,modifier=Modifier.weight(1f),
-                        variant=ChaskiButtonVariant.Outlined)
+    val statusText=when(order.status) {
+        OrderStatus.PENDING_CONFIRMATION->"Pendiente de confirmación"
+        OrderStatus.PREPARING->"En preparación"
+        OrderStatus.READY_FOR_PICKUP->"Listo para recojo"
+    }
+    val statusBackground=when(order.status) {
+        OrderStatus.PENDING_CONFIRMATION->ChaskiStatusPendingBg
+        OrderStatus.PREPARING->ChaskiAdminCardBg
+        OrderStatus.READY_FOR_PICKUP->ChaskiStatusApprovedBg
+    }
+    val statusForeground=when(order.status) {
+        OrderStatus.PENDING_CONFIRMATION->ChaskiStatusPendingFg
+        OrderStatus.PREPARING->ChaskiAdminAccent
+        OrderStatus.READY_FOR_PICKUP->ChaskiStatusApprovedFg
+    }
+    Surface(modifier=Modifier.fillMaxWidth(),color=MaterialTheme.colorScheme.surface,
+        shape=MaterialTheme.shapes.large,tonalElevation=1.dp,shadowElevation=1.dp) {
+        Column(Modifier.padding(ChaskiDimens.SpacingMd),verticalArrangement=Arrangement.spacedBy(ChaskiDimens.SpacingSm)) {
+            Text("Pedido ${order.orderId.take(8)}",style=MaterialTheme.typography.titleMedium,
+                fontWeight=FontWeight.Bold,color=ChaskiTextPrimary)
+            Text(date,style=MaterialTheme.typography.bodySmall,color=ChaskiTextMuted)
+            ChaskiStatusPill(statusText,statusBackground,statusForeground)
+            order.estimatedPreparationMinutes?.let {
+                Text("Estimación: $it minutos",style=MaterialTheme.typography.bodyMedium)
+            }
+            HorizontalDivider(color=ChaskiDivider)
+            Text("Productos",style=MaterialTheme.typography.labelMedium,color=ChaskiTextMuted)
+            order.items.take(2).forEach { item ->
+                Text("${item.quantity} × ${item.name}",style=MaterialTheme.typography.bodyMedium)
+            }
+            if(order.items.size>2) Text("+${order.items.size-2} productos más",
+                style=MaterialTheme.typography.bodySmall,color=ChaskiTextMuted)
+            Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween) {
+                Text("Total",style=MaterialTheme.typography.titleMedium,fontWeight=FontWeight.SemiBold)
+                Text(formatCartPrice(order.amounts.totalMinor),style=MaterialTheme.typography.titleMedium,
+                    fontWeight=FontWeight.Bold,color=ChaskiPrice)
+            }
+            TextButton(onClick=onToggle,modifier=Modifier.align(androidx.compose.ui.Alignment.End)) {
+                Text(if(expanded)"Ocultar detalle" else "Ver detalle")
+            }
+            if(expanded) {
+                HorizontalDivider(color=ChaskiDivider)
+                Text("Detalle del pedido",style=MaterialTheme.typography.titleSmall,fontWeight=FontWeight.SemiBold)
+                order.items.forEach { item ->
+                    Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(ChaskiDimens.SpacingSm)) {
+                        Column(Modifier.weight(1f)) {
+                            Text("${item.quantity} × ${item.name}",style=MaterialTheme.typography.bodyMedium)
+                            Text("${formatCartPrice(item.unitPriceMinor)} c/u",style=MaterialTheme.typography.bodySmall,
+                                color=ChaskiTextMuted)
+                        }
+                        Text(formatCartPrice(item.lineTotalMinor),style=MaterialTheme.typography.bodyMedium,
+                            fontWeight=FontWeight.SemiBold)
+                    }
                 }
-                else if(order.status==OrderStatus.PREPARING)Column(verticalArrangement=Arrangement.spacedBy(ChaskiDimens.SpacingSm)){
+                OrderAmountRow("Subtotal",order.amounts.subtotalMinor)
+                OrderAmountRow("Reparto",order.amounts.deliveryFeeMinor)
+                OrderAmountRow("Propina",order.amounts.tipMinor)
+                Text("Efectivo al recibir · PEN",style=MaterialTheme.typography.bodySmall,color=ChaskiTextMuted)
+                order.pickupCode?.let {
+                    Text("Código de recojo: $it",style=MaterialTheme.typography.titleMedium,
+                        fontWeight=FontWeight.Bold)
+                }
+                if(order.status==OrderStatus.PENDING_CONFIRMATION) {
+                    ChaskiButton("Aceptar pedido",onClick=onAccept,enabled=actionsEnabled)
+                    ChaskiButton("Rechazar pedido",onClick=onReject,enabled=actionsEnabled,
+                        variant=ChaskiButtonVariant.Outlined)
+                } else if(order.status==OrderStatus.PREPARING) {
                     ChaskiButton("Marcar pedido listo",onClick=onReady,enabled=actionsEnabled)
-                    ChaskiButton("Actualizar estimación",onClick=onEstimate,enabled=actionsEnabled,variant=ChaskiButtonVariant.Outlined)
+                    ChaskiButton("Actualizar estimación",onClick=onEstimate,enabled=actionsEnabled,
+                        variant=ChaskiButtonVariant.Outlined)
                 }
             }
         }
+    }
+}
+
+@Composable private fun OrderAmountRow(label:String,amountMinor:Long) {
+    Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween) {
+        Text(label,style=MaterialTheme.typography.bodyMedium,color=ChaskiTextMuted)
+        Text(formatCartPrice(amountMinor),style=MaterialTheme.typography.bodyMedium)
     }
 }
 
