@@ -31,12 +31,9 @@ import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.Place
-import androidx.compose.material.icons.filled.RestaurantMenu
-import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Store
 import androidx.compose.material.icons.filled.Storefront
-import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -170,34 +167,12 @@ internal fun AccountContent(
         }
 
         if (experience == CommercialExperience.CLIENT) {
-        AccountMenuItem(
-            icon = Icons.Filled.Store,
-            title = stringResource(R.string.business_register_title),
-            subtitle = stringResource(R.string.business_register_subtitle),
-            onClick = onOpenBusiness,
-        )
-
-        AccountMenuItem(
-            icon = Icons.Filled.RestaurantMenu,
-            title = "Menú y Catálogo de Productos",
-            subtitle = "Gestiona categorías, platillos, precios y fotografías",
-            onClick = onOpenManageCatalog,
-        )
-
-        AccountMenuItem(
-            icon = Icons.Filled.Tune,
-            title = "Productos por Local",
-            subtitle = "Configura precios y disponibilidad por establecimiento",
-            onClick = onOpenStoreProductConfiguration,
-        )
-
-        AccountMenuItem(
-            icon = Icons.Filled.Schedule,
-            title = "Operaciones de Locales",
-            subtitle = "Control de disponibilidad y horarios de atención",
-            onClick = onOpenStoreOperations,
-        )
-
+            AccountMenuItem(
+                icon = Icons.Filled.Store,
+                title = stringResource(R.string.business_register_title),
+                subtitle = stringResource(R.string.business_register_subtitle),
+                onClick = onOpenBusiness,
+            )
         } else {
             SectionHeader(if (experience == CommercialExperience.OWNER) "MI NEGOCIO" else "MIS LOCALES")
             Text("Gestiona tus funciones comerciales desde la primera pestaña. Aquí conservas tus opciones personales.",
