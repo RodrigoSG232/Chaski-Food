@@ -150,6 +150,37 @@ class StoreProductConfigurationViewModelTest {
     }
 
     @Test
+    fun `guardar cambios del local conserva pendientes si una escritura falla`() = runTest {
+        prepareSuccessfulContent(productCount = 2)
+        stores.owned.value = ApiResult.Success(listOf(
+            BusinessStore(id = "store-1", businessId = "business-1"),
+            BusinessStore(id = "store-2", businessId = "business-1"),
+        ))
+        val model = model()
+        runCurrent()
+
+        model.editPrice("product-1", "13,50")
+        model.editAvailability("product-2", StoreProductAvailability.AVAILABLE)
+        model.selectStore("store-2")
+        assertEquals("store-2", model.bulk.value.pendingStoreId)
+        assertEquals("store-1", (model.uiState.value as StoreProductConfigurationUiState.Success).selectedStoreId)
+        model.cancelStoreSwitch()
+
+        configurations.failureByProduct["product-2"] = "Error temporal"
+        model.saveAll()
+        runCurrent()
+        assertEquals(2, configurations.saved.size)
+        assertEquals(setOf("product-2"), model.drafts.value.keys)
+        assertTrue(model.bulk.value.error!!.contains("Se guardaron 1 de 2"))
+
+        configurations.failureByProduct.clear()
+        model.saveAll()
+        runCurrent()
+        assertTrue(model.drafts.value.isEmpty())
+        assertEquals(3, configurations.saved.size)
+    }
+
+    @Test
     fun `local suspendido no intenta consultar ni configurar productos`() = runTest {
         stores.owned.value = ApiResult.Success(listOf(BusinessStore(
             id = "store-1",

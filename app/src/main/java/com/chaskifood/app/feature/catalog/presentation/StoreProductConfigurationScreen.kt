@@ -4,6 +4,7 @@ import com.chaskifood.app.ui.components.StoreSelector
 import com.chaskifood.app.core.navigation.LocalProtectedAction
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -22,8 +23,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Storefront
 import androidx.compose.material3.Button
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -48,6 +52,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -60,7 +65,6 @@ import com.chaskifood.app.feature.business.domain.BusinessStore
 import com.chaskifood.app.feature.catalog.domain.StoreProductAvailability
 import com.chaskifood.app.feature.catalog.domain.formatProductPrice
 import com.chaskifood.app.feature.catalog.domain.parseProductPrice
-import com.chaskifood.app.feature.catalog.domain.storeProductConfigurationId
 import com.chaskifood.app.ui.components.ChaskiStatusPill
 import com.chaskifood.app.ui.theme.ChaskiBackground
 import com.chaskifood.app.ui.theme.ChaskiDimens
@@ -80,16 +84,21 @@ fun StoreProductConfigurationScreen(
 ) {
     val authorize = LocalProtectedAction.current
     val state by viewModel.uiState.collectAsStateWithLifecycle()
-    val operations by viewModel.operations.collectAsStateWithLifecycle()
+    val drafts by viewModel.drafts.collectAsStateWithLifecycle()
+    val bulk by viewModel.bulk.collectAsStateWithLifecycle()
 
     StoreProductConfigurationContent(
         state = state,
-        operations = operations,
+        drafts = drafts,
+        bulk = bulk,
         onBack = onBack,
         onRetry = viewModel::retry,
         onSelectStore = { id -> authorize { viewModel.selectStore(id) } },
-        onSave = { id, price, availability -> authorize { viewModel.saveConfiguration(id, price, availability) } },
-        onClearFeedback = viewModel::clearOperationFeedback,
+        onPriceChange = viewModel::editPrice,
+        onAvailabilityChange = viewModel::editAvailability,
+        onSaveAll = { authorize { viewModel.saveAll() } },
+        onConfirmStoreSwitch = { authorize { viewModel.confirmStoreSwitch() } },
+        onCancelStoreSwitch = viewModel::cancelStoreSwitch,
         modifier = modifier,
     )
 }
@@ -97,14 +106,25 @@ fun StoreProductConfigurationScreen(
 @Composable
 internal fun StoreProductConfigurationContent(
     state: StoreProductConfigurationUiState,
-    operations: Map<String, ProductConfigurationOperationState>,
+    drafts: Map<String, ProductConfigurationDraft>,
+    bulk: ProductConfigurationBulkState,
     onBack: () -> Unit,
     onRetry: () -> Unit,
     onSelectStore: (String) -> Unit,
-    onSave: (String, Double, StoreProductAvailability) -> Unit,
-    onClearFeedback: (String, String) -> Unit,
+    onPriceChange: (String, String) -> Unit,
+    onAvailabilityChange: (String, StoreProductAvailability) -> Unit,
+    onSaveAll: () -> Unit,
+    onConfirmStoreSwitch: () -> Unit,
+    onCancelStoreSwitch: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    if (bulk.pendingStoreId != null) AlertDialog(
+        onDismissRequest = onCancelStoreSwitch,
+        title = { Text("Cambios sin guardar") },
+        text = { Text("Si cambias de local, se descartarán los cambios pendientes de este local.") },
+        confirmButton = { TextButton(onClick = onConfirmStoreSwitch) { Text("Descartar y cambiar") } },
+        dismissButton = { TextButton(onClick = onCancelStoreSwitch) { Text("Seguir editando") } },
+    )
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -167,26 +187,37 @@ internal fun StoreProductConfigurationContent(
                     if (state.products.isEmpty()) {
                         StateMessage("Este negocio todavía no tiene productos registrados.", onRetry = null)
                     } else {
+                        val pending = pendingProductIds(state.products, drafts)
                         LazyColumn(
-                            modifier = Modifier.fillMaxSize(),
+                            modifier = Modifier.weight(1f),
                             verticalArrangement = Arrangement.spacedBy(ChaskiDimens.SpacingMd),
                         ) {
                             items(state.products, key = { it.product.id }) { item ->
-                                val key = storeProductConfigurationId(state.selectedStoreId, item.product.id)
                                 ProductConfigurationCard(
                                     storeId = state.selectedStoreId,
                                     item = item,
-                                    operation = operations[key] ?: ProductConfigurationOperationState(),
-                                    onSave = { price, availability ->
-                                        onSave(item.product.id, price, availability)
-                                    },
-                                    onClearFeedback = {
-                                        onClearFeedback(state.selectedStoreId, item.product.id)
-                                    },
+                                    draft = drafts[item.product.id]
+                                        ?: ProductConfigurationDraft(formatProductPrice(item.price), item.availability),
+                                    dirty = item.product.id in pending,
+                                    invalid = item.product.id in bulk.invalidProductIds,
+                                    saving = bulk.saving,
+                                    onPriceChange = { onPriceChange(item.product.id, it) },
+                                    onAvailabilityChange = { onAvailabilityChange(item.product.id, it) },
                                 )
                             }
                             item { Spacer(Modifier.height(ChaskiDimens.SpacingLg)) }
                         }
+                        Text("${pending.size} productos con cambios pendientes", style = MaterialTheme.typography.bodySmall)
+                        bulk.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                        bulk.message?.let { Text(it, color = ChaskiStatusApprovedFg) }
+                        Spacer(Modifier.height(ChaskiDimens.SpacingXs))
+                        Button(onClick = onSaveAll, enabled = pending.isNotEmpty() && !bulk.saving,
+                            modifier = Modifier.fillMaxWidth().height(48.dp)) {
+                            if (bulk.saving) CircularProgressIndicator(modifier = Modifier.size(20.dp),
+                                strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary)
+                            else Text("GUARDAR CAMBIOS")
+                        }
+                        Spacer(Modifier.height(ChaskiDimens.SpacingMd))
                     }
                 }
             }
@@ -198,38 +229,16 @@ internal fun StoreProductConfigurationContent(
 internal fun ProductConfigurationCard(
     storeId: String,
     item: StoreProductItem,
-    operation: ProductConfigurationOperationState,
-    onSave: (Double, StoreProductAvailability) -> Unit,
-    onClearFeedback: () -> Unit,
+    draft: ProductConfigurationDraft,
+    dirty: Boolean,
+    invalid: Boolean,
+    saving: Boolean,
+    onPriceChange: (String) -> Unit,
+    onAvailabilityChange: (StoreProductAvailability) -> Unit,
 ) {
-    var priceInput by rememberSaveable(storeId, item.product.id) { mutableStateOf(formatProductPrice(item.price)) }
-    var availability by rememberSaveable(storeId, item.product.id) { mutableStateOf(item.availability) }
-    var priceTouched by rememberSaveable(storeId, item.product.id) { mutableStateOf(false) }
-    var draftChanged by rememberSaveable(storeId, item.product.id) { mutableStateOf(false) }
-    val configurationSignature = "${item.configuration?.price}:${item.configuration?.availability}"
-    var observedSignature by rememberSaveable(storeId, item.product.id) { mutableStateOf(configurationSignature) }
-    var acknowledgedRevision by rememberSaveable(storeId, item.product.id) {
-        mutableStateOf(operation.successRevision)
-    }
-    val parsedPrice = remember(priceInput) { parseProductPrice(priceInput) }
-
-    LaunchedEffect(configurationSignature) {
-        if (configurationSignature != observedSignature) {
-            if (!draftChanged && !operation.saving) {
-                priceInput = formatProductPrice(item.price)
-                availability = item.availability
-                priceTouched = false
-            }
-            observedSignature = configurationSignature
-        }
-    }
-    LaunchedEffect(operation.successRevision) {
-        if (operation.successRevision > acknowledgedRevision) {
-            acknowledgedRevision = operation.successRevision
-            draftChanged = false
-            priceTouched = false
-        }
-    }
+    var expanded by rememberSaveable(storeId, item.product.id) { mutableStateOf(false) }
+    val parsedPrice = remember(draft.priceInput) { parseProductPrice(draft.priceInput) }
+    LaunchedEffect(invalid) { if (invalid) expanded = true }
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -237,8 +246,11 @@ internal fun ProductConfigurationCard(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
     ) {
         Column(Modifier.padding(16.dp)) {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Column(Modifier.fillMaxWidth()) {
+            Row(Modifier.fillMaxWidth().clickable(role = Role.Button) { expanded = !expanded }
+                .semantics { contentDescription = if (expanded) "Contraer ${item.product.name}" else "Expandir ${item.product.name}" },
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(
                         text = item.product.name,
                         style = MaterialTheme.typography.titleMedium,
@@ -250,95 +262,49 @@ internal fun ProductConfigurationCard(
                         style = MaterialTheme.typography.bodySmall,
                         color = ChaskiTextMuted,
                     )
+                    Text("S/ ${parsedPrice.value?.let(::formatProductPrice) ?: draft.priceInput} · " +
+                        if (draft.availability == StoreProductAvailability.AVAILABLE) "Disponible" else "Agotado",
+                        style = MaterialTheme.typography.bodySmall, color = ChaskiTextMuted)
+                    if (dirty) Text("Cambios sin guardar", style = MaterialTheme.typography.bodySmall,
+                        color = ChaskiPrimary)
                 }
-                ChaskiStatusPill(
-                    text = if (item.isConfigured) "CONFIGURADO" else "SIN CONFIGURAR",
-                    backgroundColor = if (item.isConfigured) ChaskiStatusApprovedBg else ChaskiStatusRejectedBg,
-                    contentColor = if (item.isConfigured) ChaskiStatusApprovedFg else ChaskiStatusRejectedFg,
-                )
+                Icon(if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                    contentDescription = null)
             }
-
-            Spacer(Modifier.height(14.dp))
-            OutlinedTextField(
-                value = priceInput,
-                onValueChange = {
-                    priceInput = it
-                    priceTouched = true
-                    draftChanged = true
-                    onClearFeedback()
-                },
-                modifier = Modifier.fillMaxWidth(),
-                enabled = !operation.saving,
-                label = { Text("Precio en este local (S/)") },
-                singleLine = true,
-                isError = priceTouched && parsedPrice.error != null,
-                supportingText = {
-                    Text(
-                        if (priceTouched) parsedPrice.error ?: "Hasta dos decimales."
-                        else "Acepta punto o coma y hasta dos decimales.",
-                    )
-                },
-                keyboardOptions = KeyboardOptions(
-                    keyboardType = KeyboardType.Decimal,
-                    imeAction = ImeAction.Done,
-                ),
+            Spacer(Modifier.height(8.dp))
+            ChaskiStatusPill(
+                text = if (item.isConfigured) "CONFIGURADO" else "SIN CONFIGURAR",
+                backgroundColor = if (item.isConfigured) ChaskiStatusApprovedBg else ChaskiStatusRejectedBg,
+                contentColor = if (item.isConfigured) ChaskiStatusApprovedFg else ChaskiStatusRejectedFg,
             )
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Column(Modifier.weight(1f)) {
-                    Text("Disponible para nuevas compras", fontWeight = FontWeight.Medium)
-                    Text(
-                        if (availability == StoreProductAvailability.AVAILABLE) "AVAILABLE" else "OUT_OF_STOCK",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = ChaskiTextMuted,
-                    )
-                }
-                Switch(
-                    checked = availability == StoreProductAvailability.AVAILABLE,
-                    onCheckedChange = {
-                        availability = if (it) StoreProductAvailability.AVAILABLE
-                        else StoreProductAvailability.OUT_OF_STOCK
-                        draftChanged = true
-                        onClearFeedback()
-                    },
-                    enabled = !operation.saving,
-                    modifier = Modifier.semantics {
-                        contentDescription = "Disponibilidad de ${item.product.name}"
-                    },
+            if (expanded) {
+                Spacer(Modifier.height(14.dp))
+                OutlinedTextField(
+                    value = draft.priceInput,
+                    onValueChange = onPriceChange,
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !saving,
+                    label = { Text("Precio en este local (S/)") },
+                    singleLine = true,
+                    isError = invalid || parsedPrice.error != null,
+                    supportingText = { Text(parsedPrice.error ?: "Acepta punto o coma y hasta dos decimales.") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal, imeAction = ImeAction.Done),
                 )
-            }
-
-            operation.error?.let {
-                Spacer(Modifier.height(8.dp))
-                Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
-            }
-            operation.message?.let {
-                Spacer(Modifier.height(8.dp))
-                Text(it, color = ChaskiStatusApprovedFg, style = MaterialTheme.typography.bodySmall)
-            }
-            Spacer(Modifier.height(12.dp))
-            Button(
-                onClick = {
-                    priceTouched = true
-                    val price = parseProductPrice(priceInput).value ?: return@Button
-                    priceInput = formatProductPrice(price)
-                    onSave(price, availability)
-                },
-                enabled = !operation.saving && parsedPrice.value != null,
-                modifier = Modifier.fillMaxWidth().height(48.dp),
-            ) {
-                if (operation.saving) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(20.dp),
-                        strokeWidth = 2.dp,
-                        color = MaterialTheme.colorScheme.onPrimary,
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text("Disponible para nuevas compras", modifier = Modifier.weight(1f),
+                        fontWeight = FontWeight.Medium)
+                    Switch(
+                        checked = draft.availability == StoreProductAvailability.AVAILABLE,
+                        onCheckedChange = {
+                            onAvailabilityChange(if (it) StoreProductAvailability.AVAILABLE
+                                else StoreProductAvailability.OUT_OF_STOCK)
+                        },
+                        enabled = !saving,
+                        modifier = Modifier.semantics {
+                            contentDescription = "Disponibilidad de ${item.product.name}"
+                        },
                     )
-                } else {
-                    Text("GUARDAR CONFIGURACIÓN")
                 }
             }
         }
@@ -373,6 +339,7 @@ private fun businessStatusMessage(status: BusinessStatus): String = when (status
 @androidx.compose.ui.tooling.preview.Preview(showBackground = true, widthDp = 360, heightDp = 800)
 @Composable private fun StoreProductConfigurationPreview() {
     com.chaskifood.app.ui.theme.ChaskiTheme {
-        StoreProductConfigurationContent(StoreProductConfigurationUiState.NoStores, emptyMap(), {}, {}, {}, { _, _, _ -> }, { _, _ -> })
+        StoreProductConfigurationContent(StoreProductConfigurationUiState.NoStores, emptyMap(),
+            ProductConfigurationBulkState(), {}, {}, {}, { _, _ -> }, { _, _ -> }, {}, {}, {})
     }
 }

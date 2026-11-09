@@ -20,6 +20,8 @@ import com.chaskifood.app.feature.catalog.domain.Product
 import com.chaskifood.app.feature.catalog.domain.StoreProductAvailability
 import com.chaskifood.app.feature.catalog.domain.StoreProductConfiguration
 import com.chaskifood.app.feature.catalog.domain.StoreProductConfigurationRepository
+import com.chaskifood.app.feature.catalog.domain.formatProductPrice
+import com.chaskifood.app.feature.catalog.domain.parseProductPrice
 import com.chaskifood.app.feature.catalog.domain.storeProductConfigurationId
 import com.chaskifood.app.feature.catalog.domain.validProductPrice
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -75,6 +77,28 @@ data class ProductConfigurationOperationState(
     val successRevision: Long = 0,
 )
 
+data class ProductConfigurationDraft(
+    val priceInput: String,
+    val availability: StoreProductAvailability,
+)
+
+data class ProductConfigurationBulkState(
+    val saving: Boolean = false,
+    val error: String? = null,
+    val message: String? = null,
+    val pendingStoreId: String? = null,
+    val invalidProductIds: Set<String> = emptySet(),
+)
+
+internal fun pendingProductIds(
+    products: List<StoreProductItem>,
+    drafts: Map<String, ProductConfigurationDraft>,
+): Set<String> = products.mapNotNull { item ->
+    val draft = drafts[item.product.id] ?: return@mapNotNull null
+    val price = parseProductPrice(draft.priceInput).value
+    item.product.id.takeIf { !item.isConfigured || price != item.price || draft.availability != item.availability }
+}.toSet()
+
 @HiltViewModel
 class StoreProductConfigurationViewModel @Inject constructor(
     private val authRepository: AuthRepository,
@@ -92,6 +116,11 @@ class StoreProductConfigurationViewModel @Inject constructor(
     private val _operations = MutableStateFlow<Map<String, ProductConfigurationOperationState>>(emptyMap())
     val operations: StateFlow<Map<String, ProductConfigurationOperationState>> = _operations.asStateFlow()
 
+    private val _drafts = MutableStateFlow<Map<String, ProductConfigurationDraft>>(emptyMap())
+    val drafts: StateFlow<Map<String, ProductConfigurationDraft>> = _drafts.asStateFlow()
+    private val _bulk = MutableStateFlow(ProductConfigurationBulkState())
+    val bulk: StateFlow<ProductConfigurationBulkState> = _bulk.asStateFlow()
+
     private var accessObservation: Job? = null
     private var contentObservation: Job? = null
     private var availableStores: List<BusinessStore> = emptyList()
@@ -105,6 +134,7 @@ class StoreProductConfigurationViewModel @Inject constructor(
                 authorization.changes.collectLatest {
                     accessObservation?.cancel(); contentObservation?.cancel()
                     availableStores = emptyList(); selectedStoreId = null; _operations.value = emptyMap()
+                    _drafts.value = emptyMap(); _bulk.value = ProductConfigurationBulkState()
                     _uiState.value = StoreProductConfigurationUiState.Loading
                     if (authorization.hasAuthorizedStores()) load()
                 }
@@ -115,9 +145,93 @@ class StoreProductConfigurationViewModel @Inject constructor(
     fun retry() = load()
 
     fun selectStore(storeId: String) {
-        if (availableStores.none { it.id == storeId && allowed(it) } || selectedStoreId == storeId) return
+        if (_bulk.value.saving || availableStores.none { it.id == storeId && allowed(it) } || selectedStoreId == storeId) return
+        val current = _uiState.value as? StoreProductConfigurationUiState.Success
+        if (current != null && pendingProductIds(current.products, _drafts.value).isNotEmpty()) {
+            _bulk.value = _bulk.value.copy(pendingStoreId = storeId)
+            return
+        }
+        switchStore(storeId)
+    }
+
+    fun cancelStoreSwitch() { _bulk.value = _bulk.value.copy(pendingStoreId = null) }
+
+    fun confirmStoreSwitch() {
+        val id = _bulk.value.pendingStoreId ?: return
+        if (_bulk.value.saving || availableStores.none { it.id == id && allowed(it) }) return
+        switchStore(id)
+    }
+
+    private fun switchStore(storeId: String) {
+        _drafts.value = emptyMap()
+        _bulk.value = ProductConfigurationBulkState()
         selectedStoreId = storeId
         observeSelectedStore()
+    }
+
+    fun editPrice(productId: String, input: String) = editDraft(productId) { it.copy(priceInput = input) }
+
+    fun editAvailability(productId: String, availability: StoreProductAvailability) =
+        editDraft(productId) { it.copy(availability = availability) }
+
+    private fun editDraft(productId: String, change: (ProductConfigurationDraft) -> ProductConfigurationDraft) {
+        if (_bulk.value.saving) return
+        val state = _uiState.value as? StoreProductConfigurationUiState.Success ?: return
+        val item = state.products.singleOrNull { it.product.id == productId } ?: return
+        val current = _drafts.value[productId] ?: ProductConfigurationDraft(formatProductPrice(item.price), item.availability)
+        _drafts.value += productId to change(current)
+        _bulk.value = _bulk.value.copy(error = null, message = null,
+            invalidProductIds = _bulk.value.invalidProductIds - productId)
+    }
+
+    fun saveAll() {
+        val state = _uiState.value as? StoreProductConfigurationUiState.Success ?: return
+        val store = state.stores.singleOrNull { it.id == state.selectedStoreId } ?: return
+        if (_bulk.value.saving || !allowed(store)) return
+        val changedIds = pendingProductIds(state.products, _drafts.value)
+        if (changedIds.isEmpty()) return
+        val invalid = changedIds.filter { parseProductPrice(_drafts.value.getValue(it).priceInput).value == null }.toSet()
+        if (invalid.isNotEmpty()) {
+            _bulk.value = _bulk.value.copy(error = "Corrige los precios marcados antes de guardar.",
+                message = null, invalidProductIds = invalid)
+            return
+        }
+        val changes = state.products.filter { it.product.id in changedIds }.map { item ->
+            StoreProductConfiguration(store.businessId, store.id, item.product.id,
+                parseProductPrice(_drafts.value.getValue(item.product.id).priceInput).value!!,
+                _drafts.value.getValue(item.product.id).availability)
+        }
+        _bulk.value = _bulk.value.copy(saving = true, error = null, message = null, invalidProductIds = emptySet())
+        viewModelScope.launch {
+            var saved = 0
+            try {
+                for (configuration in changes) {
+                    val result = try { configurationRepository.saveConfiguration(configuration) }
+                        catch (cancelled: CancellationException) { throw cancelled }
+                        catch (_: Exception) { ApiResult.Failure("No se pudo guardar el producto. Intenta nuevamente.") }
+                    when (result) {
+                        is ApiResult.Success -> {
+                            saved++
+                            val current = _uiState.value as? StoreProductConfigurationUiState.Success
+                            if (current?.selectedStoreId == store.id) {
+                                _uiState.value = current.copy(products = current.products.map { item ->
+                                    if (item.product.id == configuration.productId) item.copy(configuration = configuration) else item
+                                })
+                                _drafts.value -= configuration.productId
+                            }
+                        }
+                        is ApiResult.Failure -> {
+                            _bulk.value = _bulk.value.copy(error =
+                                "Se guardaron $saved de ${changes.size} cambios. Los restantes siguen pendientes. ${result.message.orEmpty()}")
+                            return@launch
+                        }
+                    }
+                }
+                _bulk.value = _bulk.value.copy(message = "Se guardaron $saved cambios.")
+            } finally {
+                _bulk.value = _bulk.value.copy(saving = false)
+            }
+        }
     }
 
     fun clearOperationFeedback(storeId: String, productId: String) {
@@ -198,6 +312,8 @@ class StoreProductConfigurationViewModel @Inject constructor(
                     contentObservation?.cancel()
                     availableStores = emptyList()
                     selectedStoreId = null
+                    _drafts.value = emptyMap()
+                    _bulk.value = ProductConfigurationBulkState()
                     _uiState.value = StoreProductConfigurationUiState.SignedOut
                     return@collectLatest
                 }
@@ -251,10 +367,16 @@ class StoreProductConfigurationViewModel @Inject constructor(
                     if (availableStores.isEmpty()) {
                         selectedStoreId = null
                         contentObservation?.cancel()
+                        _drafts.value = emptyMap()
+                        _bulk.value = ProductConfigurationBulkState()
                         showEmptyAccess(unavailableBusiness)
                     } else {
                         val selected = selectedStoreId?.takeIf { id -> availableStores.any { it.id == id } }
                             ?: availableStores.first().id
+                        if (selectedStoreId != null && selectedStoreId != selected) {
+                            _drafts.value = emptyMap()
+                            _bulk.value = ProductConfigurationBulkState()
+                        }
                         selectedStoreId = selected
                         observeSelectedStore()
                     }
