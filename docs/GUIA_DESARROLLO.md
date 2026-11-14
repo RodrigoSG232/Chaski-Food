@@ -11,6 +11,8 @@ Cómo trabajamos en el proyecto, para personas y para asistentes de IA (Claude C
 
 Regla de oro: **todo cambio se prueba primero en LOCAL**. CONECTADO usa Firebase real con datos y cuentas de prueba autorizadas.
 
+**Selección del modo (Debug).** Sin propiedades, Gradle compila en **LOCAL** (`app/build.gradle.kts`), incluido el botón Run de Android Studio. CONECTADO solo se activa con las tres propiedades de §2.3, pasadas con `-P` o puestas en tu `%USERPROFILE%\.gradle\gradle.properties` personal, que tiene prioridad sobre el del repositorio. **Nunca pongas `chaskiFirebaseMode` ni las demás propiedades `chaski*` en el `gradle.properties` del repositorio**: afectarían a todo el equipo. Si el JSON activo no coincide con el modo, `validateDebugFirebaseConfiguration` detiene la compilación; no hay cambio automático a Firebase real.
+
 ### 2.1 LOCAL (Firebase Emulator Suite)
 1. JSON de Debug del proyecto demo (solo si no tienes ya un `app/src/debug/google-services.json` personal; respáldalo antes de cambiarlo):
    ```powershell
