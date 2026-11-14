@@ -4,7 +4,9 @@ const path = require("node:path");
 // Same enumerator and ignore semantics as the pinned Firebase CLI; no archive or network.
 const { readdirRecursive } = require("firebase-tools/lib/fsAsync");
 const root = path.resolve(__dirname, "..");
-const required = ["package.json", "pnpm-lock.yaml", "pnpm-workspace.yaml", "tsconfig.json", "lib/src/index.js", "scripts/build.cjs"];
+// npm is the single package manager: Cloud Build installs exactly what package-lock.json pins (npm ci).
+const required = ["package.json", "package-lock.json", "tsconfig.json", "lib/src/index.js", "scripts/build.cjs"];
+const forbidden = ["pnpm-lock.yaml", "pnpm-workspace.yaml", "yarn.lock"];
 async function packageFiles(source, ignore) {
   const entries = await readdirRecursive({ path: source, ignoreStrings: [...ignore,
     "firebase-debug.log", "firebase-debug.*.log", ".runtimeconfig.json"] });
@@ -22,7 +24,13 @@ async function verify() {
     throw new Error("Missing explicit food-local packaging configuration");
   }
   const files = await packageFiles(root, food.ignore);
-  const allowedRoot = new Set([...required.slice(0, 4), "scripts/build.cjs"]);
+  if (!Array.isArray(food.predeploy) || food.predeploy.some(step => !/^npm --prefix "\$RESOURCE_DIR" run /.test(step))) {
+    throw new Error("Predeploy must use npm against the Functions directory");
+  }
+  for (const file of forbidden) {
+    if (fs.existsSync(path.join(root, file))) throw new Error(`Second lockfile or workspace present: ${file}`);
+  }
+  const allowedRoot = new Set([...required.slice(0, 3), "scripts/build.cjs"]);
   if (files.some(file => !allowedRoot.has(file) &&
       !/^src\/(?:[\w-]+\/)*[\w-]+\.ts$/.test(file) &&
       !/^lib\/src\/(?:[\w-]+\/)*[\w-]+\.js$/.test(file))) {

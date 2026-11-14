@@ -14,7 +14,7 @@ test("CLI upload exclusions discard synthetic private and generated test files",
       "nested/account.pem", "nested/service-account.json", "google-services.json",
       "node_modules/demo/index.js", "test/example.ts", "lib/test/example.js",
       "scripts/verifyPackage.cjs", ".npmrc", "nested/credentials.json", "nested/key.jks", "firebase-debug.log", "coverage/report.json", "tmp/private.json"];
-    const included = ["package.json", "pnpm-lock.yaml", "pnpm-workspace.yaml", "tsconfig.json",
+    const included = ["package.json", "package-lock.json", "tsconfig.json",
       "src/index.ts", "lib/src/index.js", "scripts/build.cjs"];
     for (const file of [...excluded, ...included]) {
       const target = join(directory, file);
@@ -26,9 +26,20 @@ test("CLI upload exclusions discard synthetic private and generated test files",
 });
 
 test("predeploy builds first and verifies the actual upload file set", async () => {
-  assert.deepEqual(food.predeploy, ['pnpm --dir "$RESOURCE_DIR" run build',
-    'pnpm --dir "$RESOURCE_DIR" run verify:package']);
+  assert.deepEqual(food.predeploy, ['npm --prefix "$RESOURCE_DIR" run build',
+    'npm --prefix "$RESOURCE_DIR" run verify:package']);
   const files: string[] = await verify();
   assert.ok(files.includes("lib/src/index.js"));
-  assert.ok(files.includes("pnpm-workspace.yaml"));
+  assert.ok(files.includes("package-lock.json"));
+  for (const other of ["pnpm-lock.yaml", "pnpm-workspace.yaml", "yarn.lock"]) assert.equal(files.includes(other), false, other);
+});
+
+test("npm is the single declared package manager and the lockfile pins the direct dependencies", () => {
+  const pkg = JSON.parse(readFileSync(resolve(__dirname, "../../package.json"), "utf8"));
+  const lock = JSON.parse(readFileSync(resolve(__dirname, "../../package-lock.json"), "utf8"));
+  assert.match(pkg.packageManager, /^npm@\d+\.\d+\.\d+$/);
+  assert.equal(pkg.engines.node, "22");
+  assert.equal(lock.lockfileVersion, 3);
+  for (const [name, version] of Object.entries({ ...pkg.dependencies, ...pkg.devDependencies }))
+    assert.equal(lock.packages[`node_modules/${name}`]?.version, version, name);
 });

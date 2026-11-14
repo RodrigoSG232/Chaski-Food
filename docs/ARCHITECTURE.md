@@ -65,7 +65,7 @@ Tablas `app_config`, `carts`, `cart_items` (carrito por UID) y `checkout_intents
 
 ## 3. Backend `foodApi` (Cloud Functions v2)
 
-Código en `functions/` (TypeScript, Node 22, pnpm 11.25.0, `firebase-functions` 7.4, `firebase-admin` 14.5). Codebase **`food-local`** en `firebase.json` (es un nombre de despliegue: el mismo código corre en el emulador y en Cloud).
+Código en `functions/` (TypeScript, Node 22, npm con `package-lock.json`, `firebase-functions` 7.4, `firebase-admin` 14.5). Codebase **`food-local`** en `firebase.json` (es un nombre de despliegue: el mismo código corre en el emulador y en Cloud).
 
 | Función | Tipo | Configuración |
 |---|---|---|

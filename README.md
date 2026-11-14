@@ -18,8 +18,8 @@ Las instrucciones para asistentes de IA (`AGENTS.md` y `CLAUDE.md`) se comparten
 ```powershell
 # LOCAL (emuladores, proyecto demo-chaski-hu15) — detalles en docs/GUIA_DESARROLLO.md §2.1
 Copy-Item app/src/debug/google-services.demo.json app/src/debug/google-services.json   # solo si no tienes uno propio
-pnpm --dir functions install --frozen-lockfile; pnpm --dir functions run build
-$env:CHASKI_ROUTE_FIXTURE = 'enabled'; pnpm --dir functions run emulators
+npm --prefix functions ci; npm --prefix functions run build
+$env:CHASKI_ROUTE_FIXTURE = 'enabled'; npm --prefix functions run emulators
 .\gradlew.bat :app:assembleDebug -PchaskiFirebaseMode=LOCAL
 
 # CONECTADO (Firebase real; requiere el google-services.json legítimo, nunca en Git)

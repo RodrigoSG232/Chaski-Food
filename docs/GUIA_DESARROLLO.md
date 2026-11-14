@@ -4,7 +4,7 @@ Cómo trabajamos en el proyecto, para personas y para asistentes de IA (Claude C
 
 ## 1. Requisitos
 - JDK 21, Android SDK (plataforma 37), Android Studio, un AVD o teléfono con ADB.
-- Node.js 22 y pnpm 11.25.0. El Firebase CLI viene en las dependencias de `functions/` (no hace falta instalarlo global).
+- Node.js 22 y npm (incluido con Node.js; instalación reproducible con `npm ci` y `package-lock.json`). El Firebase CLI viene en las dependencias de `functions/` (no hace falta instalarlo global).
 - Comandos desde la **raíz del repo** en PowerShell, con el wrapper `.\gradlew.bat`.
 
 ## 2. Entornos de trabajo y comandos
@@ -20,10 +20,10 @@ Regla de oro: **todo cambio se prueba primero en LOCAL**. CONECTADO usa Firebase
    ```
 2. Backend y emuladores (desde `functions/`). Crea antes `functions/.secret.local` con un valor **ficticio** `HEIGIT_API_KEY=local-fixture-only` si no existe:
    ```powershell
-   pnpm install --frozen-lockfile
-   pnpm run build
+   npm ci
+   npm run build
    $env:CHASKI_ROUTE_FIXTURE = 'enabled'
-   pnpm run emulators        # Auth 9099, Firestore 8089, Storage 9199 y Functions 5001
+   npm run emulators        # Auth 9099, Firestore 8089, Storage 9199 y Functions 5001
    ```
    Se detiene con `Ctrl+C` en esa terminal.
 3. App (otra terminal, desde la raíz):
@@ -41,14 +41,14 @@ El repositorio incluye un sembrador idempotente exclusivo de `demo-chaski-hu15`.
 1. Levanta los emuladores y deja la terminal abierta:
    ```bash
    cd functions
-   CHASKI_ROUTE_FIXTURE=enabled pnpm run emulators
+   CHASKI_ROUTE_FIXTURE=enabled npm run emulators
    ```
 2. Desde otra terminal, compila y crea el escenario deseado:
    ```bash
-   pnpm --dir functions run build
-   pnpm --dir functions run lab:seed -- hu20
+   npm --prefix functions run build
+   npm --prefix functions run lab:seed -- hu20
    ```
-   Repetir el comando reinicia únicamente los documentos y cuentas fijos del laboratorio. Para retirarlos: `pnpm --dir functions run lab:reset`.
+   Repetir el comando reinicia únicamente los documentos y cuentas fijos del laboratorio. Para retirarlos: `npm --prefix functions run lab:reset`.
 3. Cuentas creadas (todas usan `emulator-password`):
 
    | Experiencia | Correo |
@@ -67,8 +67,8 @@ En teléfono físico ejecuta antes `adb reverse` para los cuatro puertos y compi
 Para explorar catálogos sin crear manualmente negocios y productos, con los cuatro emuladores levantados ejecuta:
 
 ```bash
-pnpm --dir functions run build
-pnpm --dir functions run marketplace:seed
+npm --prefix functions run build
+npm --prefix functions run marketplace:seed
 ```
 
 El comando es idempotente y solo acepta el proyecto local `demo-chaski-hu15`. Crea dos negocios aprobados, tres locales por negocio, ocho categorías, veinte productos y configuraciones distintas por local. Las 26 imágenes JPEG se cargan como objetos en Storage; Firestore guarda solamente sus URL. No crea clientes ni repartidores.
@@ -82,7 +82,7 @@ Las cuatro cuentas usan la contraseña `emulator-password` y ya tienen teléfono
 | Propietario Burger | `owner.burger@chaski.test` | Todos los de Burger Station |
 | Responsable Este Burger | `manager.burger.este@chaski.test` | Burger Station Este |
 
-Para retirarlos usa `pnpm --dir functions run marketplace:reset`. Los archivos fuente están en `functions/test/marketplace/assets/`, quedan excluidos del paquete de Cloud y no se publican con Functions.
+Para retirarlos usa `npm --prefix functions run marketplace:reset`. Los archivos fuente están en `functions/test/marketplace/assets/`, quedan excluidos del paquete de Cloud y no se publican con Functions.
 
 #### Marketplace permanente compartido
 
@@ -93,9 +93,9 @@ La carga administrativa es idempotente, exige credenciales fuera del repositorio
 ### 2.2 Pruebas
 | Qué | Comando |
 |---|---|
-| Unitarias backend | `pnpm --dir functions test` (tras `build`) |
-| Backend + reglas en emulador (laboratorio limpio, secuencial) | desde `functions/`: `pnpm exec firebase emulators:exec --only auth,firestore,functions --project demo-chaski-hu15 --config ../firebase.json "node --test --test-concurrency=1 lib/test/*.emulator.js"` |
-| Paquete de Functions (antes de publicar) | `pnpm --dir functions run verify:package` |
+| Unitarias backend | `npm --prefix functions test` (tras `build`) |
+| Backend + reglas en emulador (laboratorio limpio, secuencial) | desde `functions/`: `npx firebase emulators:exec --only auth,firestore,functions --project demo-chaski-hu15 --config ../firebase.json "node --test --test-concurrency=1 lib/test/*.emulator.js"` |
+| Paquete de Functions (antes de publicar) | `npm --prefix functions run verify:package` |
 | JVM Android | `.\gradlew.bat :app:testDebugUnitTest` + las propiedades del modo cuyo JSON esté activo |
 | Compilar pruebas instrumentadas | `.\gradlew.bat :app:compileDebugAndroidTestKotlin` + propiedades del modo |
 | Instrumentadas | `.\gradlew.bat :app:connectedDebugAndroidTest` con AVD/teléfono y, si usan Firebase, los emuladores levantados |
@@ -120,7 +120,7 @@ Compilar androidTest **no** equivale a ejecutarlas. Ejecuta las pruebas proporci
 4. Pruebas en CONECTADO: solo con cuentas y dispositivos autorizados. Para probar avisos push, el responsable debe tener **la sesión abierta** en su dispositivo y el comprador debe pedir desde **otro** dispositivo (p. ej. un AVD): cerrar la sesión del responsable retira su dispositivo y el evento termina en `NO_RECIPIENTS`. Crear un pedido escribe datos reales.
 
 ### 2.4 Cambios en Cloud (siempre con autorización humana explícita)
-Nada en Cloud se modifica automáticamente: ni Functions, ni reglas, ni índices, ni datos, ni IAM, ni secretos. Procedimiento usado en HU16/HU34 (desde la raíz, con `node functions/node_modules/firebase-tools/lib/bin/firebase.js` o `pnpm --dir functions exec firebase`):
+Nada en Cloud se modifica automáticamente: ni Functions, ni reglas, ni índices, ni datos, ni IAM, ni secretos. Procedimiento usado en HU16/HU34 (desde la raíz, con `node functions/node_modules/firebase-tools/lib/bin/firebase.js` o `npm --prefix functions exec -- firebase`):
 1. Comparar lo publicado con lo local (reglas, índices, funciones) y guardar respaldo de lo publicado.
 2. Ensayo: `deploy --only "functions:food-local:foodApi,functions:food-local:newOrderNotifier" --dry-run --project chaski-food-9adba --non-interactive`.
 3. Despliegue acotado a las funciones exactas. `--force` solo si el CLI lo exige por el aviso de reintentos de `newOrderNotifier`, nunca para aceptar eliminaciones.

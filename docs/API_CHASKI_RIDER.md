@@ -171,7 +171,7 @@ Simulación y pasos de validación: [HU23_SEGUIMIENTO.md](HU23_SEGUIMIENTO.md).
 ## Publicación
 
 ```bash
-pnpm --dir functions exec firebase deploy \
+npm --prefix functions exec -- firebase deploy \
   --only "functions:food-local:riderApi" \
   --project chaski-food-9adba \
   --non-interactive
