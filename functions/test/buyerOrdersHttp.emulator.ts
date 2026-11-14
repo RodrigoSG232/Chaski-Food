@@ -158,6 +158,30 @@ test("HU19: the buyer reads the stored rejection reason; legacy rejections stay 
   assert.deepEqual(await call(other, `/${custom}`), { status: 404, body: { error: "ORDER_NOT_FOUND" } });
 });
 
+test("HU20: the buyer reads the current estimated time and extended minutes, never the internal estimate records", async () => {
+  const buyer = await actor(), other = await actor(), at = 1_900_000_000_000;
+  const extended = orderIdFor("hu20-extended"), legacy = orderIdFor("hu20-legacy"), cancelled = orderIdFor("hu20-cancelled");
+  await seed([extended, legacy, cancelled].map(id => ({ id, buyer: buyer.uid, status: id === cancelled ? "CANCELLED" : "PREPARING", millis: at })));
+  await db.doc(`food_orders/${extended}`).update({ estimatedPreparationMinutes: 40, estimatedReadyAt: Timestamp.fromMillis(at + 70 * 60_000),
+    estimateRevision: 2, preparationExtendedMinutes: 30, estimateUpdatedByUid: "PRIVATE_MANAGER" });
+  await db.doc(`food_orders/${extended}/estimate_operations/PRIVATE_OPERATION`).set({ requestHash: "PRIVATE_HASH" });
+  await db.doc(`food_orders/${extended}/estimate_history/0000000001`).set({ schemaVersion: 2, actorUid: "PRIVATE_MANAGER" });
+  // Legacy replacement: revision without extension counter; must not be reported as an extension.
+  await db.doc(`food_orders/${legacy}`).update({ estimatedPreparationMinutes: 25, estimatedReadyAt: Timestamp.fromMillis(at + 25 * 60_000),
+    estimateRevision: 1 });
+
+  const current = await call(buyer, `/${extended}`);
+  assert.equal(current.status, 200); assert.equal(current.body.order.estimatedReadyAtEpochMillis, at + 70 * 60_000);
+  assert.equal(current.body.order.estimatedPreparationMinutes, 40); assert.equal(current.body.order.preparationExtendedMinutes, 30);
+  for (const secret of ["PRIVATE", "estimateRevision", "estimateUpdatedByUid", "operation", "actor", buyer.uid])
+    assert.equal(JSON.stringify(current.body).includes(secret), false, secret);
+  const old = await call(buyer, `/${legacy}`);
+  assert.equal(old.status, 200); assert.equal(old.body.order.preparationExtendedMinutes, 0);
+  const closed = await call(buyer, `/${cancelled}`);
+  assert.equal(closed.status, 200); assert.equal("preparationExtendedMinutes" in closed.body.order, false);
+  assert.deepEqual(await call(other, `/${extended}`), { status: 404, body: { error: "ORDER_NOT_FOUND" } });
+});
+
 test("cursors are bound to account and phase; foreign or deleted anchors are rejected", async () => {
   const a = await actor(), b = await actor(); const orders: Seed[] = [];
   for (let i = 0; i < 25; i++) orders.push({ id: orderIdFor(`c${i}`), buyer: a.uid, status: "PREPARING", millis: 1_900_000_000_000 - i });

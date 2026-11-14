@@ -36,6 +36,14 @@ internal object BuyerOrderPreviewData {
         listOf(BuyerOrderStatusEntry("PENDING_CONFIRMATION", true, T), BuyerOrderStatusEntry("PREPARING", true, T + 240_000),
             BuyerOrderStatusEntry("READY_FOR_PICKUP", true, T + 1_560_000), BuyerOrderStatusEntry("IN_DELIVERY", true, T + 1_980_000)))
 
+    /** HU20: pedido en preparación con la hora estimada vigente y una ampliación de 15 minutos. */
+    val preparingDetail = BuyerOrderDetail(BuyerOrderSummary(id("5e2c7a90"), T, "PREPARING", true, BuyerOrderPhase.ACTIVE,
+        "Local de ejemplo · Centro", "Negocio de ejemplo", 2, 3300, p("Lomo saltado" to 2), 1), null, "Av. Ficticia 123, Cercado (ejemplo)",
+        BuyerOrderDelivery("Casa", "Calle Imaginaria 456, dpto. 2B", null, null),
+        listOf(StoreOrderLine("p6", "Lomo saltado", 2, 1500, 3000)), OrderAmounts(3000, 300, 3300), OrderPaymentMethod.CASH_ON_DELIVERY,
+        listOf(BuyerOrderStatusEntry("PENDING_CONFIRMATION", true, T), BuyerOrderStatusEntry("PREPARING", true, T + 120_000)),
+        estimatedPreparationMinutes = 40, estimatedReadyAtEpochMillis = 4_102_444_800_000, preparationExtendedMinutes = 15)
+
     /** HU19: rechazo con «Otro» y comentario del local de varias líneas. */
     val rejectedDetail = BuyerOrderDetail(historical[2], null, "Jr. Ejemplo 789 (ejemplo)",
         BuyerOrderDelivery("Casa", "Calle Imaginaria 456, dpto. 2B", null, null),

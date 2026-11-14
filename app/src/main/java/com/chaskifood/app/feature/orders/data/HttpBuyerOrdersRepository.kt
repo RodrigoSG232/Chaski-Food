@@ -164,7 +164,8 @@ private fun BuyerOrderDetailResponse.toDomain(): BuyerOrderDetail {
         OrderAmounts(subtotalMinor,deliveryFeeMinor,totalMinor,tipMinor), OrderPaymentMethod.CASH_ON_DELIVERY,
         statusHistory.map { BuyerOrderStatusEntry(it.status, it.statusKnown, it.occurredAtEpochMillis) },
         estimatedPreparationMinutes,estimatedReadyAtEpochMillis,OrderPaymentStatus.valueOf(paymentStatus),
-        rejection = if (status == "REJECTED") rejectionOf(rejectionReason, rejectionExplanation) else null)
+        rejection = if (status == "REJECTED") rejectionOf(rejectionReason, rejectionExplanation) else null,
+        preparationExtendedMinutes = if (estimatedReadyAtEpochMillis != null) preparationExtendedMinutes else 0)
 }
 
 /** Tolerant on purpose: an unknown or missing reason must never stop the buyer from opening a historical order. */

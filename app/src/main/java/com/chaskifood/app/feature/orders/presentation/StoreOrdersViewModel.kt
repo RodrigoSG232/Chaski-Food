@@ -7,9 +7,15 @@ import javax.inject.Inject
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 
+/** HU20: an extension whose outcome is unknown (timeout/network). Retrying reuses its operation ID. */
+data class PendingPreparationExtension(val orderId:String,val extension:PreparationExtension)
+
 data class StoreOrdersUiState(val context:StoreOrdersContext?=null,val loading:Boolean=true,val loadingMore:Boolean=false,
     val storeName:String="",val orders:List<StoreOrderSummary> = emptyList(),val nextCursor:String?=null,
-    val message:String?=null,val accessDenied:Boolean=false,val respondingOrderId:String?=null,val selectedStatus:OrderStatus=OrderStatus.PENDING_CONFIRMATION)
+    val message:String?=null,val accessDenied:Boolean=false,val respondingOrderId:String?=null,val selectedStatus:OrderStatus=OrderStatus.PENDING_CONFIRMATION,
+    val pendingExtension:PendingPreparationExtension?=null,
+    /** HU20: the order whose extension request is in flight (progress indicator; actions stay disabled). */
+    val extendingOrderId:String?=null)
 
 @HiltViewModel
 class StoreOrdersViewModel @Inject constructor(private val repository:StoreOrdersRepository,savedState:SavedStateHandle):ViewModel() {
@@ -112,18 +118,54 @@ class StoreOrdersViewModel @Inject constructor(private val repository:StoreOrder
             }
         }
     }
-    fun updateEstimate(orderId:String,minutes:Int){
-        val expected=usableContext()?:return;if(decisionJob?.isActive==true)return
-        mutable.update{it.copy(respondingOrderId=orderId,message=null)}
-        decisionJob=viewModelScope.launch{when(val result=repository.updateEstimate(expected,orderId,minutes)){
-            is PreparationEstimateResult.Updated->mutable.update{state->state.copy(respondingOrderId=null,message="Estimación actualizada.",
-                orders=state.orders.map{if(it.orderId==orderId)StoreOrderSummary(it.orderId,it.createdAtEpochMillis,it.items,it.amounts,
-                    OrderStatus.PREPARING,it.paymentMethod,minutes,result.estimatedReadyAtEpochMillis)else it})}
-            PreparationEstimateResult.StateChanged,PreparationEstimateResult.NotFound->mutable.update{it.copy(respondingOrderId=null,message="El pedido cambió y ya no permite actualizar la estimación.")}
-            PreparationEstimateResult.AccessDenied,PreparationEstimateResult.AuthenticationRequired,PreparationEstimateResult.StaleContext->{context=null;mutable.value=StoreOrdersUiState(loading=false,accessDenied=true,message="Tu autorización cambió.")}
-            PreparationEstimateResult.Unavailable->mutable.update{it.copy(respondingOrderId=null,message="No pudimos actualizar la estimación.")}
-        }}
+    /** A new, explicit extension: always a new operation ID and the revision the responsible person is looking at. */
+    fun extendPreparation(orderId:String,additionalMinutes:Int){
+        val order=mutable.value.orders.firstOrNull{it.orderId==orderId&&it.status==OrderStatus.PREPARING}?:return
+        val extension=runCatching{PreparationExtension(newOperationId(),additionalMinutes,order.estimateRevision)}.getOrNull()?:return
+        sendExtension(PendingPreparationExtension(orderId,extension))
     }
+    /** Retries only an unconfirmed operation, with the same ID, so the server can never add the minutes twice. */
+    fun retryPendingExtension(){ mutable.value.pendingExtension?.let(::sendExtension) }
+    fun discardPendingExtension(){
+        if(decisionJob?.isActive==true)return
+        mutable.update{it.copy(pendingExtension=null)}
+        usableContext()?.let{fetch(it,null)}
+    }
+    private fun sendExtension(pending:PendingPreparationExtension){
+        val expected=usableContext()?:return
+        if(decisionJob?.isActive==true || mutable.value.respondingOrderId!=null)return
+        val ticket=request
+        mutable.update{it.copy(respondingOrderId=pending.orderId,message=null,pendingExtension=pending,extendingOrderId=pending.orderId)}
+        decisionJob=viewModelScope.launch{
+            val result=try{repository.extendPreparation(expected,pending.orderId,pending.extension)}catch(e:CancellationException){throw e}
+                catch(_:Exception){PreparationExtensionResult.Unavailable}
+            currentCoroutineContext().ensureActive()
+            if(ticket!=request||context!=expected)return@launch
+            when(result){
+                is PreparationExtensionResult.Extended->mutable.update{state->state.copy(respondingOrderId=null,pendingExtension=null,
+                    extendingOrderId=null,
+                    message="Tiempo ampliado. Revisa la nueva hora estimada.",
+                    orders=state.orders.map{if(it.orderId==pending.orderId)it.withExtension(result.estimatedReadyAtEpochMillis,
+                        result.estimateRevision,result.preparationExtendedMinutes)else it})}
+                PreparationExtensionResult.Unavailable->mutable.update{it.copy(respondingOrderId=null,extendingOrderId=null,
+                    message="No se confirmó la ampliación. Puedes reintentarla sin que se sume dos veces.")}
+                PreparationExtensionResult.RevisionChanged->reloadAfterExtension(expected,
+                    "Otro cambio actualizó la hora estimada. Revísala y vuelve a confirmar si aún necesitas ampliar.")
+                PreparationExtensionResult.OperationConflict->reloadAfterExtension(expected,
+                    "No pudimos confirmar esa ampliación. Revisa la hora estimada y vuelve a intentarlo.")
+                PreparationExtensionResult.StateChanged,PreparationExtensionResult.NotFound->reloadAfterExtension(expected,
+                    "El pedido cambió y ya no está en preparación.")
+                PreparationExtensionResult.AccessDenied,PreparationExtensionResult.AuthenticationRequired,
+                PreparationExtensionResult.StaleContext->{context=null
+                    mutable.value=StoreOrdersUiState(loading=false,accessDenied=true,message="Tu autorización cambió.")}
+            }
+        }
+    }
+    private fun reloadAfterExtension(expected:StoreOrdersContext,notice:String){
+        mutable.update{it.copy(respondingOrderId=null,pendingExtension=null,extendingOrderId=null)}
+        fetch(expected,null,notice)
+    }
+    private fun newOperationId()=java.util.UUID.randomUUID().toString()
     private fun respond(orderId:String,decision:StoreOrderDecision) {
         val expected=usableContext()?:return
         if(decisionJob?.isActive==true || mutable.value.respondingOrderId!=null || mutable.value.orders.none{it.orderId==orderId})return
@@ -152,10 +194,13 @@ class StoreOrdersViewModel @Inject constructor(private val repository:StoreOrder
             }
         }
     }
-    private fun fetch(expected:StoreOrdersContext,cursor:String?){
+    private fun fetch(expected:StoreOrdersContext,cursor:String?,notice:String?=null){
         val ticket=++request
         val selected=mutable.value.selectedStatus
-        mutable.value=if(cursor==null)StoreOrdersUiState(context=expected,selectedStatus=selected) else mutable.value.copy(loadingMore=true,message=null)
+        // An unconfirmed extension survives reloads; only its explicit retry or discard clears it.
+        val pending=mutable.value.pendingExtension
+        mutable.value=if(cursor==null)StoreOrdersUiState(context=expected,selectedStatus=selected,pendingExtension=pending)
+            else mutable.value.copy(loadingMore=true,message=null)
         job=viewModelScope.launch {
             val result=try{repository.page(expected,cursor,selected)}catch(e:CancellationException){throw e}catch(_:Exception){StoreOrdersResult.Unavailable}
             currentCoroutineContext().ensureActive()
@@ -170,7 +215,8 @@ class StoreOrdersViewModel @Inject constructor(private val repository:StoreOrder
                     val previous=if(cursor==null)emptyList()else mutable.value.orders
                     val duplicate=previous.any {old->result.page.orders.any {it.orderId==old.orderId}}
                     mutable.value=if(duplicate)mutable.value.copy(loading=false,loadingMore=false,nextCursor=null,message="La página cambió. Actualiza la bandeja.")
-                    else StoreOrdersUiState(expected,false,false,result.page.storeName,previous+result.page.orders,result.page.nextCursor,selectedStatus=selected)
+                    else StoreOrdersUiState(expected,false,false,result.page.storeName,previous+result.page.orders,result.page.nextCursor,
+                        message=notice,selectedStatus=selected,pendingExtension=pending)
                 }
                 StoreOrdersResult.AccessDenied,StoreOrdersResult.AuthenticationRequired,StoreOrdersResult.StoreMissing->
                     mutable.value=StoreOrdersUiState(context=expected,loading=false,accessDenied=true,message=when(result){

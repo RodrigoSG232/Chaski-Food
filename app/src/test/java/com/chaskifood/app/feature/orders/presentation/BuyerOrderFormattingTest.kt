@@ -49,6 +49,30 @@ class BuyerOrderFormattingTest {
         }
     }
 
+    @Test fun preparationEstimateShowsAClockTimeTheExtensionAndNeverClaimsReadyWhenOverdue() {
+        val lima = ZoneId.of("America/Lima"); val readyAt = 1_800_000_000_000 // 03:00 en Lima
+        assertEquals("03:00", formatOrderClockTime(readyAt, lima))
+        val onTime = buyerPreparationEstimateText(readyAt, 15, readyAt - 60_000, lima)
+        assertEquals("Hora estimada de preparación: 03:00 (aprox.)", onTime.headline)
+        assertEquals("El local amplió el tiempo en 15 min.", onTime.detail)
+        assertNull(buyerPreparationEstimateText(readyAt, 0, readyAt, lima).detail)
+        val overdue = buyerPreparationEstimateText(readyAt, 0, readyAt + 60_000, lima).headline
+        assertTrue(overdue.contains("ya pasó") && overdue.contains("sigue preparando")); assertFalse(overdue.contains("listo"))
+    }
+
+    @Test fun storeCardMarksAnOverdueEstimateAsStillPreparing() {
+        val lima = ZoneId.of("America/Lima"); val readyAt = 1_800_000_000_000
+        assertEquals("Listo aprox. a las 03:00", storePreparationEstimateText(readyAt, readyAt, lima))
+        val overdue = storePreparationEstimateText(readyAt, readyAt + 60_000, lima)
+        assertEquals("Hora estimada vencida (03:00) · sigue en preparación", overdue); assertFalse(overdue.contains("Listo"))
+    }
+
+    @Test fun extensionPreviewAddsToTheCurrentEstimateOrToNowWhenItHasPassed() {
+        val readyAt = 1_800_002_400_000
+        assertEquals(readyAt + 600_000, extendedPreviewEpochMillis(readyAt, readyAt - 1_200_000, 10))
+        assertEquals(readyAt + 900_000 + 600_000, extendedPreviewEpochMillis(readyAt, readyAt + 900_000, 10))
+    }
+
     @Test fun previewMustMatchTheLineCount() {
         val one = listOf(BuyerOrderItemPreview("Plato", 2))
         assertThrows(IllegalArgumentException::class.java) { summary(one, 3) }

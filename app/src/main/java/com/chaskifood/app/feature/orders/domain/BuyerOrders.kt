@@ -65,6 +65,8 @@ class BuyerOrderDetail(
     val estimatedPreparationMinutes:Int?=null,val estimatedReadyAtEpochMillis:Long?=null,
     val paymentStatus: OrderPaymentStatus = OrderPaymentStatus.PENDING,
     val rejection: BuyerOrderRejection? = null,
+    /** HU20: minutos sumados mediante ampliaciones; 0 si no hubo o si el pedido es anterior a esta regla. */
+    val preparationExtendedMinutes: Int = 0,
 ) {
     val items: List<StoreOrderLine> = frozenOrderList(items)
     val statusHistory: List<BuyerOrderStatusEntry> = frozenOrderList(statusHistory)
@@ -77,6 +79,7 @@ class BuyerOrderDetail(
             this.items.take(BuyerOrderSummary.MAX_ITEM_PREVIEW).map { BuyerOrderItemPreview(it.name, it.quantity) })
         require(this.statusHistory.isNotEmpty() && this.statusHistory.zipWithNext().all { (a, b) -> a.occurredAtEpochMillis <= b.occurredAtEpochMillis })
         require(rejection == null || summary.status == "REJECTED")
+        require(preparationExtendedMinutes >= 0 && (preparationExtendedMinutes == 0 || estimatedReadyAtEpochMillis != null))
         if(estimatedPreparationMinutes!=null||estimatedReadyAtEpochMillis!=null)require(summary.status in setOf("PREPARING", "READY_FOR_PICKUP")&&
             estimatedPreparationMinutes!=null&&estimatedPreparationMinutes in 5..180&&estimatedReadyAtEpochMillis!=null&&
             estimatedReadyAtEpochMillis in 1..MAX_ORDER_EPOCH_MILLIS)

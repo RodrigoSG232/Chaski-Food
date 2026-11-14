@@ -5,7 +5,7 @@ import { StoreOrdersReader } from "./orders/storeOrdersReader";
 import { OrderDecisionService } from "./orders/orderDecisionService";
 import { parseOrderDecision } from "./orders/orderDecisionPolicy";
 import { PreparationEstimateService } from "./orders/preparationEstimateService";
-import { parsePreparationEstimate } from "./orders/preparationEstimatePolicy";
+import { parsePreparationExtension } from "./orders/preparationEstimatePolicy";
 import { OrderReadyService } from "./orders/orderReadyService";
 import { FoodDeliverySimulationService } from "./orders/foodDeliverySimulationService";
 import { BuyerOrdersReader } from "./orders/buyerOrdersReader";
@@ -86,7 +86,7 @@ export function createFoodApiHandler(dependencies: FoodApiDependencies): FoodHtt
         }
         return;
       }
-      const estimatePath = /^\/api\/v1\/stores\/([^/]+)\/orders\/([^/]+)\/preparation-estimate\/?$/.exec(request.path);
+      const extensionPath = /^\/api\/v1\/stores\/([^/]+)\/orders\/([^/]+)\/preparation-extensions\/?$/.exec(request.path);
       const readyPath = /^\/api\/v1\/stores\/([^/]+)\/orders\/([^/]+)\/ready-for-pickup\/?$/.exec(request.path);
       const storeSimulationPath = /^\/api\/v1\/stores\/([^/]+)\/orders\/([^/]+)\/simulate-(pickup|arrival)\/?$/.exec(request.path);
       if (storeSimulationPath) {
@@ -128,22 +128,22 @@ export function createFoodApiHandler(dependencies: FoodApiDependencies): FoodHtt
         }
         return;
       }
-      if (estimatePath) {
-        if (request.method !== "PUT") { response.status(405).set("Allow", "PUT").json({ error: "METHOD_NOT_ALLOWED" }); return; }
+      if (extensionPath) {
+        if (request.method !== "POST") { response.status(405).set("Allow", "POST").json({ error: "METHOD_NOT_ALLOWED" }); return; }
         try {
           if (Object.keys(request.query).length) throw new OrderHttpError("INVALID_REQUEST", 400);
           const app = dependencies.app(runtime), auth = getAuth(app);
           const actor = await verifyCommercialIdentity(auth, request.get("authorization"));
-          const input = parsePreparationEstimate(request.body);
-          response.status(200).json(await new PreparationEstimateService(getFirestore(app), auth).update(actor,
-            decodeURIComponent(estimatePath[1]), decodeURIComponent(estimatePath[2]), input.estimatedPreparationMinutes));
+          const input = parsePreparationExtension(request.body);
+          response.status(200).json(await new PreparationEstimateService(getFirestore(app), auth).extend(actor,
+            decodeURIComponent(extensionPath[1]), decodeURIComponent(extensionPath[2]), input));
         } catch (error) {
           if (error instanceof AuthenticationRequired) response.status(401).json({ error: "AUTHENTICATION_REQUIRED" });
           else if (error instanceof OrderHttpError) response.status(error.status).json({ error: error.code });
           else if (error instanceof CommercialAccessError) response.status(error.status === 403 ? 403 : 503)
             .json({ error: error.status === 403 ? "ACCESS_DENIED" : "AUTHORIZATION_UNAVAILABLE" });
           else if (error instanceof URIError) response.status(404).json({ error: "ORDER_NOT_FOUND" });
-          else response.status(503).json({ error: "ESTIMATE_UPDATE_UNAVAILABLE" });
+          else response.status(503).json({ error: "PREPARATION_EXTENSION_UNAVAILABLE" });
         }
         return;
       }

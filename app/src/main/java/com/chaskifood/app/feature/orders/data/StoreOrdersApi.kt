@@ -10,7 +10,10 @@ import retrofit2.http.*
 @Serializable internal data class StoreOrderResponse(val orderId:String,val createdAtEpochMillis:Long,val status:String,
     val items:List<StoreOrderLineResponse>,val subtotalMinor:Long,val deliveryFeeMinor:Long,val totalMinor:Long,
     val currency:String,val paymentMethod:String,val estimatedPreparationMinutes:Int?=null,val estimatedReadyAtEpochMillis:Long?=null,
-    val pickupCode:String?=null,val readyAtEpochMillis:Long?=null,val tipMinor:Long=0,val simulationStage:String?=null)
+    val pickupCode:String?=null,val readyAtEpochMillis:Long?=null,val tipMinor:Long=0,val simulationStage:String?=null,
+    val estimateRevision:Long=0,val preparationExtendedMinutes:Int=0)
+@Serializable internal data class PreparationExtensionResponse(val contractVersion:Int,val outcome:String,val status:String,
+    val estimatedReadyAtEpochMillis:Long,val estimateRevision:Long,val preparationExtendedMinutes:Int)
 @Serializable internal data class StoreOrderLineResponse(val productId:String,val name:String,val quantity:Int,
     val unitPriceMinor:Long,val lineTotalMinor:Long)
 @Serializable internal data class StoreOrderDecisionResponse(val contractVersion:Int,val outcome:String,val status:String,
@@ -22,9 +25,9 @@ internal interface StoreOrdersApi {
     @POST("stores/{storeId}/orders/{orderId}/decision")
     suspend fun respond(@Path("storeId") storeId:String,@Path("orderId") orderId:String,
         @Header("Authorization") authorization:String,@Body body:JsonObject):Response<StoreOrderDecisionResponse>
-    @PUT("stores/{storeId}/orders/{orderId}/preparation-estimate")
-    suspend fun updateEstimate(@Path("storeId") storeId:String,@Path("orderId") orderId:String,
-        @Header("Authorization") authorization:String,@Body body:JsonObject):Response<StoreOrderDecisionResponse>
+    @POST("stores/{storeId}/orders/{orderId}/preparation-extensions")
+    suspend fun extendPreparation(@Path("storeId") storeId:String,@Path("orderId") orderId:String,
+        @Header("Authorization") authorization:String,@Body body:JsonObject):Response<PreparationExtensionResponse>
     @POST("stores/{storeId}/orders/{orderId}/ready-for-pickup")
     suspend fun markReady(@Path("storeId") storeId:String,@Path("orderId") orderId:String,
         @Header("Authorization") authorization:String,@Body body:JsonObject):Response<StoreOrderDecisionResponse>

@@ -7,8 +7,10 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.*
+import kotlinx.coroutines.delay
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -18,6 +20,9 @@ import com.chaskifood.app.feature.cart.presentation.formatCartPrice
 import com.chaskifood.app.feature.orders.domain.StoreOrderSummary
 import com.chaskifood.app.feature.orders.domain.StoreOrderRejectionReason
 import com.chaskifood.app.feature.orders.domain.OrderStatus
+import com.chaskifood.app.feature.orders.domain.PreparationExtension
+import com.chaskifood.app.feature.orders.domain.StoreOrderLine
+import com.chaskifood.app.feature.orders.domain.OrderAmounts
 import com.chaskifood.app.ui.components.*
 import com.chaskifood.app.ui.theme.*
 import java.text.SimpleDateFormat
@@ -30,23 +35,25 @@ fun StoreOrdersScreen(onBack:()->Unit,viewModel:StoreOrdersViewModel=hiltViewMod
     val authorize=LocalProtectedAction.current
     StoreOrdersContent(state,onBack,{authorize{viewModel.refresh()}},{authorize{viewModel.loadMore()}},
         {id,minutes->authorize{viewModel.accept(id,minutes)}},{id,reason,text->authorize{viewModel.reject(id,reason,text)}},
-        {authorize{viewModel.selectStatus(it)}},{id,minutes->authorize{viewModel.updateEstimate(id,minutes)}},
+        {authorize{viewModel.selectStatus(it)}},{id,minutes->authorize{viewModel.extendPreparation(id,minutes)}},
         {id->authorize{viewModel.markReady(id)}},{id->authorize{viewModel.simulatePickup(id)}},
-        {id->authorize{viewModel.simulateArrival(id)}})
+        {id->authorize{viewModel.simulateArrival(id)}},{authorize{viewModel.retryPendingExtension()}},
+        {authorize{viewModel.discardPendingExtension()}})
 }
 
 @Composable
 internal fun StoreOrdersContent(state:StoreOrdersUiState,onBack:()->Unit={},onRefresh:()->Unit={},onMore:()->Unit={},
     onAccept:(String,Int)->Unit={_,_->},onReject:(String,StoreOrderRejectionReason,String?)->Unit={_,_,_->},
-    onStatus:(OrderStatus)->Unit={},onEstimate:(String,Int)->Unit={_,_->},onReady:(String)->Unit={},
-    onPickup:(String)->Unit={},onArrival:(String)->Unit={}) {
+    onStatus:(OrderStatus)->Unit={},onExtend:(String,Int)->Unit={_,_->},onReady:(String)->Unit={},
+    onPickup:(String)->Unit={},onArrival:(String)->Unit={},onRetryExtension:()->Unit={},onDiscardExtension:()->Unit={}) {
     var expanded by remember(state.context){mutableStateOf<String?>(null)}
     var accepting by remember{mutableStateOf<String?>(null)}
     var rejecting by remember{mutableStateOf<String?>(null)}
-    var estimating by remember{mutableStateOf<String?>(null)}
+    var extending by remember{mutableStateOf<String?>(null)}
     accepting?.let{id->AcceptOrderDialog({accepting=null}){minutes->accepting=null;onAccept(id,minutes)}}
     rejecting?.let{id->RejectOrderDialog({rejecting=null}){reason,text->rejecting=null;onReject(id,reason,text)}}
-    estimating?.let{id->AcceptOrderDialog({estimating=null}){minutes->estimating=null;onEstimate(id,minutes)}}
+    extending?.let{id->state.orders.firstOrNull{it.orderId==id&&it.estimatedReadyAtEpochMillis!=null}?.let{order->
+        ExtendPreparationDialog(order.estimatedReadyAtEpochMillis!!,{extending=null}){minutes->extending=null;onExtend(id,minutes)}}}
     Scaffold(containerColor=ChaskiBackground,topBar={ChaskiAppBar(title="Pedidos del local",onBackClick=onBack)}) {padding->
         LazyColumn(Modifier.fillMaxSize().padding(padding),contentPadding=PaddingValues(ChaskiDimens.ScreenPadding),
             verticalArrangement=Arrangement.spacedBy(ChaskiDimens.SpacingMd)) {
@@ -66,12 +73,15 @@ internal fun StoreOrdersContent(state:StoreOrdersUiState,onBack:()->Unit={},onRe
                         }
                     }
                     state.message?.let{message->item("error"){Text(message,modifier=Modifier.semantics{liveRegion=LiveRegionMode.Polite})}}
+                    state.pendingExtension?.let{pending->item("pending-extension"){
+                        PendingExtensionCard(pending,state.respondingOrderId==null,state.extendingOrderId!=null,
+                            onRetryExtension,onDiscardExtension)}}
                     if(state.orders.isEmpty() && state.message==null)item("empty"){Text("No hay pedidos en esta sección.")}
                     items(state.orders,key={it.orderId}){order->
                         OrderInboxCard(order,expanded==order.orderId,state.respondingOrderId==null,
                             {expanded=if(expanded==order.orderId)null else order.orderId},{accepting=order.orderId},
-                            {rejecting=order.orderId},{estimating=order.orderId},{onReady(order.orderId)},
-                            {onPickup(order.orderId)},{onArrival(order.orderId)})
+                            {rejecting=order.orderId},{extending=order.orderId},{onReady(order.orderId)},
+                            {onPickup(order.orderId)},{onArrival(order.orderId)},extending=state.extendingOrderId==order.orderId)
                     }
                     if(state.loadingMore)item("more-loading"){CircularProgressIndicator()}
                     if(state.nextCursor!=null)item("more"){ChaskiButton("Cargar más",onClick=onMore,enabled=!state.loadingMore,
@@ -82,8 +92,8 @@ internal fun StoreOrdersContent(state:StoreOrdersUiState,onBack:()->Unit={},onRe
     }
 }
 @Composable private fun OrderInboxCard(order:StoreOrderSummary,expanded:Boolean,actionsEnabled:Boolean,onToggle:()->Unit,
-    onAccept:()->Unit,onReject:()->Unit,onEstimate:()->Unit,onReady:()->Unit,
-    onPickup:()->Unit,onArrival:()->Unit) {
+    onAccept:()->Unit,onReject:()->Unit,onExtend:()->Unit,onReady:()->Unit,
+    onPickup:()->Unit,onArrival:()->Unit,extending:Boolean=false) {
     val date=remember(order.createdAtEpochMillis){SimpleDateFormat("dd/MM/yyyy HH:mm",Locale.forLanguageTag("es-PE")).apply{
         timeZone=TimeZone.getTimeZone("America/Lima")}.format(Date(order.createdAtEpochMillis))}
     val statusText=when(order.status) {
@@ -111,8 +121,18 @@ internal fun StoreOrdersContent(state:StoreOrdersUiState,onBack:()->Unit={},onRe
                 fontWeight=FontWeight.Bold,color=ChaskiTextPrimary)
             Text(date,style=MaterialTheme.typography.bodySmall,color=ChaskiTextMuted)
             ChaskiStatusPill(statusText,statusBackground,statusForeground)
-            order.estimatedPreparationMinutes?.let {
-                Text("Estimación: $it minutos",style=MaterialTheme.typography.bodyMedium)
+            order.estimatedReadyAtEpochMillis?.let {
+                // Reloj local por minuto (sin red): solo cambia el texto cuando la hora estimada vence.
+                val now by produceState(System.currentTimeMillis(),it){while(true){delay(60_000);value=System.currentTimeMillis()}}
+                val overdue=order.status==OrderStatus.PREPARING&&now>it
+                Text(if(order.status==OrderStatus.PREPARING)storePreparationEstimateText(it,now)
+                    else "Listo aprox. a las ${formatOrderClockTime(it)}",style=MaterialTheme.typography.bodyMedium,
+                    fontWeight=FontWeight.SemiBold,color=if(overdue)ChaskiStatusPendingFg else ChaskiTextPrimary)
+                if(extending)Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(8.dp)){
+                    CircularProgressIndicator(Modifier.size(16.dp),strokeWidth=2.dp)
+                    Text("Ampliando tiempo…",style=MaterialTheme.typography.bodySmall,color=ChaskiTextMuted)}
+                if(order.preparationExtendedMinutes>0)Text("Incluye +${order.preparationExtendedMinutes} min de ampliación",
+                    style=MaterialTheme.typography.bodySmall,color=ChaskiTextMuted)
             }
             HorizontalDivider(color=ChaskiDivider)
             Text("Productos",style=MaterialTheme.typography.labelMedium,color=ChaskiTextMuted)
@@ -157,7 +177,7 @@ internal fun StoreOrdersContent(state:StoreOrdersUiState,onBack:()->Unit={},onRe
                         variant=ChaskiButtonVariant.Outlined)
                 } else if(order.status==OrderStatus.PREPARING) {
                     ChaskiButton("Marcar pedido listo",onClick=onReady,enabled=actionsEnabled)
-                    ChaskiButton("Actualizar estimación",onClick=onEstimate,enabled=actionsEnabled,
+                    ChaskiButton("Ampliar tiempo",onClick=onExtend,enabled=actionsEnabled,
                         variant=ChaskiButtonVariant.Outlined)
                 } else if(order.status==OrderStatus.READY_FOR_PICKUP) {
                     ChaskiButton("Pedido recogido",onClick=onPickup,enabled=actionsEnabled)
@@ -190,6 +210,57 @@ internal fun StoreOrdersContent(state:StoreOrdersUiState,onBack:()->Unit={},onRe
         dismissButton={TextButton(onClick=onDismiss){Text("Volver")}})
 }
 
+/**
+ * HU20: adds minutes to the current estimate; it never replaces the HU19 duration. The new time shown is a preview
+ * computed with the device clock; foodApi returns the authoritative time.
+ */
+@Composable internal fun ExtendPreparationDialog(currentReadyAtEpochMillis:Long,onDismiss:()->Unit,
+    nowEpochMillis:()->Long={System.currentTimeMillis()},onConfirm:(Int)->Unit) {
+    var minutes by remember{mutableStateOf("10")}
+    val value=minutes.toIntOrNull()
+    val valid=value!=null&&value in PreparationExtension.MIN_MINUTES..PreparationExtension.MAX_MINUTES
+    AlertDialog(onDismissRequest=onDismiss,title={Text("Ampliar tiempo de preparación")},
+        text={Column(verticalArrangement=Arrangement.spacedBy(ChaskiDimens.SpacingSm)){
+            Text("Se sumarán minutos a la hora estimada actual; no se reemplaza la estimación inicial.")
+            Text("Hora estimada actual: ${formatOrderClockTime(currentReadyAtEpochMillis)}",fontWeight=FontWeight.SemiBold)
+            Row(Modifier.horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(8.dp)){
+                listOf(5,10,15,30).forEach{option->
+                    FilterChip(value==option,{minutes=option.toString()},{Text("+$option min")})
+                }
+            }
+            OutlinedTextField(minutes,{minutes=it.filter(Char::isDigit).take(2)},label={Text("Minutos adicionales (5 a 60)")},
+                singleLine=true,isError=minutes.isNotEmpty()&&!valid)
+            if(valid)Text("Nueva hora estimada: ≈ ${formatOrderClockTime(
+                extendedPreviewEpochMillis(currentReadyAtEpochMillis,nowEpochMillis(),value!!))}",fontWeight=FontWeight.Bold)
+            else Text("Indica entre 5 y 60 minutos.",color=ChaskiTextMuted)
+        }},
+        confirmButton={TextButton(onClick={onConfirm(value!!)},enabled=valid){Text("Confirmar ampliación")}},
+        dismissButton={TextButton(onClick=onDismiss){Text("Volver")}})
+}
+
+@Composable private fun PendingExtensionCard(pending:PendingPreparationExtension,enabled:Boolean,sending:Boolean,
+    onRetry:()->Unit,onDiscard:()->Unit) {
+    Surface(modifier=Modifier.fillMaxWidth(),color=ChaskiStatusPendingBg,shape=MaterialTheme.shapes.medium) {
+        Column(Modifier.padding(ChaskiDimens.SpacingMd),verticalArrangement=Arrangement.spacedBy(ChaskiDimens.SpacingSm)) {
+            if(sending) {
+                // Reintento en curso: no se afirma éxito ni fallo hasta la respuesta de foodApi.
+                Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(8.dp)){
+                    CircularProgressIndicator(Modifier.size(16.dp),strokeWidth=2.dp)
+                    Text("Ampliando tiempo… (+${pending.extension.additionalMinutes} min)",color=ChaskiStatusPendingFg)}
+                return@Column
+            }
+            Text("La ampliación de +${pending.extension.additionalMinutes} min del pedido ${pending.orderId.take(8)} no se confirmó.",
+                color=ChaskiStatusPendingFg,fontWeight=FontWeight.SemiBold)
+            Text("Reintentar la envía otra vez sin sumarla dos veces. Descartar recarga la bandeja.",
+                style=MaterialTheme.typography.bodySmall,color=ChaskiStatusPendingFg)
+            Row(horizontalArrangement=Arrangement.spacedBy(ChaskiDimens.SpacingSm)) {
+                TextButton(onClick=onRetry,enabled=enabled){Text("Reintentar")}
+                TextButton(onClick=onDiscard,enabled=enabled){Text("Descartar")}
+            }
+        }
+    }
+}
+
 private fun StoreOrderRejectionReason.label()=when(this){
     StoreOrderRejectionReason.STORE_BUSY->"Alta demanda"
     StoreOrderRejectionReason.PRODUCT_UNAVAILABLE->"Producto no disponible"
@@ -207,4 +278,32 @@ private fun StoreOrderRejectionReason.label()=when(this){
             label={Text("Explicación obligatoria")},minLines=2,isError=explanation.isNotEmpty()&&!valid)
     }},confirmButton={TextButton(onClick={onConfirm(reason,explanation.trim().takeIf{reason==StoreOrderRejectionReason.OTHER})},enabled=valid){Text("Confirmar rechazo")}},
         dismissButton={TextButton(onClick=onDismiss){Text("Volver")}})
+}
+
+private val previewPreparingOrder = StoreOrderSummary("5e2c7a90" + "0".repeat(56), 1_800_000_000_000,
+    listOf(StoreOrderLine("p1", "Lomo saltado", 2, 1500, 3000)), OrderAmounts(3000, 300, 3300), OrderStatus.PREPARING,
+    estimatedPreparationMinutes = 40, estimatedReadyAtEpochMillis = 1_800_003_300_000, estimateRevision = 1, preparationExtendedMinutes = 15)
+
+@androidx.compose.ui.tooling.preview.Preview(name = "Bandeja · en preparación (ampliado)", showBackground = true, widthDp = 360, heightDp = 900)
+@Composable
+private fun StoreOrdersPreparingPreview() = ChaskiTheme {
+    StoreOrdersContent(StoreOrdersUiState(loading = false, storeName = "Local de ejemplo · Centro", orders = listOf(previewPreparingOrder),
+        selectedStatus = OrderStatus.PREPARING))
+}
+
+@androidx.compose.ui.tooling.preview.Preview(name = "Bandeja · hora vencida y ampliando", showBackground = true, widthDp = 360, heightDp = 900)
+@Composable
+private fun StoreOrdersOverdueExtendingPreview() = ChaskiTheme {
+    // Hora estimada en el pasado (vencida) mientras se procesa una ampliación de +10 min.
+    val overdue = previewPreparingOrder.withExtension(1_700_000_000_000, 1, 15)
+    StoreOrdersContent(StoreOrdersUiState(loading = false, storeName = "Local de ejemplo · Centro", orders = listOf(overdue),
+        selectedStatus = OrderStatus.PREPARING, respondingOrderId = overdue.orderId, extendingOrderId = overdue.orderId,
+        pendingExtension = PendingPreparationExtension(overdue.orderId,
+            PreparationExtension("3f8a1c2e-5b7d-4e9f-8a6b-1c2d3e4f5a6b", 10, 1))))
+}
+
+@androidx.compose.ui.tooling.preview.Preview(name = "Diálogo · ampliar tiempo", showBackground = true, widthDp = 360, heightDp = 640)
+@Composable
+private fun ExtendPreparationDialogPreview() = ChaskiTheme {
+    ExtendPreparationDialog(1_800_003_300_000, {}, nowEpochMillis = { 1_800_001_000_000 }) {}
 }

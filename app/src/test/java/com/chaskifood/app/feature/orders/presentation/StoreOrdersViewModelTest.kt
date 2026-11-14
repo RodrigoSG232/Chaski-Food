@@ -23,7 +23,8 @@ class StoreOrdersViewModelTest {
         val auth=MutableStateFlow(initial);var current=true;var calls=0;val cursors=mutableListOf<String?>()
         var next:StoreOrdersResult=StoreOrdersResult.Loaded(StoreOrdersPage("store","Local",emptyList(),null))
         var decision:StoreOrderDecisionResult=StoreOrderDecisionResult.Unavailable
-        var estimate:PreparationEstimateResult=PreparationEstimateResult.Unavailable
+        var extension:PreparationExtensionResult=PreparationExtensionResult.Unavailable
+        val extensions=mutableListOf<Pair<String,PreparationExtension>>()
         var ready:MarkOrderReadyResult=MarkOrderReadyResult.Unavailable
         val decisions=mutableListOf<Pair<String,StoreOrderDecision>>()
         var block:suspend()->StoreOrdersResult={next}
@@ -33,7 +34,10 @@ class StoreOrdersViewModelTest {
         override suspend fun respond(context:StoreOrdersContext,orderId:String,decision:StoreOrderDecision):StoreOrderDecisionResult {
             decisions+=orderId to decision;return this.decision
         }
-        override suspend fun updateEstimate(context:StoreOrdersContext,orderId:String,minutes:Int)=estimate
+        var extensionGate:CompletableDeferred<Unit>?=null
+        override suspend fun extendPreparation(context:StoreOrdersContext,orderId:String,extension:PreparationExtension):PreparationExtensionResult {
+            extensions+=orderId to extension;extensionGate?.await();return this.extension
+        }
         override suspend fun markReady(context:StoreOrdersContext,orderId:String)=ready
     }
     private fun vm(repo:Repo,store:String="store")=StoreOrdersViewModel(repo,SavedStateHandle(mapOf("businessId" to "business","storeId" to store)))
@@ -60,11 +64,76 @@ class StoreOrdersViewModelTest {
         assertEquals(listOf("order"),vm.state.value.orders.map{it.orderId});assertTrue(vm.state.value.message!!.contains("suspendido"))
         assertNull(vm.state.value.respondingOrderId)
     }
-    @Test fun estimateUpdateChangesVisiblePreparingOrder()=runTest {
-        val repo=Repo(StoreOrdersAuthorization.Allowed(context()));repo.next=loaded();val vm=vm(repo);runCurrent()
-        repo.estimate=PreparationEstimateResult.Updated(1800002400000);vm.updateEstimate("order",40);runCurrent()
-        assertEquals(40,vm.state.value.orders.single().estimatedPreparationMinutes)
-        assertEquals(1800002400000,vm.state.value.orders.single().estimatedReadyAtEpochMillis)
+    private fun preparing(revision:Long=1,extended:Int=0)=StoreOrdersResult.Loaded(StoreOrdersPage("store","Local",listOf(
+        StoreOrderSummary("order",1800000000000,listOf(StoreOrderLine("p","Plato",1,1000,1000)),OrderAmounts(1000,300,1300),
+            OrderStatus.PREPARING,estimatedPreparationMinutes=40,estimatedReadyAtEpochMillis=1800002400000,
+            estimateRevision=revision,preparationExtendedMinutes=extended)),null))
+    @Test fun extensionSendsCurrentRevisionAndUpdatesTheVisibleOrderWithoutTouchingTheInitialEstimate()=runTest {
+        val repo=Repo(StoreOrdersAuthorization.Allowed(context()));repo.next=preparing(revision=1);val vm=vm(repo);runCurrent()
+        repo.extension=PreparationExtensionResult.Extended(1800003000000,2,10);vm.extendPreparation("order",10);runCurrent()
+        val sent=repo.extensions.single().second
+        assertEquals(10,sent.additionalMinutes);assertEquals(1L,sent.expectedEstimateRevision)
+        val order=vm.state.value.orders.single()
+        assertEquals(40,order.estimatedPreparationMinutes);assertEquals(1800003000000,order.estimatedReadyAtEpochMillis)
+        assertEquals(2L,order.estimateRevision);assertEquals(10,order.preparationExtendedMinutes)
+        assertNull(vm.state.value.pendingExtension);assertTrue(vm.state.value.message!!.contains("ampliado"))
+    }
+    @Test fun twoIntentionalExtensionsUseDifferentOperationsAndInvalidMinutesAreNeverSent()=runTest {
+        val repo=Repo(StoreOrdersAuthorization.Allowed(context()));repo.next=preparing(revision=0);val vm=vm(repo);runCurrent()
+        repo.extension=PreparationExtensionResult.Extended(1800003000000,1,10);vm.extendPreparation("order",10);runCurrent()
+        repo.extension=PreparationExtensionResult.Extended(1800003600000,2,20);vm.extendPreparation("order",10);runCurrent()
+        assertEquals(2,repo.extensions.size)
+        assertNotEquals(repo.extensions[0].second.operationId,repo.extensions[1].second.operationId)
+        assertEquals(listOf(0L,1L),repo.extensions.map{it.second.expectedEstimateRevision})
+        vm.extendPreparation("order",4);vm.extendPreparation("order",61);vm.extendPreparation("missing",10);runCurrent()
+        assertEquals(2,repo.extensions.size)
+    }
+    @Test fun uncertainExtensionKeepsItsOperationAcrossReloadsAndRetriesWithTheSameId()=runTest {
+        val repo=Repo(StoreOrdersAuthorization.Allowed(context()));repo.next=preparing();val vm=vm(repo);runCurrent()
+        repo.extension=PreparationExtensionResult.Unavailable;vm.extendPreparation("order",15);runCurrent()
+        val pending=vm.state.value.pendingExtension!!;assertEquals(15,pending.extension.additionalMinutes)
+        assertTrue(vm.state.value.message!!.contains("no se confirmó",ignoreCase=true))
+        vm.refresh();runCurrent();assertEquals(pending,vm.state.value.pendingExtension)
+        repo.extension=PreparationExtensionResult.Extended(1800003300000,2,15);vm.retryPendingExtension();runCurrent()
+        assertEquals(listOf(pending.extension,pending.extension),repo.extensions.map{it.second})
+        assertNull(vm.state.value.pendingExtension)
+    }
+    @Test fun discardingAnUncertainExtensionReloadsInsteadOfSendingANewOne()=runTest {
+        val repo=Repo(StoreOrdersAuthorization.Allowed(context()));repo.next=preparing();val vm=vm(repo);runCurrent()
+        vm.extendPreparation("order",15);runCurrent();val calls=repo.calls
+        repo.next=preparing(revision=2,extended=15);vm.discardPendingExtension();runCurrent()
+        assertNull(vm.state.value.pendingExtension);assertEquals(calls+1,repo.calls);assertEquals(1,repo.extensions.size)
+        assertEquals(2L,vm.state.value.orders.single().estimateRevision)
+    }
+    @Test fun revisionConflictOrStateChangeReloadsAndExplainsWithoutRetrying()=runTest {
+        for((result,text) in listOf(PreparationExtensionResult.RevisionChanged to "Otro cambio",
+            PreparationExtensionResult.OperationConflict to "No pudimos confirmar",
+            PreparationExtensionResult.StateChanged to "ya no está en preparación")) {
+            val repo=Repo(StoreOrdersAuthorization.Allowed(context()));repo.next=preparing();val vm=vm(repo);runCurrent()
+            repo.extension=result;repo.next=preparing(revision=3);vm.extendPreparation("order",10);runCurrent()
+            assertNull(vm.state.value.pendingExtension);assertEquals(1,repo.extensions.size)
+            assertTrue(vm.state.value.message!!.contains(text));assertEquals(3L,vm.state.value.orders.single().estimateRevision)
+        }
+    }
+    @Test fun inFlightExtensionShowsProgressBlocksDuplicatesAndNeverClaimsSuccessEarly()=runTest {
+        val repo=Repo(StoreOrdersAuthorization.Allowed(context()));repo.next=preparing();val vm=vm(repo);runCurrent()
+        val gate=CompletableDeferred<Unit>();repo.extensionGate=gate
+        repo.extension=PreparationExtensionResult.Extended(1800003000000,2,10)
+        vm.extendPreparation("order",10);runCurrent()
+        assertEquals("order",vm.state.value.extendingOrderId);assertEquals("order",vm.state.value.respondingOrderId)
+        assertNull(vm.state.value.message);assertEquals(1800002400000,vm.state.value.orders.single().estimatedReadyAtEpochMillis)
+        vm.extendPreparation("order",10);vm.retryPendingExtension();vm.discardPendingExtension();runCurrent()
+        assertEquals(1,repo.extensions.size)
+        gate.complete(Unit);runCurrent()
+        assertNull(vm.state.value.extendingOrderId);assertNull(vm.state.value.respondingOrderId)
+        assertTrue(vm.state.value.message!!.contains("ampliado"))
+        repo.extensionGate=null;repo.extension=PreparationExtensionResult.Unavailable;vm.extendPreparation("order",5);runCurrent()
+        assertNull(vm.state.value.extendingOrderId);assertNotNull(vm.state.value.pendingExtension)
+    }
+    @Test fun lostAuthorizationDuringExtensionClosesTheInbox()=runTest {
+        val repo=Repo(StoreOrdersAuthorization.Allowed(context()));repo.next=preparing();val vm=vm(repo);runCurrent()
+        repo.extension=PreparationExtensionResult.AccessDenied;vm.extendPreparation("order",10);runCurrent()
+        assertTrue(vm.state.value.accessDenied);assertTrue(vm.state.value.orders.isEmpty())
     }
     @Test fun readyTransitionRemovesPreparingOrderAndShowsPickupCode()=runTest {
         val repo=Repo(StoreOrdersAuthorization.Allowed(context()))

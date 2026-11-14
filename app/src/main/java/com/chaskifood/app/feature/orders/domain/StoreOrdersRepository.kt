@@ -26,7 +26,8 @@ data class StoreOrderLine(val productId:String,val name:String,val quantity:Int,
 class StoreOrderSummary(val orderId:String,val createdAtEpochMillis:Long,items:List<StoreOrderLine>,val amounts:OrderAmounts,
     val status:OrderStatus=OrderStatus.PENDING_CONFIRMATION,val paymentMethod:OrderPaymentMethod=OrderPaymentMethod.CASH_ON_DELIVERY,
     val estimatedPreparationMinutes:Int?=null,val estimatedReadyAtEpochMillis:Long?=null,
-    val pickupCode:String?=null,val readyAtEpochMillis:Long?=null,val simulationStage:String?=null) {
+    val pickupCode:String?=null,val readyAtEpochMillis:Long?=null,val simulationStage:String?=null,
+    val estimateRevision:Long=0,val preparationExtendedMinutes:Int=0) {
     val items:List<StoreOrderLine> = frozenOrderList(items)
     init {
         orderId(orderId);require(createdAtEpochMillis in 1..MAX_ORDER_EPOCH_MILLIS)
@@ -39,7 +40,11 @@ class StoreOrderSummary(val orderId:String,val createdAtEpochMillis:Long,items:L
             readyAtEpochMillis!=null&&readyAtEpochMillis in 1..MAX_ORDER_EPOCH_MILLIS)
         else require(pickupCode==null&&readyAtEpochMillis==null)
         require(simulationStage==null || (status==OrderStatus.IN_DELIVERY && simulationStage in setOf("ON_THE_WAY","AT_CUSTOMER")))
+        require(estimateRevision>=0 && preparationExtendedMinutes>=0)
     }
+    fun withExtension(estimatedReadyAtEpochMillis:Long,estimateRevision:Long,preparationExtendedMinutes:Int)=StoreOrderSummary(orderId,
+        createdAtEpochMillis,items,amounts,status,paymentMethod,estimatedPreparationMinutes,estimatedReadyAtEpochMillis,pickupCode,
+        readyAtEpochMillis,simulationStage,estimateRevision,preparationExtendedMinutes)
 }
 class StoreOrdersPage(val storeId:String,val storeName:String,orders:List<StoreOrderSummary>,val nextCursor:String?) {
     val orders:List<StoreOrderSummary> = frozenOrderList(orders)
@@ -82,14 +87,29 @@ sealed interface StoreOrderDecisionResult {
     data object StaleContext:StoreOrderDecisionResult
     data object Unavailable:StoreOrderDecisionResult
 }
-sealed interface PreparationEstimateResult {
-    data class Updated(val estimatedReadyAtEpochMillis:Long):PreparationEstimateResult
-    data object StateChanged:PreparationEstimateResult
-    data object AccessDenied:PreparationEstimateResult
-    data object AuthenticationRequired:PreparationEstimateResult
-    data object NotFound:PreparationEstimateResult
-    data object StaleContext:PreparationEstimateResult
-    data object Unavailable:PreparationEstimateResult
+/**
+ * HU20: one explicit extension of the current preparation estimate. [operationId] identifies this intent: a retry
+ * reuses it so the server never adds the minutes twice; a new intent always uses a new ID.
+ */
+data class PreparationExtension(val operationId:String,val additionalMinutes:Int,val expectedEstimateRevision:Long) {
+    init {
+        require(operationId.matches(Regex("[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}")))
+        require(additionalMinutes in MIN_MINUTES..MAX_MINUTES && expectedEstimateRevision>=0)
+    }
+    companion object { const val MIN_MINUTES=5; const val MAX_MINUTES=60 }
+}
+sealed interface PreparationExtensionResult {
+    data class Extended(val estimatedReadyAtEpochMillis:Long,val estimateRevision:Long,val preparationExtendedMinutes:Int):PreparationExtensionResult
+    /** Another change moved the estimate first; the screen must reload and ask again. */
+    data object RevisionChanged:PreparationExtensionResult
+    data object OperationConflict:PreparationExtensionResult
+    data object StateChanged:PreparationExtensionResult
+    data object AccessDenied:PreparationExtensionResult
+    data object AuthenticationRequired:PreparationExtensionResult
+    data object NotFound:PreparationExtensionResult
+    data object StaleContext:PreparationExtensionResult
+    /** Timeout or network failure: the outcome is unknown, so only the same operation may be retried. */
+    data object Unavailable:PreparationExtensionResult
 }
 sealed interface MarkOrderReadyResult {
     data class Ready(val pickupCode:String,val readyAtEpochMillis:Long):MarkOrderReadyResult
@@ -115,7 +135,7 @@ interface StoreOrdersRepository {
     fun isCurrent(context:StoreOrdersContext):Boolean
     suspend fun page(context:StoreOrdersContext,cursor:String?=null,status:OrderStatus=OrderStatus.PENDING_CONFIRMATION):StoreOrdersResult
     suspend fun respond(context:StoreOrdersContext,orderId:String,decision:StoreOrderDecision):StoreOrderDecisionResult
-    suspend fun updateEstimate(context:StoreOrdersContext,orderId:String,minutes:Int):PreparationEstimateResult
+    suspend fun extendPreparation(context:StoreOrdersContext,orderId:String,extension:PreparationExtension):PreparationExtensionResult
     suspend fun markReady(context:StoreOrdersContext,orderId:String):MarkOrderReadyResult
     suspend fun simulatePickup(context:StoreOrdersContext,orderId:String):SimulatedStoreDeliveryResult = SimulatedStoreDeliveryResult.Unavailable
     suspend fun simulateArrival(context:StoreOrdersContext,orderId:String):SimulatedStoreDeliveryResult = SimulatedStoreDeliveryResult.Unavailable

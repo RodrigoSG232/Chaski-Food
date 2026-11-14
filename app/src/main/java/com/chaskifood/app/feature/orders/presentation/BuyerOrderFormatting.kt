@@ -78,6 +78,38 @@ internal fun formatOrderDateTime(epochMillis: Long, zone: ZoneId = ZoneId.system
 internal fun formatOrderShortDateTime(epochMillis: Long, zone: ZoneId = ZoneId.systemDefault()): String =
     shortDateTime.format(Instant.ofEpochMilli(epochMillis).atZone(zone)).replace(".", "")
 
+private val clockTime = DateTimeFormatter.ofPattern("HH:mm", peru)
+
+/** Hora de reloj de una estimación («12:50»); siempre aproximada, nunca una promesa. */
+internal fun formatOrderClockTime(epochMillis: Long, zone: ZoneId = ZoneId.systemDefault()): String =
+    clockTime.format(Instant.ofEpochMilli(epochMillis).atZone(zone))
+
+/** HU20: misma regla que foodApi, solo como vista previa: max(hora vigente, ahora) + minutos. */
+internal fun extendedPreviewEpochMillis(currentReadyAtEpochMillis: Long, nowEpochMillis: Long, additionalMinutes: Int): Long =
+    maxOf(currentReadyAtEpochMillis, nowEpochMillis) + additionalMinutes * 60_000L
+
+/** HU20: tarjeta del responsable; una hora vencida no significa que el pedido esté listo. */
+internal fun storePreparationEstimateText(estimatedReadyAtEpochMillis: Long, nowEpochMillis: Long,
+    zone: ZoneId = ZoneId.systemDefault()): String {
+    val time = formatOrderClockTime(estimatedReadyAtEpochMillis, zone)
+    return if (nowEpochMillis > estimatedReadyAtEpochMillis) "Hora estimada vencida ($time) · sigue en preparación"
+    else "Listo aprox. a las $time"
+}
+
+/** HU20: textos del comprador mientras el pedido sigue en preparación. */
+internal data class BuyerPreparationEstimateText(val headline: String, val detail: String?)
+
+internal fun buyerPreparationEstimateText(estimatedReadyAtEpochMillis: Long, preparationExtendedMinutes: Int, nowEpochMillis: Long,
+    zone: ZoneId = ZoneId.systemDefault()): BuyerPreparationEstimateText {
+    val time = formatOrderClockTime(estimatedReadyAtEpochMillis, zone)
+    // Una hora vencida no significa que el pedido esté listo: solo el estado READY_FOR_PICKUP lo indica.
+    val headline = if (nowEpochMillis > estimatedReadyAtEpochMillis)
+        "La hora estimada ($time) ya pasó. El local sigue preparando tu pedido."
+    else "Hora estimada de preparación: $time (aprox.)"
+    val detail = if (preparationExtendedMinutes > 0) "El local amplió el tiempo en $preparationExtendedMinutes min." else null
+    return BuyerPreparationEstimateText(headline, detail)
+}
+
 /** «2× Lomo saltado · 1× Chicha morada · +1 más» con los datos históricos del resumen. */
 internal fun itemPreviewText(summary: BuyerOrderSummary): String {
     val shown = summary.itemPreview.joinToString(" · ") { "${it.quantity}× ${it.name}" }

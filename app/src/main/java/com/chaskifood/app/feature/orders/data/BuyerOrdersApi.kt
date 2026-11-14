@@ -20,7 +20,7 @@ import retrofit2.http.*
     val itemPreview: List<BuyerOrderItemPreviewResponse>, val itemLineCount: Int,
     val estimatedPreparationMinutes:Int?=null,val estimatedReadyAtEpochMillis:Long?=null,val tipMinor:Long=0,
     val paymentStatus:String="PENDING", val deliveryOutcome: String? = null,
-    val rejectionReason: String? = null, val rejectionExplanation: String? = null)
+    val rejectionReason: String? = null, val rejectionExplanation: String? = null, val preparationExtendedMinutes: Int = 0)
 @Serializable internal data class BuyerOrderCancellationResponse(val contractVersion: Int, val outcome: String, val status: String)
 @Serializable internal data class SimulatedPaymentResponse(val contractVersion: Int, val outcome: String, val paymentStatus: String)
 @Serializable internal data class ConfirmReceivedResponse(val contractVersion:Int,val outcome:String,

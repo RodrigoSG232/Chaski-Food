@@ -19,8 +19,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.delay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -124,7 +126,14 @@ private fun DetailBody(detail: BuyerOrderDetail, message: String?, notice: Strin
                     color = ChaskiTextSecondary)
                 Text("Se actualiza al abrir esta pantalla, al volver a la app o al deslizar hacia abajo.",
                     style = MaterialTheme.typography.bodySmall, color = ChaskiTextTertiary)
-                detail.estimatedPreparationMinutes?.let { Text("Tiempo estimado: $it minutos",fontWeight=FontWeight.Bold) }
+                // HU20: solo mientras se prepara; en READY_FOR_PICKUP manda el estado, no la estimación.
+                if (summary.status == "PREPARING") detail.estimatedReadyAtEpochMillis?.let { readyAt ->
+                    val now by produceState(System.currentTimeMillis(), readyAt) {
+                        while (true) { delay(60_000); value = System.currentTimeMillis() } } // reloj local, sin red
+                    val estimate = buyerPreparationEstimateText(readyAt, detail.preparationExtendedMinutes, now)
+                    Text(estimate.headline, fontWeight = FontWeight.Bold, color = ChaskiTextPrimary)
+                    estimate.detail?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = ChaskiTextSecondary) }
+                }
             }
         }
         if (trackingState != null) item("tracking") { BuyerTrackingCard(trackingState, onTrackingRefresh) }
@@ -271,6 +280,12 @@ private fun AmountRow(label: String, minor: Long, bold: Boolean = false) {
 @Composable
 private fun BuyerOrderDetailPreview() = ChaskiTheme {
     BuyerOrderDetailContent(BuyerOrderDetailUiState(loading = false, detail = BuyerOrderPreviewData.detail), {}, {})
+}
+
+@Preview(name = "Detalle · en preparación (ampliado)", showBackground = true, widthDp = 360, heightDp = 1500)
+@Composable
+private fun BuyerOrderPreparingDetailPreview() = ChaskiTheme {
+    BuyerOrderDetailContent(BuyerOrderDetailUiState(loading = false, detail = BuyerOrderPreviewData.preparingDetail), {}, {})
 }
 
 @Preview(name = "Detalle · rechazado (Otro)", showBackground = true, widthDp = 360, heightDp = 1500)

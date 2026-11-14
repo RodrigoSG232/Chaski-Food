@@ -147,6 +147,19 @@ class HttpBuyerOrdersRepositoryTest {
         assertNull(decoded.rejectionReason); assertNull(decoded.rejectionExplanation)
     }
 
+    @Test fun preparingDetailMapsExtendedMinutesAndOlderResponsesDefaultToZero() = runTest {
+        suspend fun load(body: BuyerOrderDetailResponse) =
+            (repo(detail = { Response.success(BuyerOrderDetailEnvelope(1, body)) }).detail(session, id) as BuyerOrderDetailResult.Loaded).detail
+        val preparing = detail().copy(estimatedPreparationMinutes = 40, estimatedReadyAtEpochMillis = 1_800_003_000_000)
+        val extended = load(preparing.copy(preparationExtendedMinutes = 25))
+        assertEquals(25, extended.preparationExtendedMinutes); assertEquals(40, extended.estimatedPreparationMinutes)
+        assertEquals(1_800_003_000_000, extended.estimatedReadyAtEpochMillis)
+        assertEquals(0, load(preparing).preparationExtendedMinutes)
+        val json = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
+        assertEquals(0, json.decodeFromString(BuyerOrderDetailResponse.serializer(),
+            json.encodeToString(BuyerOrderDetailResponse.serializer(), preparing)).preparationExtendedMinutes)
+    }
+
     @Test fun httpCodesMapToTypedResults() = runTest {
         assertEquals(BuyerOrdersResult.InvalidCursor, repo(page = { _, _ -> error(400) }).page(session, BuyerOrderPhase.ACTIVE, "cursor"))
         assertEquals(BuyerOrdersResult.AuthenticationRequired, repo(page = { _, _ -> error(401) }).page(session, BuyerOrderPhase.ACTIVE))

@@ -55,9 +55,15 @@ async function page(a:Actor|undefined,store:string,query="") {
 async function decide(a:Actor,store:string,orderId:string,body:Record<string,unknown>) {
   return connectedHttp(app)(a.token,`/stores/${store}/orders/${orderId}/decision`,body,"POST");
 }
-async function updateEstimate(a:Actor,store:string,orderId:string,minutes:unknown) {
-  return connectedHttp(app)(a.token,`/stores/${store}/orders/${orderId}/preparation-estimate`,
-    {estimatedPreparationMinutes:minutes},"PUT");
+async function extend(a:Actor,store:string,orderId:string,body:Record<string,unknown>) {
+  return connectedHttp(app)(a.token,`/stores/${store}/orders/${orderId}/preparation-extensions`,body,"POST");
+}
+const extension=(additionalMinutes:unknown,expectedEstimateRevision:unknown,operationId:string=randomUUID())=>
+  ({operationId,additionalMinutes,expectedEstimateRevision});
+async function acceptedOrder(f:Awaited<ReturnType<typeof fixture>>,id:string,minutes=40) {
+  await seedOrder(f.store,f.owner.uid,id);
+  const accepted=await decide(f.manager,f.store,id,{action:"ACCEPT",estimatedPreparationMinutes:minutes});
+  assert.equal(accepted.status,200);return accepted.body.estimatedReadyAtEpochMillis as number;
 }
 before(async()=>{admin=await actor(true,true);await prepare(admin);});
 after(async()=>{await db.terminate();await deleteApp(app);});
@@ -84,38 +90,119 @@ test("manager accepts a pending order with an estimate and the transition is ide
   assert.equal(notice.get("buyerUid"),"PRIVATE_BUYER");assert.equal(notice.get("type"),"ORDER_ACCEPTED");
   assert.equal((await db.collection("order_events").where("orderId","==",id).get()).size,1);
 });
-test("manager updates a preparing estimate and the preparing inbox exposes the latest value",async()=>{
-  const f=await fixture(),id="ae".repeat(32);await seedOrder(f.store,f.owner.uid,id);
-  await decide(f.manager,f.store,id,{action:"ACCEPT",estimatedPreparationMinutes:25});
-  const updated=await updateEstimate(f.manager,f.store,id,40);
-  assert.equal(updated.status,200);assert.equal(updated.body.outcome,"UPDATED");
+test("HU20: extensions add to the current estimate, keep the HU19 value and record v2 history",async()=>{
+  const f=await fixture(),id="ae".repeat(32),initial=await acceptedOrder(f,id,40);
+  const first=await extend(f.manager,f.store,id,extension(5,0));
+  assert.equal(first.status,200,JSON.stringify(first.body));
+  assert.deepEqual(Object.keys(first.body).sort(),["contractVersion","estimateRevision","estimatedReadyAtEpochMillis","outcome",
+    "preparationExtendedMinutes","status"]);
+  assert.equal(first.body.outcome,"EXTENDED");assert.equal(first.body.estimatedReadyAtEpochMillis,initial+5*60_000);
+  const second=await extend(f.manager,f.store,id,extension(60,1));
+  assert.equal(second.body.estimatedReadyAtEpochMillis,initial+65*60_000);
+  assert.equal(second.body.estimateRevision,2);assert.equal(second.body.preparationExtendedMinutes,65);
   const order=(await db.doc(`food_orders/${id}`).get()).data()!;
   assert.equal(order.status,"PREPARING");assert.equal(order.estimatedPreparationMinutes,40);
-  assert.equal(order.estimateRevision,1);assert.equal(order.estimateUpdatedByUid,f.manager.uid);
-  const history=await db.doc(`food_orders/${id}/estimate_history/0000000001`).get();
-  assert.equal(history.get("minutes"),40);assert.equal(history.get("actorUid"),f.manager.uid);
+  assert.equal(order.estimatedReadyAt.toMillis(),initial+65*60_000);assert.equal(order.estimateUpdatedByUid,f.manager.uid);
+  const history=(await db.collection(`food_orders/${id}/estimate_history`).orderBy("revision").get()).docs.map(d=>d.data());
+  assert.deepEqual(history.map(h=>[h.schemaVersion,h.kind,h.revision,h.additionalMinutes]),[[2,"EXTENSION",1,5],[2,"EXTENSION",2,60]]);
+  assert.equal(history[1].previousReadyAt.toMillis(),initial+5*60_000);assert.equal(history[1].actorUid,f.manager.uid);
   const preparing=await page(f.manager,f.store,"?status=PREPARING");
-  assert.equal(preparing.status,200);assert.equal(preparing.body.orders[0].orderId,id);
-  assert.equal(preparing.body.orders[0].estimatedPreparationMinutes,40);
+  const row=preparing.body.orders.find((o:any)=>o.orderId===id);
+  assert.equal(row.estimatedPreparationMinutes,40);assert.equal(row.estimatedReadyAtEpochMillis,initial+65*60_000);
+  assert.equal(row.estimateRevision,2);assert.equal(row.preparationExtendedMinutes,65);
+  // HU19 retry contract still holds after extending: same accept returns the original answer, not a new state.
+  const retried=await decide(f.manager,f.store,id,{action:"ACCEPT",estimatedPreparationMinutes:40});
+  assert.equal(retried.status,200);assert.equal(retried.body.status,"PREPARING");
 });
-test("equal estimates are idempotent and delivery synchronization is recorded once",async()=>{
-  const f=await fixture(),id="af".repeat(32);await seedOrder(f.store,f.owner.uid,id);
-  await decide(f.manager,f.store,id,{action:"ACCEPT",estimatedPreparationMinutes:20});
+test("HU20: two intentional equal extensions both apply, with no cumulative cap",async()=>{
+  const f=await fixture(),id="af".repeat(32),initial=await acceptedOrder(f,id,180);
+  for(let revision=0;revision<5;revision++)
+    assert.equal((await extend(f.manager,f.store,id,extension(60,revision))).status,200);
+  const twice=[await extend(f.manager,f.store,id,extension(10,5)),await extend(f.manager,f.store,id,extension(10,6))];
+  assert.deepEqual(twice.map(r=>r.body.estimateRevision),[6,7]);
+  assert.equal(twice[1].body.preparationExtendedMinutes,320);
+  assert.equal(twice[1].body.estimatedReadyAtEpochMillis,initial+320*60_000);
+  assert.equal((await db.collection(`food_orders/${id}/estimate_history`).get()).size,7);
+});
+test("HU20: a retried operation never adds twice; reusing its ID with other data conflicts",async()=>{
+  const f=await fixture(),id="a0".repeat(32),initial=await acceptedOrder(f,id,30);
   await db.doc(`food_orders/${id}`).update({deliveryId:"delivery-1"});
-  const first=await updateEstimate(f.manager,f.store,id,35),repeated=await updateEstimate(f.manager,f.store,id,35);
-  assert.equal(first.body.outcome,"UPDATED");assert.equal(repeated.body.outcome,"UNCHANGED");
-  assert.equal(first.body.estimatedReadyAtEpochMillis,repeated.body.estimatedReadyAtEpochMillis);
-  assert.equal((await db.doc(`food_orders/${id}`).get()).get("estimateRevision"),1);
+  const op=randomUUID(),first=await extend(f.manager,f.store,id,extension(15,0,op));
+  const retries=await Promise.all([1,2,3].map(()=>extend(f.manager,f.store,id,extension(15,0,op))));
+  for(const r of retries){assert.equal(r.status,200);assert.deepEqual(r.body,first.body);}
+  const order=(await db.doc(`food_orders/${id}`).get()).data()!;
+  assert.equal(order.estimateRevision,1);assert.equal(order.estimatedReadyAt.toMillis(),initial+15*60_000);
+  assert.equal((await db.collection(`food_orders/${id}/estimate_history`).get()).size,1);
+  assert.equal((await db.collection(`food_orders/${id}/estimate_operations`).get()).size,1);
   assert.equal((await db.doc(`rider_events/estimate_${id}_1`).get()).get("status"),"PENDING");
+  for(const body of [extension(20,0,op),extension(15,1,op)]) {
+    const conflict=await extend(f.manager,f.store,id,body);
+    assert.equal(conflict.status,409);assert.equal(conflict.body.error,"OPERATION_CONFLICT");
+  }
+  // After the order moves on, the original operation still replays its recorded result.
+  await db.doc(`food_orders/${id}`).update({status:"READY_FOR_PICKUP"});
+  assert.deepEqual((await extend(f.manager,f.store,id,extension(15,0,op))).body,first.body);
+  assert.equal((await db.doc(`food_orders/${id}`).get()).get("estimateRevision"),1);
+});
+test("HU20: a stale revision is rejected and concurrent managers cannot both extend from the same view",async()=>{
+  const f=await fixture(),id="a1".repeat(32),initial=await acceptedOrder(f,id,30);
+  const results=await Promise.all([extend(f.manager,f.store,id,extension(10,0)),extend(f.manager,f.store,id,extension(20,0))]);
+  assert.deepEqual(results.map(r=>r.status).sort(),[200,409]);
+  const loser=results.find(r=>r.status===409)!,winner=results.find(r=>r.status===200)!;
+  assert.equal(loser.body.error,"ESTIMATE_REVISION_CHANGED");
+  const order=(await db.doc(`food_orders/${id}`).get()).data()!;
+  assert.equal(order.estimateRevision,1);assert.equal(order.estimatedReadyAt.toMillis(),winner.body.estimatedReadyAtEpochMillis);
+  assert.ok([initial+10*60_000,initial+20*60_000].includes(order.estimatedReadyAt.toMillis()));
+  const stale=await extend(f.manager,f.store,id,extension(5,0));
+  assert.equal(stale.status,409);assert.equal(stale.body.error,"ESTIMATE_REVISION_CHANGED");
   assert.equal((await db.collection(`food_orders/${id}/estimate_history`).get()).size,1);
 });
-test("preparation estimate endpoint validates input, state and store authorization",async()=>{
-  const f=await fixture(),id="a0".repeat(32);await seedOrder(f.store,f.owner.uid,id);
-  assert.equal((await updateEstimate(f.manager,f.store,id,4)).status,400);
-  assert.equal((await updateEstimate(f.manager,f.store,id,20)).status,409);
+test("HU20: an expired estimate restarts from server time; legacy v1 history is preserved",async()=>{
+  const f=await fixture(),id="b1".repeat(32);await acceptedOrder(f,id,30);
+  const past=Timestamp.fromMillis(Date.now()-3_600_000);
+  // Legacy HU20 replacement: overwritten minutes, revision 1 and a schemaVersion 1 history entry, no extension fields.
+  await db.doc(`food_orders/${id}`).update({estimatedPreparationMinutes:25,estimatedReadyAt:past,estimateRevision:1,updatedAt:past});
+  await db.doc(`food_orders/${id}/estimate_history/0000000001`).set({schemaVersion:1,revision:1,minutes:25,estimatedReadyAt:past,
+    actorUid:f.manager.uid,occurredAt:past});
+  const before=Date.now(),r=await extend(f.manager,f.store,id,extension(10,1)),after=Date.now();
+  assert.equal(r.status,200,JSON.stringify(r.body));
+  assert.ok(r.body.estimatedReadyAtEpochMillis>=before+10*60_000&&r.body.estimatedReadyAtEpochMillis<=after+10*60_000);
+  assert.equal(r.body.estimateRevision,2);assert.equal(r.body.preparationExtendedMinutes,10);
+  const legacy=(await db.doc(`food_orders/${id}/estimate_history/0000000001`).get()).data()!;
+  assert.equal(legacy.schemaVersion,1);assert.equal(legacy.minutes,25);
+  assert.equal((await db.doc(`food_orders/${id}/estimate_history/0000000002`).get()).get("baseAt").toMillis()>=before,true);
+  assert.equal((await db.doc(`food_orders/${id}`).get()).get("estimatedPreparationMinutes"),25);
+});
+test("HU20: validation, state, authorization and the retired replacement endpoint",async()=>{
+  const f=await fixture(),id="b2".repeat(32);await seedOrder(f.store,f.owner.uid,id);
+  for(const body of [extension(4,0),extension(61,0),extension(10.5,0),extension("10",0),extension(10,-1),
+    {additionalMinutes:10,expectedEstimateRevision:0},{...extension(10,0),estimatedReadyAt:1},{estimatedPreparationMinutes:30}]) {
+    const r=await extend(f.manager,f.store,id,body as Record<string,unknown>);assert.equal(r.status,400,JSON.stringify(body));
+  }
+  assert.equal((await extend(f.manager,f.store,id,extension(10,0))).status,409);
   await decide(f.manager,f.store,id,{action:"ACCEPT",estimatedPreparationMinutes:20});
-  assert.equal((await updateEstimate(f.manager,f.other,id,30)).status,403);
-  assert.equal((await updateEstimate(f.buyer,f.store,id,30)).status,403);
+  for(const [a,store] of [[f.manager,f.other],[f.buyer,f.store],[f.owner,f.store]] as const)
+    assert.equal((await extend(a,store,id,extension(10,0))).status,403);
+  const http=connectedHttp(app);
+  const legacy=await http(f.manager.token,`/stores/${f.store}/orders/${id}/preparation-estimate`,{estimatedPreparationMinutes:45},"PUT");
+  assert.equal(legacy.status,404);assert.equal(legacy.body.error,"NOT_FOUND");
+  assert.equal((await http(f.manager.token,`/stores/${f.store}/orders/${id}/preparation-extensions`,undefined,"GET")).status,405);
+  const order=(await db.doc(`food_orders/${id}`).get()).data()!;
+  assert.equal(order.estimatedPreparationMinutes,20);assert.equal(order.estimateRevision,undefined);
+  assert.equal((await db.collection(`food_orders/${id}/estimate_history`).get()).size,0);
+  for(const status of ["READY_FOR_PICKUP","IN_DELIVERY","COMPLETED","CANCELLED","REJECTED"]) {
+    await db.doc(`food_orders/${id}`).update({status});
+    const r=await extend(f.manager,f.store,id,extension(10,0));
+    assert.equal(r.status,409,status);assert.equal(r.body.error,"ORDER_STATE_CHANGED");
+  }
+});
+test("HU20: suspension blocks new acceptance but accepted orders can still be extended",async()=>{
+  const f=await fixture(),id="b3".repeat(32),other="b4".repeat(32);await acceptedOrder(f,id,30);await acceptedOrder(f,other,30);
+  await db.doc(`business_requests/${f.owner.uid}`).update({status:"SUSPENDED"});
+  assert.equal((await extend(f.manager,f.store,id,extension(10,0))).status,200);
+  await db.doc(`business_requests/${f.owner.uid}`).update({status:"APPROVED"});
+  await db.doc(`stores/${f.store}`).update({status:"SUSPENDED"});
+  assert.equal((await extend(f.manager,f.store,other,extension(10,0))).status,200);
 });
 test("rejection records a required reason and removes the order from the pending inbox",async()=>{
   const f=await fixture(),id="bd".repeat(32);await seedOrder(f.store,f.owner.uid,id);

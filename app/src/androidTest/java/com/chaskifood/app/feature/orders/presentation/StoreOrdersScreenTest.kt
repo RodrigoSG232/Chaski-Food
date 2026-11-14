@@ -43,15 +43,43 @@ class StoreOrdersScreenTest {
         compose.onNodeWithText("Red no disponible").assertIsDisplayed()
         compose.onNodeWithText("No hay pedidos pendientes en este local.").assertDoesNotExist()
     }
-    @Test fun preparingQueueShowsEstimateUpdateInsteadOfDecisionActions() {
+    @Test fun preparingQueueOffersAnExtensionDialogInsteadOfDecisionActions() {
         val preparing=StoreOrderSummary("3".repeat(64),1800000000000,listOf(StoreOrderLine("p","Plato",1,1000,1000)),
-            OrderAmounts(1000,300,1300),OrderStatus.PREPARING,estimatedPreparationMinutes=25,estimatedReadyAtEpochMillis=1800001500000)
+            OrderAmounts(1000,300,1300),OrderStatus.PREPARING,estimatedPreparationMinutes=25,estimatedReadyAtEpochMillis=1800001500000,
+            estimateRevision=1,preparationExtendedMinutes=10)
+        var extended:Pair<String,Int>?=null
         compose.setContent{ChaskiTheme{StoreOrdersContent(StoreOrdersUiState(context,loading=false,storeName="Local",
-            orders=listOf(preparing),selectedStatus=OrderStatus.PREPARING))}}
+            orders=listOf(preparing),selectedStatus=OrderStatus.PREPARING),onExtend={id,minutes->extended=id to minutes})}}
+        compose.onNodeWithText("Listo aprox. a las",substring=true).assertIsDisplayed()
+        compose.onNodeWithText("Incluye +10 min de ampliación").assertIsDisplayed()
         compose.onNodeWithText("Ver detalle").performClick()
-        compose.onNodeWithText("Estimación: 25 minutos").assertIsDisplayed()
-        compose.onNodeWithText("Actualizar estimación").assertIsDisplayed()
         compose.onNodeWithText("Aceptar pedido").assertDoesNotExist()
+        compose.onNodeWithText("Ampliar tiempo").performScrollTo().performClick()
+        compose.onNodeWithText("Ampliar tiempo de preparación").assertIsDisplayed()
+        compose.onNodeWithText("Aceptar y preparar").assertDoesNotExist()
+        compose.onNodeWithText("+15 min").performClick()
+        compose.onNodeWithText("Nueva hora estimada",substring=true).assertIsDisplayed()
+        compose.onNodeWithText("Confirmar ampliación").performClick()
+        compose.runOnIdle {assertEquals("3".repeat(64) to 15,extended)}
+    }
+    @Test fun overdueEstimateAndInFlightExtensionAreExplained() {
+        val overdue=StoreOrderSummary("4".repeat(64),1700000000000,listOf(StoreOrderLine("p","Plato",1,1000,1000)),
+            OrderAmounts(1000,300,1300),OrderStatus.PREPARING,estimatedPreparationMinutes=25,estimatedReadyAtEpochMillis=1700001500000,
+            estimateRevision=1)
+        compose.setContent{ChaskiTheme{StoreOrdersContent(StoreOrdersUiState(context,loading=false,orders=listOf(overdue),
+            selectedStatus=OrderStatus.PREPARING,respondingOrderId=overdue.orderId,extendingOrderId=overdue.orderId))}}
+        compose.onNodeWithText("Hora estimada vencida",substring=true).assertIsDisplayed()
+        compose.onNodeWithText("Listo aprox.",substring=true).assertDoesNotExist()
+        compose.onNodeWithText("Ampliando tiempo…").assertIsDisplayed()
+    }
+    @Test fun uncertainExtensionOffersRetryAndDiscard() {
+        var retries=0;var discards=0
+        val pending=PendingPreparationExtension("3".repeat(64),PreparationExtension("3f8a1c2e-5b7d-4e9f-8a6b-1c2d3e4f5a6b",15,1))
+        compose.setContent{ChaskiTheme{StoreOrdersContent(StoreOrdersUiState(context,loading=false,pendingExtension=pending),
+            onRetryExtension={retries++},onDiscardExtension={discards++})}}
+        compose.onNodeWithText("no se confirmó",substring=true).assertIsDisplayed()
+        compose.onNodeWithText("Reintentar").performClick();compose.onNodeWithText("Descartar").performClick()
+        compose.runOnIdle {assertEquals(1,retries);assertEquals(1,discards)}
     }
     @Test fun moreResultsAndCollapsedDetailsDoNotAddBusinessActions() {
         var more=0
@@ -77,7 +105,8 @@ class StoreOrdersScreenTest {
             override fun observeAuthorization(target:StoreOrdersTarget):Flow<StoreOrdersAuthorization> = auth
             override fun isCurrent(context:StoreOrdersContext)=auth.value==StoreOrdersAuthorization.Allowed(context)
             override suspend fun respond(context:StoreOrdersContext,orderId:String,decision:StoreOrderDecision)=StoreOrderDecisionResult.Unavailable
-            override suspend fun updateEstimate(context:StoreOrdersContext,orderId:String,minutes:Int)=PreparationEstimateResult.Unavailable
+            override suspend fun extendPreparation(context:StoreOrdersContext,orderId:String,extension:PreparationExtension)=
+                PreparationExtensionResult.Unavailable
             override suspend fun markReady(context:StoreOrdersContext,orderId:String)=MarkOrderReadyResult.Unavailable
             override suspend fun page(context:StoreOrdersContext,cursor:String?,status:OrderStatus):StoreOrdersResult {
                 reads++;return StoreOrdersResult.Loaded(StoreOrdersPage("store","Local",listOf(order()),null))

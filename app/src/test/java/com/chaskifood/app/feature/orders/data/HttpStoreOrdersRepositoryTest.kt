@@ -26,15 +26,18 @@ class HttpStoreOrdersRepositoryTest {
         override fun isCurrent(uid:String,generation:Long)=true
     }
     private fun api(decision:suspend (String,JsonObject)->Response<StoreOrderDecisionResponse> =
-        { _, _ -> Response.error(503,"{}".toResponseBody())},block:suspend(String?)->Response<StoreOrdersResponse>)=object:StoreOrdersApi {
+        { _, _ -> Response.error(503,"{}".toResponseBody())},
+        extension:suspend (String,JsonObject)->Response<PreparationExtensionResponse> = { _, _ -> Response.error(503,"{}".toResponseBody())},
+        block:suspend(String?)->Response<StoreOrdersResponse>)=object:StoreOrdersApi {
         override suspend fun page(storeId:String,authorization:String,cursor:String?,status:String,pageSize:Int):Response<StoreOrdersResponse> {
             assertEquals("store",storeId);assertEquals("Bearer fixture-token",authorization);assertEquals(20,pageSize);return block(cursor)
         }
         override suspend fun respond(storeId:String,orderId:String,authorization:String,body:JsonObject):Response<StoreOrderDecisionResponse> {
             assertEquals("store",storeId);assertEquals("Bearer fixture-token",authorization);return decision(orderId,body)
         }
-        override suspend fun updateEstimate(storeId:String,orderId:String,authorization:String,body:JsonObject)=
-            Response.error<StoreOrderDecisionResponse>(503,"{}".toResponseBody())
+        override suspend fun extendPreparation(storeId:String,orderId:String,authorization:String,body:JsonObject):Response<PreparationExtensionResponse> {
+            assertEquals("store",storeId);assertEquals("Bearer fixture-token",authorization);return extension(orderId,body)
+        }
         override suspend fun markReady(storeId:String,orderId:String,authorization:String,body:JsonObject)=
             Response.error<StoreOrderDecisionResponse>(503,"{}".toResponseBody())
         override suspend fun simulatePickup(storeId:String,orderId:String,authorization:String,body:JsonObject)=
@@ -90,5 +93,54 @@ class HttpStoreOrdersRepositoryTest {
         assertEquals(StoreOrdersResult.Unavailable,HttpStoreOrdersRepository(api{throw java.io.IOException()},tokens,source).page(context))
         val job=async{HttpStoreOrdersRepository(api{awaitCancellation()},tokens,source).page(context)}
         runCurrent();job.cancel();runCurrent();assertTrue(job.isCancelled)
+    }
+    private val extension=PreparationExtension("3f8a1c2e-5b7d-4e9f-8a6b-1c2d3e4f5a6b",10,1)
+    private fun extend(response:suspend (JsonObject)->Response<PreparationExtensionResponse>)=
+        runBlocking{HttpStoreOrdersRepository(api(extension={_,body->response(body)}){Response.success(valid())},tokens,source)
+            .extendPreparation(context,"a".repeat(64),extension)}
+    private fun error(code:Int,body:String="{}")=Response.error<PreparationExtensionResponse>(code,body.toResponseBody())
+    @Test fun extensionSendsOperationMinutesAndRevisionAndMapsTheServerResult(){
+        val result=extend{body->
+            assertEquals(setOf("operationId","additionalMinutes","expectedEstimateRevision"),body.keys)
+            assertEquals(extension.operationId,body["operationId"].toString().trim('"'))
+            assertEquals("10",body["additionalMinutes"].toString());assertEquals("1",body["expectedEstimateRevision"].toString())
+            Response.success(PreparationExtensionResponse(1,"EXTENDED","PREPARING",1_800_003_000_000,2,10))}
+        assertEquals(PreparationExtensionResult.Extended(1_800_003_000_000,2,10),result)
+    }
+    @Test fun extensionConflictsAreDistinguishedAndUnknownOutcomesStayRetryable(){
+        assertEquals(PreparationExtensionResult.RevisionChanged,extend{error(409,"""{"error":"ESTIMATE_REVISION_CHANGED"}""")})
+        assertEquals(PreparationExtensionResult.OperationConflict,extend{error(409,"""{"error":"OPERATION_CONFLICT"}""")})
+        assertEquals(PreparationExtensionResult.StateChanged,extend{error(409,"""{"error":"ORDER_STATE_CHANGED"}""")})
+        assertEquals(PreparationExtensionResult.StateChanged,extend{error(409,"not json")})
+        assertEquals(PreparationExtensionResult.AuthenticationRequired,extend{error(401)})
+        assertEquals(PreparationExtensionResult.AccessDenied,extend{error(403)})
+        assertEquals(PreparationExtensionResult.NotFound,extend{error(404)})
+        for(code in listOf(400,500,503))assertEquals(PreparationExtensionResult.Unavailable,extend{error(code)})
+        assertEquals(PreparationExtensionResult.Unavailable,extend{throw java.io.IOException()})
+        // A 200 that breaks the contract is treated as an unknown outcome, never as success.
+        for(bad in listOf(PreparationExtensionResponse(2,"EXTENDED","PREPARING",1_800_003_000_000,2,10),
+            PreparationExtensionResponse(1,"EXTENDED","READY_FOR_PICKUP",1_800_003_000_000,2,10),
+            PreparationExtensionResponse(1,"EXTENDED","PREPARING",1_800_003_000_000,0,10),
+            PreparationExtensionResponse(1,"EXTENDED","PREPARING",1_800_003_000_000,2,5)))
+            assertEquals(PreparationExtensionResult.Unavailable,extend{Response.success(bad)})
+        assertEquals(PreparationExtensionResult.NotFound,runBlocking{HttpStoreOrdersRepository(api{Response.success(valid())},tokens,source)
+            .extendPreparation(context,"../x",extension)})
+    }
+    @Test fun extensionRequestsAreValidatedBeforeLeavingTheDevice(){
+        for(bad in listOf({PreparationExtension("not-a-uuid",10,0)},{PreparationExtension(extension.operationId,4,0)},
+            {PreparationExtension(extension.operationId,61,0)},{PreparationExtension(extension.operationId,10,-1)}))
+            assertThrows(IllegalArgumentException::class.java){bad()}
+    }
+    @Test fun inboxMapsExtensionCountersAndToleratesResponsesWithoutThem(){
+        val preparing=StoreOrdersResponse(1,"store","Local",listOf(StoreOrderResponse("order",1800000000000,"PREPARING",
+            listOf(StoreOrderLineResponse("p","Plato",2,1000,2000)),2000,300,2300,"PEN","CASH_ON_DELIVERY",40,1_800_002_400_000,
+            estimateRevision=3,preparationExtendedMinutes=25)),null)
+        val order=(runBlocking{HttpStoreOrdersRepository(api{Response.success(preparing)},tokens,source).page(context,null,OrderStatus.PREPARING)}
+            as StoreOrdersResult.Loaded).page.orders.single()
+        assertEquals(3L,order.estimateRevision);assertEquals(25,order.preparationExtendedMinutes);assertEquals(40,order.estimatedPreparationMinutes)
+        val legacy=preparing.copy(orders=listOf(preparing.orders.single().copy(estimateRevision=0,preparationExtendedMinutes=0)))
+        val old=(runBlocking{HttpStoreOrdersRepository(api{Response.success(legacy)},tokens,source).page(context,null,OrderStatus.PREPARING)}
+            as StoreOrdersResult.Loaded).page.orders.single()
+        assertEquals(0L,old.estimateRevision);assertEquals(0,old.preparationExtendedMinutes)
     }
 }

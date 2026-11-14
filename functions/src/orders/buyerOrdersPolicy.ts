@@ -3,7 +3,7 @@ import { digest, validId } from "../access/commercialAccessPolicy";
 import { MAX_ORDER_EPOCH_MILLIS, orderText } from "./orderModels";
 import { REJECTION_REASONS, RejectionReason } from "./orderDecisionPolicy";
 import { OrderHttpError } from "./orderRequest";
-import { validatedOrderCore } from "./storeOrdersPolicy";
+import { optionalCounter, validatedOrderCore } from "./storeOrdersPolicy";
 
 /** HU17 read vocabulary. HU17 never writes statuses; HU18–HU23 add transitions (HU19: PENDING_CONFIRMATION → PREPARING). */
 export const ACTIVE_ORDER_STATUSES = ["PENDING_CONFIRMATION", "PREPARING", "READY_FOR_PICKUP", "IN_DELIVERY"] as const;
@@ -105,12 +105,14 @@ export function projectBuyerOrderDetail(id: string, data: Record<string, any>, u
     const estimatedPreparationMinutes = hasEstimate && Number.isInteger(data.estimatedPreparationMinutes) &&
       data.estimatedPreparationMinutes >= 5 && data.estimatedPreparationMinutes <= 180 ? data.estimatedPreparationMinutes : null;
     if(hasEstimate && estimatedPreparationMinutes === null)throw new Error();
+    // HU20: minutes added through extensions; legacy replacements are not counted and never shown as extensions.
+    const extension = hasEstimate ? { preparationExtendedMinutes: optionalCounter(data.preparationExtendedMinutes) } : {};
     return { ...summary, storePhone: optionalText(store.phone), pickupAddressText: orderText(pickup.addressText),
       delivery: { label: optionalText(dropoff.label), addressText: orderText(dropoff.addressText),
         reference: optionalText(dropoff.reference), instructions: optionalText(dropoff.instructions) },
       items: core.items, subtotalMinor: core.subtotalMinor, deliveryFeeMinor: core.deliveryFeeMinor,tipMinor:core.tipMinor,
       paymentMethod: core.paymentMethod,paymentStatus:data.paymentStatus, statusHistory, estimatedPreparationMinutes, estimatedReadyAtEpochMillis,
-      ...(summary.status === "REJECTED" ? buyerRejection(data) : {}) };
+      ...extension, ...(summary.status === "REJECTED" ? buyerRejection(data) : {}) };
   } catch (error) {
     if (error instanceof OrderHttpError) throw error;
     return inconsistent();
