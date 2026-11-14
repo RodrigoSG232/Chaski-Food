@@ -1,6 +1,7 @@
 import { Timestamp } from "firebase-admin/firestore";
 import { digest, validId } from "../access/commercialAccessPolicy";
 import { MAX_ORDER_EPOCH_MILLIS, orderText } from "./orderModels";
+import { REJECTION_REASONS, RejectionReason } from "./orderDecisionPolicy";
 import { OrderHttpError } from "./orderRequest";
 import { validatedOrderCore } from "./storeOrdersPolicy";
 
@@ -65,6 +66,24 @@ function optionalText(value: unknown): string | null {
   return orderText(value);
 }
 
+/**
+ * HU19: reason stored by the manager decision, visible only to the order's buyer. Historical or malformed values
+ * degrade to null instead of making the whole detail inconsistent; the deciding actor is never exposed.
+ */
+function buyerRejection(data: Record<string, any>): { rejectionReason: RejectionReason | null; rejectionExplanation: string | null } {
+  const reason = REJECTION_REASONS.includes(data.rejectionReason) ? data.rejectionReason as RejectionReason : null;
+  let explanation: string | null = null;
+  if (reason === "OTHER" && typeof data.rejectionExplanation === "string") {
+    try {
+      const text = orderText(data.rejectionExplanation).trim();
+      if (text.length >= 3 && text.length <= 300) explanation = text;
+    } catch {
+      explanation = null;
+    }
+  }
+  return { rejectionReason: reason, rejectionExplanation: explanation };
+}
+
 /** Detail keeps the HU16 historical snapshots by value; coordinates, buyer data and actors are excluded. */
 export function projectBuyerOrderDetail(id: string, data: Record<string, any>, uid: string, history: Array<Record<string, any>>) {
   const summary = projectBuyerOrderSummary(id, data, uid);
@@ -90,7 +109,8 @@ export function projectBuyerOrderDetail(id: string, data: Record<string, any>, u
       delivery: { label: optionalText(dropoff.label), addressText: orderText(dropoff.addressText),
         reference: optionalText(dropoff.reference), instructions: optionalText(dropoff.instructions) },
       items: core.items, subtotalMinor: core.subtotalMinor, deliveryFeeMinor: core.deliveryFeeMinor,tipMinor:core.tipMinor,
-      paymentMethod: core.paymentMethod,paymentStatus:data.paymentStatus, statusHistory, estimatedPreparationMinutes, estimatedReadyAtEpochMillis };
+      paymentMethod: core.paymentMethod,paymentStatus:data.paymentStatus, statusHistory, estimatedPreparationMinutes, estimatedReadyAtEpochMillis,
+      ...(summary.status === "REJECTED" ? buyerRejection(data) : {}) };
   } catch (error) {
     if (error instanceof OrderHttpError) throw error;
     return inconsistent();

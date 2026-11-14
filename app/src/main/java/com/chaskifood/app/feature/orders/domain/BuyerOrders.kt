@@ -45,12 +45,26 @@ data class BuyerOrderStatusEntry(val status: String, val statusKnown: Boolean, v
     init { orderText(status); require(occurredAtEpochMillis in 1..MAX_ORDER_EPOCH_MILLIS) }
 }
 
+/**
+ * HU19: motivo del rechazo registrado por el local. [reason] es null si el pedido es antiguo o el valor no se reconoce;
+ * [explanation] solo existe para OTHER.
+ */
+data class BuyerOrderRejection(val reason: StoreOrderRejectionReason?, val explanation: String?) {
+    init {
+        if (explanation != null) {
+            require(reason == StoreOrderRejectionReason.OTHER && explanation.trim().length in 3..300)
+            orderText(explanation)
+        }
+    }
+}
+
 /** Copia histórica del pedido (snapshots de HU16): no cambia aunque se editen la dirección o el catálogo actuales. */
 class BuyerOrderDetail(
     val summary: BuyerOrderSummary, val storePhone: String?, val pickupAddressText: String, val delivery: BuyerOrderDelivery,
     items: List<StoreOrderLine>, val amounts: OrderAmounts, val paymentMethod: OrderPaymentMethod, statusHistory: List<BuyerOrderStatusEntry>,
     val estimatedPreparationMinutes:Int?=null,val estimatedReadyAtEpochMillis:Long?=null,
     val paymentStatus: OrderPaymentStatus = OrderPaymentStatus.PENDING,
+    val rejection: BuyerOrderRejection? = null,
 ) {
     val items: List<StoreOrderLine> = frozenOrderList(items)
     val statusHistory: List<BuyerOrderStatusEntry> = frozenOrderList(statusHistory)
@@ -62,6 +76,7 @@ class BuyerOrderDetail(
         require(summary.itemLineCount == this.items.size && summary.itemPreview ==
             this.items.take(BuyerOrderSummary.MAX_ITEM_PREVIEW).map { BuyerOrderItemPreview(it.name, it.quantity) })
         require(this.statusHistory.isNotEmpty() && this.statusHistory.zipWithNext().all { (a, b) -> a.occurredAtEpochMillis <= b.occurredAtEpochMillis })
+        require(rejection == null || summary.status == "REJECTED")
         if(estimatedPreparationMinutes!=null||estimatedReadyAtEpochMillis!=null)require(summary.status in setOf("PREPARING", "READY_FOR_PICKUP")&&
             estimatedPreparationMinutes!=null&&estimatedPreparationMinutes in 5..180&&estimatedReadyAtEpochMillis!=null&&
             estimatedReadyAtEpochMillis in 1..MAX_ORDER_EPOCH_MILLIS)

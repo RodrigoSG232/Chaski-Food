@@ -163,5 +163,15 @@ private fun BuyerOrderDetailResponse.toDomain(): BuyerOrderDetail {
         items.map { StoreOrderLine(it.productId, it.name, it.quantity, it.unitPriceMinor, it.lineTotalMinor) },
         OrderAmounts(subtotalMinor,deliveryFeeMinor,totalMinor,tipMinor), OrderPaymentMethod.CASH_ON_DELIVERY,
         statusHistory.map { BuyerOrderStatusEntry(it.status, it.statusKnown, it.occurredAtEpochMillis) },
-        estimatedPreparationMinutes,estimatedReadyAtEpochMillis,OrderPaymentStatus.valueOf(paymentStatus))
+        estimatedPreparationMinutes,estimatedReadyAtEpochMillis,OrderPaymentStatus.valueOf(paymentStatus),
+        rejection = if (status == "REJECTED") rejectionOf(rejectionReason, rejectionExplanation) else null)
+}
+
+/** Tolerant on purpose: an unknown or missing reason must never stop the buyer from opening a historical order. */
+private fun rejectionOf(rawReason: String?, rawExplanation: String?): BuyerOrderRejection {
+    val reason = StoreOrderRejectionReason.entries.firstOrNull { it.name == rawReason }
+    val explanation = rawExplanation?.trim()?.takeIf {
+        reason == StoreOrderRejectionReason.OTHER && it.length in 3..300 && runCatching { orderText(it) }.isSuccess
+    }
+    return BuyerOrderRejection(reason, explanation)
 }

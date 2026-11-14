@@ -21,6 +21,34 @@ class BuyerOrderFormattingTest {
         assertEquals("2× Plato", itemPreviewText(summary(two.take(1), 1)))
     }
 
+    @Test fun paymentTextNeverClaimsPendingCashForUndeliveredOrdersAndKeepsRegisteredPayments() {
+        for (status in listOf("CANCELLED", "REJECTED"))
+            assertEquals("Sin cobro: el pedido no se entregó", buyerPaymentText(status, OrderPaymentStatus.PENDING))
+        for (status in listOf("PENDING_CONFIRMATION", "PREPARING", "READY_FOR_PICKUP", "IN_DELIVERY", "COMPLETED", "UNKNOWN_STATE"))
+            assertEquals("Efectivo pendiente hasta la entrega", buyerPaymentText(status, OrderPaymentStatus.PENDING))
+        for (status in listOf("COMPLETED", "CANCELLED", "REJECTED"))
+            assertEquals("Efectivo registrado · simulación", buyerPaymentText(status, OrderPaymentStatus.PAID))
+    }
+
+    @Test fun rejectionReasonsUseApprovedBuyerTextsAndNeverInventAMissingReason() {
+        assertEquals("El local tiene alta demanda en este momento.", buyerRejectionReasonText(StoreOrderRejectionReason.STORE_BUSY))
+        assertEquals("Uno o más productos no están disponibles.", buyerRejectionReasonText(StoreOrderRejectionReason.PRODUCT_UNAVAILABLE))
+        assertEquals("El local está próximo a cerrar.", buyerRejectionReasonText(StoreOrderRejectionReason.CLOSING_SOON))
+        assertEquals("Otro motivo", buyerRejectionReasonText(StoreOrderRejectionReason.OTHER))
+        assertEquals("Motivo del rechazo no disponible.", buyerRejectionReasonText(null))
+    }
+
+    @Test fun rejectionBelongsOnlyToRejectedOrdersAndExplanationOnlyToOther() {
+        assertEquals(StoreOrderRejectionReason.OTHER, BuyerOrderPreviewData.rejectedDetail.rejection!!.reason)
+        assertThrows(IllegalArgumentException::class.java) { BuyerOrderRejection(StoreOrderRejectionReason.STORE_BUSY, "texto libre") }
+        assertThrows(IllegalArgumentException::class.java) { BuyerOrderRejection(StoreOrderRejectionReason.OTHER, "ab") }
+        val d = BuyerOrderPreviewData.detail
+        assertThrows(IllegalArgumentException::class.java) {
+            BuyerOrderDetail(d.summary, d.storePhone, d.pickupAddressText, d.delivery, d.items, d.amounts, d.paymentMethod, d.statusHistory,
+                rejection = BuyerOrderRejection(null, null))
+        }
+    }
+
     @Test fun previewMustMatchTheLineCount() {
         val one = listOf(BuyerOrderItemPreview("Plato", 2))
         assertThrows(IllegalArgumentException::class.java) { summary(one, 3) }

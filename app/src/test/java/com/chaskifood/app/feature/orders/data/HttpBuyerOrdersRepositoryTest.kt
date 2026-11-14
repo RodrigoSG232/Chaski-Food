@@ -119,6 +119,34 @@ class HttpBuyerOrdersRepositoryTest {
         assertEquals(20, (result as BuyerOrderDetailResult.Loaded).detail.estimatedPreparationMinutes)
     }
 
+    @Test fun rejectedDetailMapsReasonAndOtherExplanationTolerantly() = runTest {
+        val rejected = detail().copy(status = "REJECTED", phase = "HISTORICAL", statusHistory = listOf(
+            BuyerOrderStatusResponse("PENDING_CONFIRMATION", true, 1_800_000_000_000), BuyerOrderStatusResponse("REJECTED", true, 1_800_000_000_100)))
+        suspend fun rejection(body: BuyerOrderDetailResponse) =
+            (repo(detail = { Response.success(BuyerOrderDetailEnvelope(1, body)) }).detail(session, id) as BuyerOrderDetailResult.Loaded).detail.rejection
+        assertEquals(BuyerOrderRejection(StoreOrderRejectionReason.PRODUCT_UNAVAILABLE, null),
+            rejection(rejected.copy(rejectionReason = "PRODUCT_UNAVAILABLE")))
+        assertEquals(BuyerOrderRejection(StoreOrderRejectionReason.OTHER, "Sin gas\nen cocina"),
+            rejection(rejected.copy(rejectionReason = "OTHER", rejectionExplanation = "  Sin gas\nen cocina ")))
+        // Antiguos, desconocidos o explicaciones fuera de contrato: el detalle abre igual, sin motivo inventado.
+        for (body in listOf(rejected, rejected.copy(rejectionReason = "LEGACY_REASON", rejectionExplanation = "texto"),
+            rejected.copy(rejectionReason = "OTHER", rejectionExplanation = "ab"),
+            rejected.copy(rejectionReason = "OTHER", rejectionExplanation = "x".repeat(301))))
+            assertNull(rejection(body)?.explanation)
+        assertNull(rejection(rejected.copy(rejectionReason = "LEGACY_REASON"))!!.reason)
+        assertNull(rejection(rejected)!!.reason)
+        assertNull(rejection(rejected.copy(rejectionReason = "STORE_BUSY", rejectionExplanation = "no corresponde"))!!.explanation)
+        // Campos sueltos en otro estado se ignoran.
+        assertNull(rejection(detail().copy(rejectionReason = "STORE_BUSY")))
+    }
+
+    @Test fun detailWithoutRejectionFieldsStillDeserializes() {
+        val json = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
+        val decoded = json.decodeFromString(BuyerOrderDetailResponse.serializer(), json.encodeToString(BuyerOrderDetailResponse.serializer(), detail()))
+        assertFalse(json.encodeToString(BuyerOrderDetailResponse.serializer(), detail()).contains("rejection"))
+        assertNull(decoded.rejectionReason); assertNull(decoded.rejectionExplanation)
+    }
+
     @Test fun httpCodesMapToTypedResults() = runTest {
         assertEquals(BuyerOrdersResult.InvalidCursor, repo(page = { _, _ -> error(400) }).page(session, BuyerOrderPhase.ACTIVE, "cursor"))
         assertEquals(BuyerOrdersResult.AuthenticationRequired, repo(page = { _, _ -> error(401) }).page(session, BuyerOrderPhase.ACTIVE))

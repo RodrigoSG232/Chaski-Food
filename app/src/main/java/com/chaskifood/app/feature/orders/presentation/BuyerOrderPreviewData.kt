@@ -35,4 +35,14 @@ internal object BuyerOrderPreviewData {
         OrderAmounts(4100, 500, 4600), OrderPaymentMethod.CASH_ON_DELIVERY,
         listOf(BuyerOrderStatusEntry("PENDING_CONFIRMATION", true, T), BuyerOrderStatusEntry("PREPARING", true, T + 240_000),
             BuyerOrderStatusEntry("READY_FOR_PICKUP", true, T + 1_560_000), BuyerOrderStatusEntry("IN_DELIVERY", true, T + 1_980_000)))
+
+    /** HU19: rechazo con «Otro» y comentario del local de varias líneas. */
+    val rejectedDetail = BuyerOrderDetail(historical[2], null, "Jr. Ejemplo 789 (ejemplo)",
+        BuyerOrderDelivery("Casa", "Calle Imaginaria 456, dpto. 2B", null, null),
+        listOf(StoreOrderLine("p4", "Pan con chicharrón", 1, 1200, 1200), StoreOrderLine("p5", "Jugo de papaya", 1, 450, 450)),
+        OrderAmounts(1650, 300, 1950), OrderPaymentMethod.CASH_ON_DELIVERY,
+        listOf(BuyerOrderStatusEntry("PENDING_CONFIRMATION", true, T - 900_000_000),
+            BuyerOrderStatusEntry("REJECTED", true, T - 899_700_000)),
+        rejection = BuyerOrderRejection(StoreOrderRejectionReason.OTHER,
+            "Se nos terminó el pan del día.\nPuedes volver a pedir mañana desde las 7:00."))
 }

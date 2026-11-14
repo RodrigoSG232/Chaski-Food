@@ -34,7 +34,6 @@ import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.chaskifood.app.feature.cart.presentation.formatCartPrice
 import com.chaskifood.app.feature.orders.domain.BuyerOrderDetail
-import com.chaskifood.app.feature.orders.domain.OrderPaymentStatus
 import com.chaskifood.app.ui.components.ChaskiAppBar
 import com.chaskifood.app.ui.components.ChaskiButtonVariant
 import com.chaskifood.app.ui.components.ChaskiButton
@@ -135,6 +134,22 @@ private fun DetailBody(detail: BuyerOrderDetail, message: String?, notice: Strin
                 ChaskiButton(if (cancelling) "Cancelando…" else "Cancelar pedido", onClick = onCancel, enabled = !cancelling,
                     variant = ChaskiButtonVariant.Outlined)
             }
+        if (summary.status == "REJECTED")
+            item("rejection") {
+                Section("MOTIVO DEL RECHAZO")
+                DetailCard {
+                    Text("Pedido rechazado", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold,
+                        color = ChaskiTextPrimary)
+                    Text(buyerRejectionReasonText(detail.rejection?.reason), style = MaterialTheme.typography.bodyMedium,
+                        color = ChaskiTextSecondary)
+                    // Texto libre del local: Text lo muestra literal (sin marcado) y respeta sus saltos de línea.
+                    detail.rejection?.explanation?.let {
+                        Text("Comentario del local:", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold,
+                            color = ChaskiTextTertiary)
+                        Text(it, style = MaterialTheme.typography.bodyMedium, color = ChaskiTextPrimary)
+                    }
+                }
+            }
         item("history") {
             Section("HISTORIAL DE ESTADOS")
             DetailCard(spacing = 0.dp) {
@@ -210,7 +225,7 @@ private fun DetailBody(detail: BuyerOrderDetail, message: String?, notice: Strin
             DetailCard {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(ChaskiDimens.SpacingSm)) {
                     Icon(Icons.Filled.Payments, contentDescription = null, tint = ChaskiTextPrimary, modifier = Modifier.size(20.dp))
-                    Text(if (detail.paymentStatus == OrderPaymentStatus.PAID) "Efectivo registrado · simulación" else "Efectivo pendiente hasta la entrega",
+                    Text(buyerPaymentText(summary.status, detail.paymentStatus),
                         style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold, color = ChaskiTextPrimary)
                 }
                 Text("No se realiza ningún cobro real.", style = MaterialTheme.typography.bodySmall, color = ChaskiTextTertiary)
@@ -256,6 +271,12 @@ private fun AmountRow(label: String, minor: Long, bold: Boolean = false) {
 @Composable
 private fun BuyerOrderDetailPreview() = ChaskiTheme {
     BuyerOrderDetailContent(BuyerOrderDetailUiState(loading = false, detail = BuyerOrderPreviewData.detail), {}, {})
+}
+
+@Preview(name = "Detalle · rechazado (Otro)", showBackground = true, widthDp = 360, heightDp = 1500)
+@Composable
+private fun BuyerOrderRejectedDetailPreview() = ChaskiTheme {
+    BuyerOrderDetailContent(BuyerOrderDetailUiState(loading = false, detail = BuyerOrderPreviewData.rejectedDetail), {}, {})
 }
 
 @Preview(name = "Detalle · no encontrado", showBackground = true, widthDp = 360, heightDp = 640)

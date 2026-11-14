@@ -129,6 +129,35 @@ test("detail exposes only the buyer's own snapshots; foreign and missing orders 
   assert.equal((await call(buyer, `/${mine}?x=1`)).status, 400);
 });
 
+test("HU19: the buyer reads the stored rejection reason; legacy rejections stay readable and others never see it", async () => {
+  const buyer = await actor(), other = await actor(), at = 1_900_000_000_000;
+  const busy = orderIdFor("rej-busy"), custom = orderIdFor("rej-other"), legacy = orderIdFor("rej-legacy"), preparing = orderIdFor("rej-prep");
+  await seed([busy, custom, legacy, preparing].map(id => ({ id, buyer: buyer.uid, status: id === preparing ? "PREPARING" : "REJECTED", millis: at })));
+  const rejectedAt = Timestamp.fromMillis(at + 60_000);
+  await db.doc(`food_orders/${busy}`).update({ rejectionReason: "PRODUCT_UNAVAILABLE", rejectionExplanation: null,
+    rejectedByUid: "PRIVATE_MANAGER", rejectedAt });
+  await db.doc(`food_orders/${custom}`).update({ rejectionReason: "OTHER", rejectionExplanation: "Sin gas\nen cocina",
+    rejectedByUid: "PRIVATE_MANAGER", rejectedAt });
+  await db.doc(`food_orders/${preparing}`).update({ estimatedPreparationMinutes: 20, estimatedReadyAt: Timestamp.fromMillis(at + 1_200_000) });
+  for (const id of [busy, custom]) await db.doc(`food_orders/${id}/status_history/manager_decision`).set({ schemaVersion: 1,
+    fromStatus: "PENDING_CONFIRMATION", toStatus: "REJECTED", actorUid: "PRIVATE_MANAGER", occurredAt: rejectedAt });
+
+  const product = await call(buyer, `/${busy}`);
+  assert.equal(product.status, 200); assert.equal(product.body.order.status, "REJECTED");
+  assert.equal(product.body.order.rejectionReason, "PRODUCT_UNAVAILABLE"); assert.equal(product.body.order.rejectionExplanation, null);
+  assert.deepEqual(product.body.order.statusHistory.map((e: any) => e.status), ["PENDING_CONFIRMATION", "REJECTED"]);
+  const otherReason = await call(buyer, `/${custom}`);
+  assert.equal(otherReason.body.order.rejectionReason, "OTHER"); assert.equal(otherReason.body.order.rejectionExplanation, "Sin gas\nen cocina");
+  for (const r of [product, otherReason]) for (const secret of ["PRIVATE", "rejectedByUid", "rejectedAt", "actor", buyer.uid])
+    assert.equal(JSON.stringify(r.body).includes(secret), false, secret);
+  const old = await call(buyer, `/${legacy}`);
+  assert.equal(old.status, 200); assert.equal(old.body.order.rejectionReason, null); assert.equal(old.body.order.rejectionExplanation, null);
+  const active = await call(buyer, `/${preparing}`);
+  assert.equal(active.status, 200); assert.equal("rejectionReason" in active.body.order, false);
+  assert.equal("rejectionExplanation" in active.body.order, false);
+  assert.deepEqual(await call(other, `/${custom}`), { status: 404, body: { error: "ORDER_NOT_FOUND" } });
+});
+
 test("cursors are bound to account and phase; foreign or deleted anchors are rejected", async () => {
   const a = await actor(), b = await actor(); const orders: Seed[] = [];
   for (let i = 0; i < 25; i++) orders.push({ id: orderIdFor(`c${i}`), buyer: a.uid, status: "PREPARING", millis: 1_900_000_000_000 - i });

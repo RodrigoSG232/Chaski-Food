@@ -89,3 +89,37 @@ test("order IDs must be SHA-256 hex; anything else is treated as not found", () 
   assert.equal(buyerOrderId(id), id);
   for (const bad of ["", "x", "B".repeat(64), "../" + id, id + "/status_history"]) assert.equal(buyerOrderId(bad), null);
 });
+
+test("HU19: a rejected detail exposes only the stored reason and the OTHER explanation, never the deciding actor", () => {
+  const rejectedHistory = [...history, { schemaVersion: 1, fromStatus: "PENDING_CONFIRMATION", toStatus: "REJECTED", actorUid: "PRIVATE_ACTOR",
+    occurredAt: new Timestamp(1800000100, 0), reason: "OTHER", explanation: "PRIVATE_HISTORY_COPY" }];
+  const rejected = (fields: Record<string, unknown>) => projectBuyerOrderDetail(id,
+    { ...order(), status: "REJECTED", rejectedByUid: "PRIVATE_MANAGER", rejectedAt: new Timestamp(1800000100, 0), ...fields }, uid, rejectedHistory);
+  for (const reason of ["STORE_BUSY", "PRODUCT_UNAVAILABLE", "CLOSING_SOON"]) {
+    const d = rejected({ rejectionReason: reason, rejectionExplanation: null });
+    assert.equal(d.rejectionReason, reason); assert.equal(d.rejectionExplanation, null);
+  }
+  const other = rejected({ rejectionReason: "OTHER", rejectionExplanation: "  Sin gas\nen cocina  " });
+  assert.equal(other.rejectionReason, "OTHER"); assert.equal(other.rejectionExplanation, "Sin gas\nen cocina");
+  const json = JSON.stringify(other);
+  for (const hidden of ["PRIVATE", "rejectedByUid", "rejectedAt", "actorUid"]) assert.equal(json.includes(hidden), false, hidden);
+});
+
+test("HU19: historical or malformed rejections stay readable with null reason data", () => {
+  const rejected = (fields: Record<string, unknown>) => projectBuyerOrderDetail(id, { ...order(), status: "REJECTED", ...fields }, uid, history);
+  for (const fields of [{}, { rejectionReason: null }, { rejectionReason: "LEGACY_REASON", rejectionExplanation: "texto" },
+    { rejectionReason: 7 }]) {
+    const d = rejected(fields);
+    assert.equal(d.status, "REJECTED"); assert.equal(d.rejectionReason, null); assert.equal(d.rejectionExplanation, null);
+  }
+  for (const explanation of [undefined, null, "  ", "ab", "x".repeat(301), 42, "\ud800"])
+    assert.equal(rejected({ rejectionReason: "OTHER", rejectionExplanation: explanation }).rejectionExplanation, null, String(explanation));
+  assert.equal(rejected({ rejectionReason: "STORE_BUSY", rejectionExplanation: "no debe verse" }).rejectionExplanation, null);
+});
+
+test("HU19: orders that are not rejected never carry rejection fields", () => {
+  for (const status of ["PENDING_CONFIRMATION", "CANCELLED", "COMPLETED"]) {
+    const d = projectBuyerOrderDetail(id, { ...order(), status, rejectionReason: "STORE_BUSY", rejectionExplanation: "x" }, uid, history);
+    assert.equal("rejectionReason" in d, false, status); assert.equal("rejectionExplanation" in d, false, status);
+  }
+});

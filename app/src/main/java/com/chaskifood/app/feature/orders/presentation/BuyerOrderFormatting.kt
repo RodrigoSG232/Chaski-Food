@@ -12,6 +12,8 @@ import androidx.compose.material.icons.filled.SoupKitchen
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import com.chaskifood.app.feature.orders.domain.BuyerOrderSummary
+import com.chaskifood.app.feature.orders.domain.OrderPaymentStatus
+import com.chaskifood.app.feature.orders.domain.StoreOrderRejectionReason
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -27,6 +29,25 @@ private val DoneBg = Color(0xFFE8F5E9)
 private val DoneText = Color(0xFF1B5E20)
 private val StoppedBg = Color(0xFFFDECEC)
 private val StoppedText = Color(0xFFB71C1C)
+
+/**
+ * Texto del pago en efectivo (HU18). Un pago registrado se muestra tal cual; un pedido cancelado o rechazado
+ * sin pago registrado no tiene cobro pendiente. No se infiere ningún reembolso.
+ */
+internal fun buyerPaymentText(status: String, paymentStatus: OrderPaymentStatus): String = when {
+    paymentStatus == OrderPaymentStatus.PAID -> "Efectivo registrado · simulación"
+    status == "CANCELLED" || status == "REJECTED" -> "Sin cobro: el pedido no se entregó"
+    else -> "Efectivo pendiente hasta la entrega"
+}
+
+/** HU19: motivo del rechazo en palabras del comprador; un motivo ausente o desconocido nunca se inventa. */
+internal fun buyerRejectionReasonText(reason: StoreOrderRejectionReason?): String = when (reason) {
+    StoreOrderRejectionReason.STORE_BUSY -> "El local tiene alta demanda en este momento."
+    StoreOrderRejectionReason.PRODUCT_UNAVAILABLE -> "Uno o más productos no están disponibles."
+    StoreOrderRejectionReason.CLOSING_SOON -> "El local está próximo a cerrar."
+    StoreOrderRejectionReason.OTHER -> "Otro motivo"
+    null -> "Motivo del rechazo no disponible."
+}
 
 /** Un estado desconocido nunca rompe la pantalla: se muestra como «Estado en actualización» (N1). */
 internal fun buyerOrderStatusUi(status: String, known: Boolean, outcome: String? = null): BuyerOrderStatusUi = when (if (known) status else "") {

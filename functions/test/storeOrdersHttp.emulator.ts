@@ -176,6 +176,50 @@ test("cancelled or already answered orders cannot be decided again",async()=>{
   assert.equal((await decide(f.manager,f.store,id,{action:"ACCEPT",estimatedPreparationMinutes:20})).status,409);
   assert.equal((await decide(f.manager,f.store,id,{action:"REJECT",reason:"STORE_BUSY"})).status,409);
 });
+test("owner and a manager of another local cannot decide; nothing is written",async()=>{
+  const f=await fixture(),id="c1".repeat(32);await seedOrder(f.other,f.owner.uid,id);await seedOrder(f.store,f.owner.uid,"c2".repeat(32));
+  const before=(await db.doc(`food_orders/${id}`).get()).data();
+  for(const [a,store,orderId] of [[f.owner,f.other,id],[f.owner,f.store,"c2".repeat(32)],[f.manager,f.other,id]] as const)
+    for(const body of [{action:"ACCEPT",estimatedPreparationMinutes:20},{action:"REJECT",reason:"STORE_BUSY"}]) {
+      const r=await decide(a,store,orderId,body);assert.equal(r.status,403,`${a.uid} ${store}`);assert.equal(r.body.status,undefined);
+    }
+  assert.deepEqual((await db.doc(`food_orders/${id}`).get()).data(),before);
+  assert.equal((await db.doc(`food_orders/${"c2".repeat(32)}`).get()).get("status"),"PENDING_CONFIRMATION");
+  for(const orderId of [id,"c2".repeat(32)]) {
+    assert.equal((await db.doc(`food_orders/${orderId}/status_history/manager_decision`).get()).exists,false);
+    assert.equal((await db.collection("order_events").where("orderId","==",orderId).get()).size,0);
+  }
+});
+test("a repeated rejection is idempotent and a rejection after acceptance conflicts",async()=>{
+  const f=await fixture(),rejected="c3".repeat(32),accepted="c4".repeat(32);
+  await seedOrder(f.store,f.owner.uid,rejected);await seedOrder(f.store,f.owner.uid,accepted);
+  const body={action:"REJECT",reason:"OTHER",explanation:"Sin gas en cocina"};
+  const first=await decide(f.manager,f.store,rejected,body),repeated=await decide(f.manager,f.store,rejected,body);
+  assert.equal(first.status,200);assert.equal(repeated.status,200);assert.equal(repeated.body.status,"REJECTED");
+  const updatedAt=(await db.doc(`food_orders/${rejected}`).get()).get("updatedAt");
+  assert.equal((await db.collection(`food_orders/${rejected}/status_history`).get()).size,1);
+  assert.equal((await db.collection("order_events").where("orderId","==",rejected).get()).size,1);
+  const changed=await decide(f.manager,f.store,rejected,{action:"REJECT",reason:"STORE_BUSY"});
+  assert.equal(changed.status,409);assert.equal(changed.body.error,"ORDER_STATE_CHANGED");
+  assert.ok((await db.doc(`food_orders/${rejected}`).get()).get("updatedAt").isEqual(updatedAt));
+  assert.equal((await decide(f.manager,f.store,accepted,{action:"ACCEPT",estimatedPreparationMinutes:15})).status,200);
+  const late=await decide(f.manager,f.store,accepted,{action:"REJECT",reason:"STORE_BUSY"});
+  assert.equal(late.status,409);assert.equal(late.body.error,"ORDER_STATE_CHANGED");
+  const order=(await db.doc(`food_orders/${accepted}`).get()).data()!;
+  assert.equal(order.status,"PREPARING");assert.equal(order.rejectionReason,undefined);
+  assert.equal((await db.collection("order_events").where("orderId","==",accepted).get()).size,1);
+});
+test("a local that is not ACTIVE blocks acceptance but still allows rejection",async()=>{
+  const f=await fixture(),acceptId="c5".repeat(32),rejectId="c6".repeat(32);
+  await seedOrder(f.store,f.owner.uid,acceptId);await seedOrder(f.store,f.owner.uid,rejectId);
+  await db.doc(`stores/${f.store}`).update({status:"SUSPENDED"});
+  const accept=await decide(f.manager,f.store,acceptId,{action:"ACCEPT",estimatedPreparationMinutes:180});
+  assert.equal(accept.status,423);assert.equal(accept.body.error,"ACCEPTANCE_SUSPENDED");
+  assert.equal((await db.doc(`food_orders/${acceptId}`).get()).get("status"),"PENDING_CONFIRMATION");
+  assert.equal((await db.collection("order_events").where("orderId","==",acceptId).get()).size,0);
+  const reject=await decide(f.manager,f.store,rejectId,{action:"REJECT",reason:"CLOSING_SOON"});
+  assert.equal(reject.status,200);assert.equal(reject.body.status,"REJECTED");
+});
 test("foreign local, owner, buyer and administrator gain no automatic inbox permission",async()=>{
   const f=await fixture();await seedOrder(f.other,f.owner.uid,"b".repeat(64));
   for(const [a,store] of [[f.manager,f.other],[f.owner,f.store],[f.buyer,f.store],[admin,f.store],[f.buyer,"missing"]] as const) {
