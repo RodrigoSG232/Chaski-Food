@@ -81,24 +81,107 @@ export function parseRiderTracking(value:unknown):RiderTracking{
     latitude:point.latitude,longitude:point.longitude,accuracyMeters:body.accuracyMeters,recordedAt,estimatedArrivalAt};
 }
 
+/** E1.3 listing limits: page size requested by Rider, Firestore batch size and documents examined per request. */
+export const RIDER_PAGE_MAX=50,RIDER_SCAN_BATCH=50,RIDER_SCAN_MAX=200;
+/** Exact Firestore ordering values of the LAST EXAMINED document (readyAt seconds + nanoseconds, then document id). */
+export type RiderOrdersCursor=Readonly<{seconds:number;nanoseconds:number;orderId:string}>;
+const maxTimestampSeconds=253_402_300_799;
+
+export function encodeRiderOrdersCursor(cursor:RiderOrdersCursor):string{
+  return Buffer.from(JSON.stringify({v:1,s:cursor.seconds,n:cursor.nanoseconds,id:cursor.orderId})).toString("base64url");
+}
+
+/** Strict parser: any malformed, tampered or unknown-version cursor is a client error, never a silent restart. */
+export function parseRiderOrdersQuery(query:Record<string,unknown>):{limit:number;cursor:RiderOrdersCursor|null}{
+  if(Object.keys(query).some(key=>key!=="limit"&&key!=="cursor"))throw new OrderHttpError("INVALID_REQUEST",400);
+  const single=(value:unknown)=>Array.isArray(value)?null:value;
+  const rawLimit=single(query.limit),rawCursor=single(query.cursor);
+  if(rawLimit===null||rawCursor===null)throw new OrderHttpError("INVALID_REQUEST",400);
+  let limit=20;
+  if(rawLimit!==undefined){
+    if(typeof rawLimit!=="string"||!/^[1-9][0-9]?$/.test(rawLimit)||Number(rawLimit)>RIDER_PAGE_MAX)throw new OrderHttpError("INVALID_REQUEST",400);
+    limit=Number(rawLimit);
+  }
+  if(rawCursor===undefined)return {limit,cursor:null};
+  try{
+    if(typeof rawCursor!=="string"||rawCursor.length>256||!/^[A-Za-z0-9_-]+$/.test(rawCursor))throw new Error();
+    const raw=JSON.parse(Buffer.from(rawCursor,"base64url").toString("utf8"));
+    if(!raw||typeof raw!=="object"||Array.isArray(raw)||Object.keys(raw).sort().join(",")!=="id,n,s,v"||raw.v!==1||
+      !Number.isSafeInteger(raw.s)||raw.s<0||raw.s>maxTimestampSeconds||!Number.isSafeInteger(raw.n)||raw.n<0||raw.n>999_999_999||
+      typeof raw.id!=="string"||!/^[0-9a-f]{64}$/.test(raw.id))throw new Error();
+    const cursor=Object.freeze({seconds:raw.s,nanoseconds:raw.n,orderId:raw.id});
+    if(encodeRiderOrdersCursor(cursor)!==rawCursor)throw new Error();
+    return {limit,cursor};
+  }catch{throw new OrderHttpError("INVALID_REQUEST",400);}
+}
+
 export function payloadHash(value:unknown):string{return createHash("sha256").update(JSON.stringify(value)).digest("hex");}
 export function riderOrderId(value:string):string|null{return /^[0-9a-f]{64}$/.test(value)?value:null;}
 
-export function projectRiderOrder(data:Record<string,any>){
-  if(data.schemaVersion!==1||!["READY_FOR_PICKUP","IN_DELIVERY","COMPLETED"].includes(data.status)||data.paymentStatus!=="PAID"||data.paymentSimulation!==true||
-    typeof data.pickupCode!=="string"||!/^[0-9]{4}$/.test(data.pickupCode)||!(data.updatedAt instanceof Timestamp))
+/** LIST = public availability (never carries the pickup code); DETAIL = reconciliation of one known order. */
+export type RiderOrderView="LIST"|"DETAIL";
+
+function isoOrNull(value:unknown):string|null{return value instanceof Timestamp?value.toDate().toISOString():null;}
+
+/** Payment as seen by the delivery partner: what the rider must collect, never internal simulation flags. */
+function riderPayment(data:Record<string,any>){
+  const pending=data.paymentStatus==="PENDING";
+  return {method:data.paymentMethod,status:data.paymentStatus,amountToCollectMinor:pending?data.totalMinor:0,currency:data.currency};
+}
+
+/** Explicit dispatch contract; the stored document may carry more internal fields. */
+function riderDispatch(stored:Record<string,any>|undefined){
+  const assignment=stored?.assignment;
+  return {status:stored?.status??"SEARCHING_RIDER",lastEventSequence:stored?.lastEventSequence??0,
+    lastAssignmentVersion:stored?.lastAssignmentVersion??0,
+    assignment:assignment?{id:assignment.id,version:assignment.version}:null,
+    rider:stored?.rider?{id:stored.rider.id,displayName:stored.rider.displayName,phone:stored.rider.phone??null,
+      vehicleType:stored.rider.vehicleType,vehiclePlate:stored.rider.vehiclePlate??null}:null,
+    deliveryOutcome:stored?.deliveryOutcome??null,reason:stored?.reason??null,updatedAt:isoOrNull(stored?.updatedAt)};
+}
+
+/** Last accepted sample without idempotency internals (payloadHash, receivedAt) or the rider identifier. */
+function riderTrackingView(stored:Record<string,any>|undefined){
+  if(!stored)return null;
+  return {assignmentId:stored.assignmentId,assignmentVersion:stored.assignmentVersion,sequence:stored.sequence,
+    latitude:stored.latitude,longitude:stored.longitude,accuracyMeters:stored.accuracyMeters,
+    recordedAt:isoOrNull(stored.recordedAt),estimatedArrivalAt:isoOrNull(stored.estimatedArrivalAt)};
+}
+
+/** Payment situations Rider may handle: legacy simulated prepayment (nothing to collect) or cash still to be collected. */
+export type RiderPaymentEligibility="LEGACY_PREPAID"|"CASH_PENDING";
+export function riderPaymentEligibility(data:Record<string,any>):RiderPaymentEligibility|null{
+  if(typeof data.pickupCode!=="string"||!/^[0-9]{4}$/.test(data.pickupCode))return null;
+  if(data.paymentStatus==="PAID"&&data.paymentSimulation===true)return "LEGACY_PREPAID";
+  if(data.paymentMethod==="CASH_ON_DELIVERY"&&data.paymentStatus==="PENDING"&&data.paymentSimulation!==true)return "CASH_PENDING";
+  return null;
+}
+
+/** E1.2: cash orders may be assigned, reach the store and be released; pickup (E2) and completion (E4) are not enabled yet. */
+const cashEventsEnabled:readonly RiderEventType[]=["ASSIGNMENT_ACCEPTED","ARRIVED_AT_MERCHANT","ASSIGNMENT_RELEASED"];
+export function riderEventAllowedForPayment(eligibility:RiderPaymentEligibility,eventType:RiderEventType):boolean{
+  return eligibility==="LEGACY_PREPAID"||cashEventsEnabled.includes(eventType);
+}
+
+export function projectRiderOrder(data:Record<string,any>,view:RiderOrderView){
+  if(data.schemaVersion!==1||!["READY_FOR_PICKUP","IN_DELIVERY","COMPLETED"].includes(data.status)||
+    riderPaymentEligibility(data)===null||!(data.updatedAt instanceof Timestamp))
     throw new OrderHttpError("ORDER_NOT_READY",409);
   const pickup=data.pickupSnapshot,dropoff=data.dropoffSnapshot,buyer=data.buyerSnapshot,store=data.storeSnapshot;
   if(!pickup||!dropoff||!buyer||!store||!validCoordinates(pickup.location)||!validCoordinates(dropoff.location)||!Array.isArray(data.items))
     throw new OrderHttpError("DATA_INCONSISTENT",503,true);
-  return {schemaVersion:1,orderId:data.orderId,updatedAt:data.updatedAt.toDate().toISOString(),status:data.status,
-    customer:{id:data.buyerUid,displayName:buyer.displayName,phone:buyer.phone??null,address:dropoff.addressText,
+  const dispatch=riderDispatch(data.riderIntegration);
+  const order={schemaVersion:1,orderId:data.orderId,updatedAt:data.updatedAt.toDate().toISOString(),status:data.status,
+    readyAt:isoOrNull(data.readyAt),
+    customer:{displayName:buyer.displayName,phone:buyer.phone??null,address:dropoff.addressText,
       reference:dropoff.reference??null,instructions:dropoff.instructions??null,latitude:dropoff.location.latitude,longitude:dropoff.location.longitude},
     merchant:{id:data.storeId,name:store.name,phone:store.phone??null,address:pickup.addressText,
       instructions:pickup.instructions??null,latitude:pickup.location.latitude,longitude:pickup.location.longitude},
     items:data.items.map((item:Record<string,unknown>)=>({id:item.productId,name:item.name,quantity:item.quantity})),
     amounts:{subtotalMinor:data.subtotalMinor,deliveryFeeMinor:data.deliveryFeeMinor,tipMinor:data.tipMinor??0,totalMinor:data.totalMinor,currency:data.currency},
-    payment:{flow:"PREPAID_SIMULATION",method:"SIMULATED",status:"PAID"},pickupCode:data.pickupCode,
-    dispatch:data.riderIntegration??{status:"SEARCHING_RIDER",lastEventSequence:0,assignment:null,rider:null},
-    tracking:data.riderTracking??null};
+    payment:riderPayment(data),dispatch,tracking:riderTrackingView(data.riderTracking)};
+  if(view==="LIST")return order;
+  // Only the backend of the current assignment may receive the code; Rider must still restrict it to that rider.
+  const pickupCode=data.status==="READY_FOR_PICKUP"&&dispatch.assignment!==null?data.pickupCode:null;
+  return {...order,pickupCode};
 }

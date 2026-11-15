@@ -94,7 +94,7 @@ La carga administrativa es idempotente, exige credenciales fuera del repositorio
 | Qué | Comando |
 |---|---|
 | Unitarias backend | `npm --prefix functions test` (tras `build`) |
-| Backend + reglas en emulador (laboratorio limpio, secuencial) | desde `functions/`: `npx firebase emulators:exec --only auth,firestore,functions --project demo-chaski-hu15 --config ../firebase.json "node --test --test-concurrency=1 lib/test/*.emulator.js"` |
+| Backend + reglas en emulador (laboratorio limpio, secuencial; requiere `$env:CHASKI_ROUTE_FIXTURE='enabled'` y `.secret.local` ficticio) | desde `functions/`: `npx firebase emulators:exec --only auth,firestore,functions --project demo-chaski-hu15 --config ../firebase.json "node --test --test-concurrency=1 lib/test/*.emulator.js"` |
 | Paquete de Functions (antes de publicar) | `npm --prefix functions run verify:package` |
 | JVM Android | `.\gradlew.bat :app:testDebugUnitTest` + las propiedades del modo cuyo JSON esté activo |
 | Compilar pruebas instrumentadas | `.\gradlew.bat :app:compileDebugAndroidTestKotlin` + propiedades del modo |
@@ -153,7 +153,12 @@ Buenas prácticas:
 - Proteger datos personales y cuentas Firebase; usar datos ficticios.
 - Evitar documentación excesiva y planificación burocrática.
 - Detenerse a pedir aprobación ante cambios de seguridad, eliminaciones, despliegues, cambios de arquitectura o decisiones de alcance.
-- Si algo en la documentación contradice al código, verificar en el código y corregir el documento.
+- **Fuente de verdad:** los requisitos y las decisiones aprobadas definen el comportamiento esperado. El código es evidencia de la implementación actual, no autoridad. Ante una contradicción entre documentación y código:
+  1. revisar los requisitos, las decisiones, el código y las pruebas;
+  2. determinar el origen de la inconsistencia antes de proponer cambios;
+  3. si el documento solo describe mal el código y el código cumple lo aprobado, corregir el documento.
+
+  No se modifica un requisito aprobado únicamente para hacerlo coincidir con el código, y no se modifica código sin autorización humana. Las implementaciones existentes se reutilizan cuando cumplen correctamente los requisitos.
 
 ## 4. Git y colaboración
 - Una rama por historia o incremento; PR hacia `main` para integrar. No trabajar directamente sobre `main`.
@@ -164,7 +169,70 @@ Buenas prácticas:
 
 ## 5. Diseño de interfaces
 - Dante trabaja algunas interfaces en **Pencil** (archivos `.pen`, mediante su servidor MCP con el asistente). El diseño se traduce a Compose reutilizando `ui/theme`, `ui/components` y la navegación existente; las decisiones de interfaz vigentes están en [DECISIONES § Interfaz](DECISIONES.md#interfaz).
-- **Pencil no es obligatorio**: cualquier integrante puede diseñar en Android Studio o con sus herramientas, respetando Material 3, `ChaskiTheme`, los componentes compartidos y los criterios de UX vigentes.
+- **Pencil antes de Compose (desde el 15-11-2026, para las historias que coordina el responsable de Food, empezando por HU21-B/HU22).** Cuando un cambio requiere una decisión de diseño (pantalla nueva, estado nuevo o cambio visual relevante):
+  1. Revisar los diseños y componentes existentes y comprobar si ya hay una pantalla equivalente.
+  2. Proponer los cambios respetando el sistema visual.
+  3. Diseñar o modificar en Pencil **solo con autorización**, en frames nuevos con prefijo de historia, sin sobrescribir los aprobados.
+  4. Presentar las pantallas y estados al responsable de Food, que los revisa (también con ChatGPT).
+  5. Implementar en Compose **solo después de la aprobación visual y funcional**.
+  6. Verificar que la app real corresponde al diseño aprobado.
+
+  - Si una pantalla existente ya satisface los requisitos, se reutiliza sin rediseñarla.
+  - Los cambios exclusivamente de backend, persistencia o pruebas no requieren Pencil.
+  - Los ajustes menores sin decisión de diseño (textos, espaciados, correcciones) se hacen dentro del alcance aprobado, con los componentes existentes.
+- *Coherencia:* esta regla concreta la de [DECISIONES § Interfaz](DECISIONES.md#interfaz) («Pencil primero»). La guía decía antes «Pencil no es obligatorio»; esa frase queda sustituida. Si otro integrante diseña una historia propia fuera de Pencil, debe acordarlo con el responsable de Food antes de implementar.
+- **Arquitectura:** todo diseño aprobado se implementa respetando [ARCHITECTURE](ARCHITECTURE.md):
+  - feature-first y MVVM, con dirección Presentation → Domain ← Data;
+  - Domain sin SDKs ni infraestructura;
+  - casos de uso, interfaces, módulos o carpetas nuevos solo cuando aportan una responsabilidad real;
+  - sin abstracciones anticipadas;
+  - reutilizar `ui/components` y los servicios existentes.
 - Decisión aprobada DEC-HU34-29: **se conserva la interfaz actual del cliente** (Inicio, Buscar, Pedidos, Cuenta, catálogo, carrito, direcciones y Checkout); cambiarla requiere decisión explícita.
 - Si cambias una interfaz de forma relevante, anota en el PR (o en el estado) qué cambió y por qué. No hace falta documentar cada ajuste visual.
 - Comprueba estados de carga/error, textos largos, tamaños táctiles y accesibilidad.
+
+## 6. Herramientas y matriz de verificación
+
+### 6.1 Cuándo usar cada herramienta
+Esta sección indica **cuándo** conviene cada herramienta; no afirma que estén instaladas. Antes de usar una, compruébalo en tu equipo.
+
+| Herramienta | Cuándo usarla |
+|---|---|
+| Claude Code, modo Plan | Analizar una HU, investigar código, comparar alternativas y proponer. No edita |
+| Claude Code, modo Manual | Aplicar cambios **autorizados**, revisando cada edición y comando |
+| Pencil (MCP) | Diseñar y aprobar interfaces antes de Compose (§5). Los `.pen` se leen solo por MCP |
+| Firebase MCP | Consultas de **solo lectura** autorizadas a Cloud (funciones, reglas, entorno). Nunca para escribir datos ni desplegar sin autorización |
+| Revisión de código y de seguridad del asistente | Antes de pedir un commit con lógica de autorización, pagos o integración |
+| Android CLI / QA de emulador | Recorridos instrumentados o capturas en AVD, cuando estén instalados y verificados |
+| Kotlin LSP | Navegación y diagnósticos de Kotlin, si es compatible con el proyecto |
+| Skills propias (futuras) | Análisis de HU, implementación, verificación, contratos y diseño. No existen todavía |
+
+### 6.2 Verificación según el tipo de cambio
+Informa siempre qué se ejecutó realmente, con su resultado, y también los fallos, las omisiones y las limitaciones. Compilar no equivale a validar.
+
+| Tipo de cambio | Verificación mínima | Evidencia adicional cuando aplique |
+|---|---|---|
+| Kotlin / Compose | `:app:testDebugUnitTest`, `assembleDebug` del modo activo, previews con datos ficticios | Instrumentadas **ejecutadas** (no solo compiladas); revisión visual en AVD o teléfono |
+| Interfaces de usuario | Diseño aprobado en Pencil (§5); estados de carga, error, vacío y textos largos | Comparación entre Pencil y la app real; accesibilidad y tamaños táctiles |
+| Cloud Functions | `npm --prefix functions run build`, `npm --prefix functions test`, emulador en secuencia (§2.2) | `verify:package` antes de publicar; comparar lo desplegado con el commit |
+| Contratos REST | Pruebas HTTP en el emulador con cuerpos válidos, inválidos (claves extra o faltantes) y errores esperados | Ejemplos del contrato reproducidos en las pruebas; compatibilidad con los consumidores existentes |
+| Autorización y seguridad | Casos positivos y negativos por rol (responsable de otro local, propietario, comprador, administrador, sin sesión) | Revisión de seguridad; ningún secreto ni PIN en logs ni en historial |
+| Firestore (reglas, índices, esquema) | Pruebas de reglas en el emulador; índices en `firestore.indexes.json` | Comparar con lo publicado antes de desplegar (§2.4); compatibilidad con datos antiguos sin migraciones destructivas |
+| Integración con Rider | Emulador: idempotencia, secuencia, asignación vigente, concurrencia, reintentos y respuesta perdida | Prueba conjunta con pedidos de prueba identificados por ambos equipos ([API_CHASKI_RIDER §12](API_CHASKI_RIDER.md)) |
+
+### 6.3 HeiGIT: pruebas deterministas y pruebas reales
+- **LOCAL determinista** (reglas de negocio y regresiones):
+  - fixtures de rutas con `CHASKI_ROUTE_FIXTURE=enabled`;
+  - `functions/.secret.local` con un valor **ficticio** (§2.1) cuando el fixture no necesita una conexión real;
+  - sin depender de servicios externos.
+- **Integración real con HeiGIT** (requiere configuración segura y **autorización previa** en cada ejecución):
+  - solicitud real de ruta y distancia con una credencial válida que nunca se copia al repositorio ni a los registros;
+  - comprobación de la tarifa a partir de la respuesta y de la coherencia entre la cotización y el pedido creado;
+  - evidencia sin credenciales ni datos personales;
+  - distinguir los fallos del proveedor de los de Food.
+
+Nunca copies el secreto real para que pase una prueba LOCAL.
+
+**Estado (15-11-2026, D1):** con el fixture de rutas, el secreto ficticio y las pruebas actualizadas a la tarifa v2, la batería completa da 197/197. En Windows con Node 24 se observaron caídas intermitentes de `node.exe` (`0xC0000409`) al lanzar procesos hijos. Si un archivo falla sin aserción, repítelo aislado antes de diagnosticar un defecto. La guía recomienda Node 22.
+
+**Gestor de paquetes:** `functions/package.json` declara `packageManager: npm@11.12.1` y existe solo `package-lock.json`. Las menciones a pnpm en auditorías antiguas son históricas.

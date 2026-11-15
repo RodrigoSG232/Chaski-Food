@@ -38,6 +38,79 @@ Decisiones **aprobadas** por el equipo que siguen aplicando y condicionan las pr
 - **Reasignación HU22:** `ASSIGNMENT_RELEASED` solo libera antes del recojo; no cancela la compra ni modifica el código. Una nueva asignación incrementa su versión. Después de `PICKED_UP` no se reasigna automáticamente y Food pasa a `IN_DELIVERY` únicamente por un evento Rider válido.
 - **Para recibir pedidos** basta al menos un responsable asignado válido; no se exige que esté conectado. Sin responsables se bloquean confirmaciones nuevas (HU16-05, HU16-12).
 
+> **Actualización 15-11-2026:** los puntos «Dependencia Rider», el destino de `PREPARATION_ESTIMATE_UPDATED` en HU20 y el «Flujo temporal Food» quedan condicionados por la sección siguiente. Su texto se conserva como historial.
+
+## Integración con Chaski Rider (HU21-B/HU22, 15-11-2026)
+
+**Origen:** conformidad técnica de Food (Dante, responsable) y de Chaski Rider (Ángel, responsable del proyecto Rider), tras dos rondas de coordinación (14 y 15-11-2026). El contrato técnico está en [API_CHASKI_RIDER](API_CHASKI_RIDER.md). **No modifica por sí solo la planificación académica:** los criterios revisados de HU21/HU22 requieren aprobación formal (ver `PLAN_HU15_HU22_RIDER.md`, local). Nada de esta sección está implementado salvo que se indique.
+
+### Integración logística
+- **Modelo pull desde `READY_FOR_PICKUP`.** Rider descubre los pedidos consultando `riderApi` y administra las ofertas, asignaciones y liberaciones. *Motivo:* reutiliza la API existente y respeta que la asignación es responsabilidad de Rider.
+- **Identificadores:** `orderId` para el pedido comercial y `assignment.id/version` para la asignación. Sin `deliveryRequestId` ni `deliveryId` en el contrato inicial. *Motivo:* el modelo pull no necesita una solicitud previa, y ambos proyectos ya identifican cada recorrido sin ellos.
+- **Proyectos independientes:** Firebase y Firestore de Food y Rider separados; comunicación solo de backend a backend por REST con OIDC; versión `/integration/v1` con activación coordinada para pedidos de prueba.
+- **Descubrimiento:**
+  - el backend Rider consulta cada 15 s (valor inicial ajustable);
+  - paginación por `readyAt` y `orderId` con `nextCursor`;
+  - cada pasada recorre todas las páginas desde el inicio;
+  - deduplicación por `orderId`.
+- **Pedido sin repartidor:** sigue `READY_FOR_PICKUP`. Sin cancelación automática mientras no se acuerde quién cancela, con qué plazo y cómo lo detecta Rider.
+
+### Validación del recojo (HU21-B)
+- **Ciclo del código:**
+  - Food genera `pickupCode` al marcar `READY_FOR_PICKUP`;
+  - Rider lo muestra **solo** al repartidor de la asignación vigente;
+  - el responsable autorizado lo introduce en Food;
+  - Food valida permisos, pedido, código y asignación vigente, y guarda `pickupVerification` ligada a `assignmentId/version`.
+- **Recojo físico:** validar el código **no** equivale a recoger. Rider confirma el recojo físico con `PICKED_UP`, que Food acepta solo con una verificación y una asignación vigentes.
+- **Reasignación normal:** conserva el código e invalida la verificación anterior.
+- **Intentos y bloqueo:** 5 fallos acumulados por pedido y ciclo de verificación. Una reasignación no reinicia el contador ni quita un bloqueo.
+- **Desbloqueo:**
+  - solo un **administrador autorizado de Food**;
+  - genera un código nuevo, invalida el anterior e inicia un ciclo nuevo de 5 intentos.
+  - **Excepción acotada a HU34-28 (aprobada como interpretación de diseño, 15-11-2026):** el administrador sigue **sin acceso general a pedidos**. La excepción permite **solo** la recuperación de un recojo bloqueado:
+    1. identificar la incidencia con datos mínimos;
+    2. comprobar que es recuperable;
+    3. ejecutar el desbloqueo;
+    4. registrar el motivo, el actor y la operación;
+    5. regenerar el PIN.
+
+    **No** habilita aceptar o rechazar pedidos, cambiar estimaciones, administrar locales, gestionar entregas ni consultar la bandeja general.
+  - Es compatible con el resto de HU34: el administrador sigue siendo un claim y no una experiencia (HU34-28), la autorización la decide el servidor (HU34-06/14/21) y el claim tampoco concede el dashboard (HU28).
+  - **Pendiente para E2:** el canal (Android o herramienta administrativa segura). No hay endpoint, permiso ni pantalla aprobados.
+- **Auditoría y exposición:**
+  - intentos y desbloqueos idempotentes y auditables;
+  - nunca se guardan los códigos introducidos;
+  - Rider ve `pickupLock`, pero no la auditoría administrativa;
+  - Food muestra al responsable la identidad del repartidor vigente.
+
+### Pago contra entrega (HU22)
+- **Medio y saldo:**
+  - `CASH_ON_DELIVERY` con pago inicial `PENDING`;
+  - `amountToCollectMinor` es el saldo exacto, en céntimos de PEN;
+  - Rider declara el medio con el que se cobró: `CASH`, `YAPE` o `PLIN`;
+  - sin pagos parciales.
+- **`collection`:** objeto en `COMPLETED_SUCCESSFULLY` contra entrega; `null` en `COMPLETED_UNSUCCESSFULLY` sin dinero recibido; ausente en los demás eventos.
+- **Cobro correcto:** pago confirmado y pedido completado en la misma transacción.
+- **Cobro discrepante:** pedido `COMPLETED` con `deliveryOutcome=SUCCESS`, pago `PENDING` e incidencia `OPEN`. Nunca se registra como `PAID` un importe incorrecto. *Motivo:* refleja la entrega física sin dar por bueno un cobro erróneo.
+- **Reintentos y consulta:** Rider no vuelve a cobrar tras una respuesta perdida; repetir el evento recupera el resultado original. El detalle permite consultar `collectionStatus` y `collectionReview`.
+- **Pendiente de diseño:**
+  - la conciliación posterior, que debe conservar trazabilidad como ajuste;
+  - una entrega fallida con movimiento de dinero, que es una incidencia y no `collection:null`.
+
+### Secuencias y resiliencia
+- **Secuencia:** `eventSequence` es por pedido, no por repartidor; continúa tras liberaciones y reasignaciones; un evento rechazado sin aplicarse no consume su secuencia.
+- **Responsabilidades de Rider:**
+  - el backend coordina los eventos con una cola de salida **duradera**;
+  - ante un resultado desconocido conserva `eventId`, contenido y secuencia;
+  - Android usa identificadores estables hacia su backend;
+  - impide asignaciones simultáneas incompatibles.
+- **Responsabilidad de Food:** el tracking y los eventos se aceptan solo para la asignación vigente.
+- **Pruebas obligatorias:** desconexiones, pérdida del ACK, reintentos y duplicados.
+
+### Simulación y pago anticipado
+- **Sustitución de la simulación:** la simulación temporal de reparto se sustituirá por el flujo real con Rider. Una vez activada la integración, el **backend** impedirá las transiciones simuladas de los pedidos gestionados por Rider. Durante el desarrollo se conservan mecanismos de prueba aislados en LOCAL. La retirada del código de simulación se evaluará después de aprobar las pruebas reales, sin afectar otros componentes.
+- **Pago anticipado:** gestionado por Food, queda como **fase futura opcional**, condicionada al tiempo disponible. El `deliveryCode` del comprador es distinto del `pickupCode` del establecimiento.
+
 ## Consultas propias (HU17)
 ### Seguimiento HU23 (08-11-2026)
 - **Aprobado por el usuario:** ETA proporcionado por Rider. Avanzar con simulación LOCAL mientras se recibe el contrato definitivo; actualizar después. En ausencia de ETA real, mostrar «ETA no disponible».

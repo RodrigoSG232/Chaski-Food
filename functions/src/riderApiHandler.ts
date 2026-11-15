@@ -1,7 +1,7 @@
 import {getFirestore} from "firebase-admin/firestore";
 import type {onRequest} from "firebase-functions/v2/https";
 import {RuntimeEnvironment} from "./runtimeEnvironment";
-import {parseRiderEvent,parseRiderTracking} from "./integration/riderIntegrationPolicy";
+import {parseRiderEvent,parseRiderOrdersQuery,parseRiderTracking} from "./integration/riderIntegrationPolicy";
 import {RiderIntegrationService} from "./integration/riderIntegrationService";
 import {OrderHttpError} from "./orders/orderRequest";
 
@@ -18,9 +18,8 @@ export function createRiderApiHandler(dependencies:Dependencies):RiderHttpHandle
       const tracking=/^\/integration\/v1\/orders\/([^/]+)\/tracking\/?$/.exec(request.path);
       if(collection){
         if(request.method!=="GET")return void error(405,"METHOD_NOT_ALLOWED");
-        if(Object.keys(request.query).some(key=>key!=="limit"))throw new OrderHttpError("INVALID_REQUEST",400);
-        const raw=Array.isArray(request.query.limit)?request.query.limit[0]:request.query.limit;
-        response.status(200).json(await service.available(raw===undefined?20:Number(raw)));return;
+        const {limit,cursor}=parseRiderOrdersQuery(request.query as Record<string,unknown>);
+        response.status(200).json(await service.available(limit,cursor));return;
       }
       if(detail){
         if(request.method!=="GET")return void error(405,"METHOD_NOT_ALLOWED");

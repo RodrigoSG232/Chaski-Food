@@ -1,27 +1,43 @@
-import { Firestore,Timestamp } from "firebase-admin/firestore";
+import { FieldPath,Firestore,Timestamp } from "firebase-admin/firestore";
 import { OrderHttpError } from "../orders/orderRequest";
-import { payloadHash,projectRiderOrder,RiderEvent,riderOrderId,RiderTracking } from "./riderIntegrationPolicy";
+import { encodeRiderOrdersCursor,payloadHash,projectRiderOrder,RIDER_PAGE_MAX,RIDER_SCAN_BATCH,RIDER_SCAN_MAX,RiderOrdersCursor,RiderEvent,riderEventAllowedForPayment,riderOrderId,riderPaymentEligibility,RiderTracking } from "./riderIntegrationPolicy";
 import { BuyerNoticeType,createBuyerNoticeEvent } from "../notifications/buyerNoticeEvent";
 
 export class RiderIntegrationService{
   constructor(private readonly db:Firestore,private readonly now:()=>number=Date.now){}
 
-  async available(limit=20){
-    if(!Number.isInteger(limit)||limit<1||limit>50)throw new OrderHttpError("INVALID_REQUEST",400);
-    const snapshot=await this.db.collection("food_orders").where("status","==","READY_FOR_PICKUP").limit(limit).get();
-    const orders=[];
-    for(const document of snapshot.docs){
-      try{const order=projectRiderOrder(document.data());if(!order.dispatch.assignment)orders.push(order);}
-      catch(error){if(!(error instanceof OrderHttpError)||error.code!=="ORDER_NOT_READY")throw error;}
+  /** E1.3: READY_FOR_PICKUP ordered by readyAt then document id; eligibility is applied before filling the page.
+   * Examines at most RIDER_SCAN_MAX documents; nextCursor always points to the LAST EXAMINED one (may follow an empty page). */
+  async available(limit=20,cursor:RiderOrdersCursor|null=null){
+    if(!Number.isInteger(limit)||limit<1||limit>RIDER_PAGE_MAX)throw new OrderHttpError("INVALID_REQUEST",400);
+    // The range bound keeps only real Timestamps: documents without readyAt (or with another type) are not listed.
+    const base=this.db.collection("food_orders").where("status","==","READY_FOR_PICKUP")
+      .where("readyAt",">=",Timestamp.fromMillis(0)).orderBy("readyAt").orderBy(FieldPath.documentId());
+    const orders=[];let last=cursor,examined=0,exhausted=false;
+    while(orders.length<limit&&examined<RIDER_SCAN_MAX){
+      const requested=Math.min(RIDER_SCAN_BATCH,RIDER_SCAN_MAX-examined);
+      const query=last?base.startAfter(new Timestamp(last.seconds,last.nanoseconds),last.orderId):base;
+      const batch=await query.limit(requested).get();
+      let consumed=0;
+      for(const document of batch.docs){
+        consumed++;examined++;
+        const readyAt=document.get("readyAt") as Timestamp;
+        last={seconds:readyAt.seconds,nanoseconds:readyAt.nanoseconds,orderId:document.id};
+        try{const order=projectRiderOrder(document.data(),"LIST");if(!order.dispatch.assignment)orders.push(order);}
+        catch(error){if(!(error instanceof OrderHttpError)||error.code!=="ORDER_NOT_READY")throw error;}
+        if(orders.length===limit)break;
+      }
+      // A short batch fully consumed means nothing remains after the last examined document.
+      if(consumed===batch.size&&batch.size<requested){exhausted=true;break;}
     }
-    return {contractVersion:1,orders};
+    return {contractVersion:1,orders,nextCursor:exhausted||!last?null:encodeRiderOrdersCursor(last)};
   }
 
   async detail(rawOrderId:string){
     const orderId=riderOrderId(rawOrderId);if(!orderId)throw new OrderHttpError("ORDER_NOT_FOUND",404);
     const data=(await this.db.doc(`food_orders/${orderId}`).get()).data();
     if(!data)throw new OrderHttpError("ORDER_NOT_FOUND",404);
-    return {contractVersion:1,order:projectRiderOrder(data)};
+    return {contractVersion:1,order:projectRiderOrder(data,"DETAIL")};
   }
 
   async event(event:RiderEvent,rawPayload:unknown){
@@ -33,7 +49,8 @@ export class RiderIntegrationService{
       if(known){if(known.payloadHash!==hash)throw new OrderHttpError("IDEMPOTENCY_CONFLICT",409);
         return {contractVersion:1,eventId:event.eventId,orderId:event.orderId,applied:true,lastEventSequence:known.eventSequence};}
       if(!order||order.schemaVersion!==1)throw new OrderHttpError("ORDER_NOT_FOUND",404);
-      if(order.paymentStatus!=="PAID"||order.paymentSimulation!==true||typeof order.pickupCode!=="string")
+      const eligibility=riderPaymentEligibility(order);
+      if(eligibility===null||!riderEventAllowedForPayment(eligibility,event.eventType))
         throw new OrderHttpError("ORDER_NOT_READY",409);
       const integration=order.riderIntegration??{lastEventSequence:0,lastAssignmentVersion:0,status:"SEARCHING_RIDER",assignment:null,rider:null};
       if(event.eventSequence!==integration.lastEventSequence+1)throw new OrderHttpError("EVENT_SEQUENCE_CONFLICT",409);

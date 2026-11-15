@@ -77,6 +77,15 @@
         { "fieldPath": "businessId", "order": "ASCENDING" },
         { "fieldPath": "completedAt", "order": "ASCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "food_orders",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "readyAt", "order": "ASCENDING" },
+        { "fieldPath": "__name__", "order": "ASCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []
