@@ -10,6 +10,7 @@ import { CommercialIdentity } from "../src/auth/verifyBuyerToken";
 import { encodeInboxCursor } from "../src/orders/storeOrdersPolicy";
 import { StoreOrdersReader } from "../src/orders/storeOrdersReader";
 import { buyerNoticeEventId } from "../src/notifications/buyerNoticeEvent";
+import { hu23Event } from "./lab/hu23Fixture";
 process.env.FIRESTORE_EMULATOR_HOST="127.0.0.1:8089";
 process.env.FIREBASE_AUTH_EMULATOR_HOST="127.0.0.1:9099";
 const project="demo-chaski-hu15",app=initializeApp({projectId:project},"hu16-inbox-tests"),db=getFirestore(app),auth=getAuth(app);
@@ -499,4 +500,116 @@ test("CLOUD inbox keeps scoped current bindings, privacy and read access during 
   assert.equal(result.status,200);assert.equal(result.body.orders.length,1);assert.ok(!JSON.stringify(result.body).includes("PRIVATE"));
   await auth.updateUser(f.manager.uid,{disabled:true});
   assert.equal((await send(f.manager.token,`/stores/${f.store}/orders`)).status,401);
+});
+
+// ---- E2: pickup security (store verification, rider events, lock and admin unlock) over LOCAL emulators only.
+const riderBase=`http://127.0.0.1:5001/${project}/southamerica-west1/riderApi/integration/v1/`;
+async function rider(path:string,method="GET",body?:unknown) {
+  const r=await fetch(riderBase+path,{method,headers:{"Content-Type":"application/json"},
+    ...(body===undefined?{}:{body:JSON.stringify(body)}),signal:AbortSignal.timeout(30_000)});
+  return {status:r.status,body:await r.json() as any};
+}
+const verifyPath=(store:string,id:string)=>`/stores/${store}/orders/${id}/pickup-verifications`;
+const attempt=(code:string,version=1,operationId=randomUUID())=>({operationId,code,assignmentId:`hu23-assignment-${version}`,assignmentVersion:version});
+/** Cash order, marked ready by the manager, with Rider-ready snapshots and assignment v1 accepted. */
+async function readyAssigned(f:Awaited<ReturnType<typeof fixture>>,id:string) {
+  await cashPreparing(f,id);
+  const ready=await connectedHttp(app)(f.manager.token,readyPath(f.store,id),{},"POST");assert.equal(ready.status,200);
+  const location={latitude:-12.1,longitude:-77.1};
+  await db.doc(`food_orders/${id}`).update({storeSnapshot:{name:"Local ficticio",phone:null},
+    pickupSnapshot:{addressText:"Local",location},dropoffSnapshot:{addressText:"Destino",location}});
+  assert.equal((await rider("rider-events","POST",hu23Event(id,"ASSIGNMENT_ACCEPTED",1))).status,200);
+  return ready.body.pickupCode as string;
+}
+const wrong=(code:string)=>code==="0000"?"1111":"0000";
+
+test("E2: the assigned manager verifies the code; replay is idempotent; pickup follows and the code is never stored in attempts",async()=>{
+  const f=await fixture(),id="e2".repeat(32),send=connectedHttp(app),code=await readyAssigned(f,id);
+  assert.equal((await rider("rider-events","POST",hu23Event(id,"PICKED_UP",2))).body.error.code,"PICKUP_NOT_VERIFIED");
+  const inbox=(await page(f.manager,f.store,"?status=READY_FOR_PICKUP")).body.orders.find((o:any)=>o.orderId===id);
+  assert.deepEqual(inbox.pickup,{assignment:{assignmentId:"hu23-assignment-1",assignmentVersion:1,riderDisplayName:"Ana (simulación LOCAL)",
+    vehicleType:"BICYCLE",vehiclePlate:null},verified:false,locked:false,attemptsRemaining:5});
+  const body=attempt(code),first=await send(f.manager.token,verifyPath(f.store,id),body,"POST");
+  assert.equal(first.status,200);assert.equal(first.body.outcome,"VERIFIED");
+  const replay=await send(f.manager.token,verifyPath(f.store,id),body,"POST");
+  assert.equal(replay.status,200);assert.equal(replay.body.replayed,true);
+  assert.equal((await send(f.manager.token,verifyPath(f.store,id),{...body,assignmentVersion:2,assignmentId:"hu23-assignment-2"},"POST")).body.error,
+    "IDEMPOTENCY_CONFLICT");
+  assert.equal((await send(f.manager.token,verifyPath(f.store,id),attempt(wrong(code)),"POST")).body.outcome,"ALREADY_VERIFIED");
+  assert.equal((await db.doc(`food_orders/${id}`).get()).get("status"),"READY_FOR_PICKUP");
+  const detail=await rider(`orders/${id}`);
+  assert.equal(detail.body.order.pickupCode,null);assert.equal(detail.body.order.pickupVerification.assignmentVersion,1);
+  assert.equal((await rider("rider-events","POST",hu23Event(id,"PICKED_UP",2))).status,200);
+  assert.equal((await db.doc(`food_orders/${id}`).get()).get("status"),"IN_DELIVERY");
+  for(const doc of (await db.collection(`food_orders/${id}/pickup_attempts`).get()).docs){
+    assert.equal("code" in doc.data(),false);assert.equal(JSON.stringify(doc.data()).includes(`"${code}"`),false);
+  }
+});
+
+test("E2: only the assigned verified manager may verify; state and assignment are enforced",async()=>{
+  const f=await fixture(),id="e3".repeat(32),send=connectedHttp(app),code=await readyAssigned(f,id);
+  for(const [a,store] of [[f.owner,f.store],[f.buyer,f.store],[f.manager,f.other],[admin,f.store]] as const)
+    assert.equal((await send(a.token,verifyPath(store,id),attempt(code),"POST")).status,403);
+  assert.equal((await send(undefined,verifyPath(f.store,id),attempt(code),"POST")).status,401);
+  assert.equal((await send(f.manager.token,verifyPath(f.store,id),{code},"POST")).status,400);
+  const other=await send(f.manager.token,verifyPath(f.store,id),attempt(code,2),"POST");
+  assert.equal(other.status,409);assert.equal(other.body.error,"ASSIGNMENT_CHANGED");
+  assert.equal((await rider("rider-events","POST",hu23Event(id,"ASSIGNMENT_RELEASED",2))).status,200);
+  assert.equal((await send(f.manager.token,verifyPath(f.store,id),attempt(code),"POST")).body.error,"ASSIGNMENT_CHANGED");
+  assert.equal((await send(f.manager.token,verifyPath(f.store,id),attempt(code,2),"POST")).body.error,"ASSIGNMENT_CHANGED");
+  assert.equal((await db.doc(`food_orders/${id}`).get()).get("pickupSecurity.failures") ?? 0,0);
+});
+
+test("E2: a release invalidates the verification; the new assignment must be verified again",async()=>{
+  const f=await fixture(),id="e4".repeat(32),send=connectedHttp(app),code=await readyAssigned(f,id);
+  assert.equal((await send(f.manager.token,verifyPath(f.store,id),attempt(code),"POST")).body.outcome,"VERIFIED");
+  assert.equal((await rider("rider-events","POST",hu23Event(id,"ASSIGNMENT_RELEASED",2))).status,200);
+  assert.equal((await db.doc(`food_orders/${id}`).get()).get("pickupSecurity.verification"),null);
+  assert.equal((await rider("rider-events","POST",hu23Event(id,"ASSIGNMENT_ACCEPTED",3,2))).status,200);
+  assert.equal((await rider("rider-events","POST",hu23Event(id,"PICKED_UP",4,2))).body.error.code,"PICKUP_NOT_VERIFIED");
+  assert.equal((await rider(`orders/${id}`)).body.order.pickupCode,code);
+  assert.equal((await send(f.manager.token,verifyPath(f.store,id),attempt(code,2),"POST")).body.outcome,"VERIFIED");
+  assert.equal((await rider("rider-events","POST",hu23Event(id,"PICKED_UP",4,2))).status,200);
+});
+
+test("E2: five wrong codes lock the order (also concurrently); the lock survives a release; only an admin unlocks with a new code",async()=>{
+  const f=await fixture(),id="e5".repeat(32),send=connectedHttp(app),code=await readyAssigned(f,id),bad=wrong(code);
+  for(let i=4;i>=3;i--){
+    const r=await send(f.manager.token,verifyPath(f.store,id),attempt(bad),"POST");
+    assert.equal(r.status,409);assert.equal(r.body.error,"PICKUP_CODE_INVALID");assert.equal(r.body.attemptsRemaining,i);
+  }
+  const parallel=await Promise.all([0,1,2].map(()=>send(f.manager.token,verifyPath(f.store,id),attempt(bad),"POST")));
+  assert.deepEqual(parallel.map(r=>r.status).sort(),[409,409,423]);
+  const locked=(await db.doc(`food_orders/${id}`).get()).data()!;
+  assert.equal(locked.pickupSecurity.failures,5);assert.ok(locked.pickupSecurity.lockedAt instanceof Timestamp);
+  assert.equal((await send(f.manager.token,verifyPath(f.store,id),attempt(code),"POST")).status,423);
+  const detail=await rider(`orders/${id}`);
+  assert.equal(detail.body.order.pickupCode,null);assert.equal(detail.body.order.pickupLock.reason,"MAX_ATTEMPTS");
+  assert.equal((await rider("rider-events","POST",hu23Event(id,"ASSIGNMENT_RELEASED",2))).status,200);
+  assert.equal((await rider("rider-events","POST",hu23Event(id,"ASSIGNMENT_ACCEPTED",3,2))).body.error.code,"PICKUP_LOCKED");
+  assert.equal((await db.doc(`food_orders/${id}`).get()).get("pickupSecurity.failures"),5);
+
+  assert.equal((await send(f.manager.token,"/admin/pickup-incidents",undefined,"GET")).status,403);
+  const incidents=await send(admin.token,"/admin/pickup-incidents",undefined,"GET");
+  assert.equal(incidents.status,200);
+  const incident=incidents.body.incidents.find((row:any)=>row.orderId===id);
+  assert.deepEqual(Object.keys(incident).sort(),["cycle","failures","hasAssignment","lockedAt","orderId","shortId","status","storeId","storeName"]);
+  assert.equal(JSON.stringify(incidents.body).includes(code),false);
+  const unlockPath=`/admin/pickup-incidents/${id}/unlock`,unlock={operationId:randomUUID(),reason:"Repartidor confirmado por el local"};
+  assert.equal((await send(f.manager.token,unlockPath,unlock,"POST")).status,403);
+  assert.equal((await send(admin.token,unlockPath,{operationId:randomUUID(),reason:"no"},"POST")).status,400);
+  const done=await send(admin.token,unlockPath,unlock,"POST");
+  assert.equal(done.status,200);assert.equal(done.body.cycle,2);assert.equal(JSON.stringify(done.body).includes("pickupCode"),false);
+  assert.equal((await send(admin.token,unlockPath,unlock,"POST")).body.replayed,true);
+  assert.equal((await send(admin.token,unlockPath,{...unlock,reason:"Otro motivo distinto"},"POST")).body.error,"IDEMPOTENCY_CONFLICT");
+  assert.equal((await send(admin.token,unlockPath,{operationId:randomUUID(),reason:"Segundo intento"},"POST")).body.error,"PICKUP_NOT_LOCKED");
+  const after=(await db.doc(`food_orders/${id}`).get()).data()!;
+  assert.notEqual(after.pickupCode,code);assert.match(after.pickupCode,/^\d{4}$/);
+  assert.deepEqual({...after.pickupSecurity},{cycle:2,failures:0,lockedAt:null,verification:null});
+  assert.equal((await db.collection(`food_orders/${id}/pickup_attempts`).get()).size,6);
+  const audit=(await db.collection(`food_orders/${id}/pickup_unlocks`).get()).docs.map(doc=>doc.data());
+  assert.equal(audit.length,1);assert.equal(audit[0].actorUid,admin.uid);assert.equal(JSON.stringify(audit[0]).includes(after.pickupCode),false);
+  assert.equal((await rider("rider-events","POST",hu23Event(id,"ASSIGNMENT_ACCEPTED",3,2))).status,200);
+  assert.equal((await rider(`orders/${id}`)).body.order.pickupCode,after.pickupCode);
+  assert.equal((await send(f.manager.token,verifyPath(f.store,id),attempt(after.pickupCode,2),"POST")).body.outcome,"VERIFIED");
 });

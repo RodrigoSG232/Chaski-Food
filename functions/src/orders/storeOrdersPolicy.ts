@@ -1,4 +1,5 @@
 import { Timestamp } from "firebase-admin/firestore";
+import { MAX_PICKUP_FAILURES, readPickupSecurity, verificationIsCurrent } from "./pickupSecurityPolicy";
 import { MAX_ORDER_EPOCH_MILLIS, orderId, orderMinor, orderText } from "./orderModels";
 import { OrderHttpError } from "./orderRequest";
 import { validId, digest } from "../access/commercialAccessPolicy";
@@ -67,6 +68,18 @@ export function optionalCounter(value:unknown):number {
   if(!Number.isSafeInteger(value)||(value as number)<0)throw new Error();
   return value as number;
 }
+/**
+ * E2 (additive, for E3): what the store needs to verify the rider — current assignment, rider name and plate, and the
+ * pickup security state. Never the rider id or phone. NOTE: pickupCode is still sent for the current APK (transitional).
+ */
+function storePickupView(data:Record<string,any>){
+  const security=readPickupSecurity(data.pickupSecurity),assignment=data.riderIntegration?.assignment,rider=data.riderIntegration?.rider;
+  return {assignment:assignment?{assignmentId:assignment.id,assignmentVersion:assignment.version,
+      riderDisplayName:rider?.displayName??null,vehicleType:rider?.vehicleType??null,vehiclePlate:rider?.vehiclePlate??null}:null,
+    verified:verificationIsCurrent(security,assignment),locked:!!security.lockedAt,
+    attemptsRemaining:security.lockedAt?0:MAX_PICKUP_FAILURES-security.failures};
+}
+
 export function projectStoreOrder(id:string,data:Record<string,any>,status:StoreOrderStatus) {
   if(status==="PENDING_CONFIRMATION")return projectPendingOrder(id,data);
   try {
@@ -86,6 +99,6 @@ export function projectStoreOrder(id:string,data:Record<string,any>,status:Store
       ...(status!=="IN_DELIVERY"?{estimatedPreparationMinutes:data.estimatedPreparationMinutes,
         estimatedReadyAtEpochMillis:data.estimatedReadyAt.toMillis(),estimateRevision,preparationExtendedMinutes}:{}),
       ...(status==="IN_DELIVERY"?{simulationStage}:{}),
-      ...(ready?{pickupCode:data.pickupCode,readyAtEpochMillis:data.readyAt.toMillis()}:{})};
+      ...(ready?{pickupCode:data.pickupCode,readyAtEpochMillis:data.readyAt.toMillis(),pickup:storePickupView(data)}:{})};
   }catch{throw new OrderHttpError("DATA_INCONSISTENT",503,true);}
 }

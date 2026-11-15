@@ -292,11 +292,19 @@ Las usa la app de Chaski Food, **no Rider**. Se documentan para que Rider entien
 - **[ACORDADO] Auditoría e idempotencia:**
   - los intentos y los desbloqueos son idempotentes y auditables;
   - **nunca se guardan los códigos introducidos.**
-- **[PROPUESTA], requieren decisión:**
-  - las rutas y los cuerpos (por ejemplo `POST …/pickup-verification` con `operationId`, `code`, `assignmentId`, `assignmentVersion`);
-  - el código HTTP del bloqueo (por ejemplo `423 PICKUP_LOCKED`);
-  - el canal administrativo del desbloqueo;
-  - la consulta del código nuevo por Rider tras un desbloqueo, que se hace por el detalle.
+- **[REPO, E2, no desplegado] Endpoints de foodApi:**
+
+  | Ruta | Quién | Respuestas |
+  |---|---|---|
+  | `POST /api/v1/stores/{storeId}/orders/{orderId}/pickup-verifications` con `{operationId (UUID v4), code (4 dígitos), assignmentId, assignmentVersion}` | Responsable VERIFIED asignado al local | `200 {outcome: VERIFIED o ALREADY_VERIFIED, attemptsRemaining, replayed}`; `409 PICKUP_CODE_INVALID {attemptsRemaining}`; `409 ASSIGNMENT_CHANGED`; `409 ORDER_STATE_CHANGED`; `423 PICKUP_LOCKED`; `409 IDEMPOTENCY_CONFLICT` (mismo `operationId` con otro actor o asignación); 400/401/403/404 |
+  | `GET /api/v1/admin/pickup-incidents` | Claim `admin` con correo verificado | `200 {incidents: [{orderId, shortId, storeId, storeName, status, lockedAt, cycle, failures, hasAssignment}], truncated}` (máximo 50, sin PIN ni datos del comprador) |
+  | `POST /api/v1/admin/pickup-incidents/{orderId}/unlock` con `{operationId, reason (5–200)}` | Claim `admin` | `200 {outcome: UNLOCKED, cycle, replayed}` (sin PIN); `409 PICKUP_NOT_LOCKED`, `409 ORDER_STATE_CHANGED`, `409 IDEMPOTENCY_CONFLICT` |
+
+  - **Persistencia:** en el pedido, `pickupSecurity {cycle, failures, lockedAt, verification}` (aditivo; si no existe, ciclo 1). Cada intento queda en `pickup_attempts/{operationId}` (actor, asignación, ciclo, resultado; **sin el código**) y cada desbloqueo en `pickup_unlocks/{operationId}`.
+  - **Atomicidad:** un intento fallido se confirma antes de responder 409/423. El quinto fallo bloquea en la misma escritura. Los intentos concurrentes se serializan.
+  - **Desbloqueo:** PIN nuevo distinto del anterior, ciclo + 1, contadores a cero; se conservan los intentos anteriores. Rider obtiene el código nuevo por el detalle si la asignación sigue vigente.
+  - **Transitorio:** la bandeja y `markReady` todavía envían `pickupCode` al responsable por compatibilidad con el APK actual. **No es la seguridad final:** se retira en E3/E5 antes de activar el flujo real. La bandeja añade `pickup {assignment (sin id ni teléfono del repartidor), verified, locked, attemptsRemaining}` para E3.
+- **Pendiente:** la interfaz del responsable y del administrador (E3, Pencil primero).
 
 ## 9. Errores
 
@@ -310,7 +318,7 @@ Cuerpo de error de Food: `{"error":{"code":"…","retryable":<true solo en 5xx>}
 | 405 | `METHOD_NOT_ALLOWED` | [CLOUD] |
 | 409 | `ORDER_NOT_READY`, `EVENT_SEQUENCE_CONFLICT`, `ASSIGNMENT_STALE`, `ORDER_STATE_CONFLICT`, `IDEMPOTENCY_CONFLICT` | [CLOUD] |
 | 409 | `ASSIGNMENT_CONFLICT` | [REPO] |
-| 409 | Recojo sin verificación vigente (`PICKUP_NOT_VERIFIED`) | [ACORDADO] la regla, [PROPUESTA] el código |
+| 409 | `PICKUP_NOT_VERIFIED` (recojo sin verificación vigente), `PICKUP_LOCKED` (aceptar un pedido bloqueado) | [REPO, E2] |
 | 422 | `INVALID_REQUEST` (cuerpo inválido o clave desconocida) | [CLOUD] |
 | 503 | `RIDER_API_UNAVAILABLE`, `DATA_INCONSISTENT` (reintentable) | [CLOUD] |
 
@@ -327,7 +335,7 @@ Cuerpo de error de Food: `{"error":{"code":"…","retryable":<true solo en 5xx>}
 
 ## 11. Estado de despliegue y diferencias publicadas
 
-| Elemento | [CLOUD] `riderapi-00001-xeg` | [REPO] `1be7a39` + E1.1/E1.2/E1.3 local (sin commit, 15-11) | [ACORDADO] |
+| Elemento | [CLOUD] `riderapi-00001-xeg` | [REPO] `630b633` (E1) + E2 local sin commit (15-11) | [ACORDADO] |
 |---|---|---|---|
 | Elegibilidad del efectivo | No | **Sí (E1.2):** `CASH_ON_DELIVERY` + `PENDING` con código, en listado, detalle y eventos `ASSIGNMENT_ACCEPTED`, `ARRIVED_AT_MERCHANT` y `ASSIGNMENT_RELEASED`. `PICKED_UP`, `ARRIVED_AT_CUSTOMER` y `COMPLETED_*` → `409 ORDER_NOT_READY` **temporal** hasta E2/E4 (no apto para la integración real). Prepago antiguo sin cambios | Sí |
 | `pickupCode` en el listado | Sí | **No** (E1.1) | No |
@@ -336,7 +344,10 @@ Cuerpo de error de Food: `{"error":{"code":"…","retryable":<true solo en 5xx>}
 | `payment` | `PREPAID_SIMULATION/SIMULATED/PAID` | **`{method, status, amountToCollectMinor, currency}`**; prepago antiguo: `CASH_ON_DELIVERY`, `PAID`, `0` (E1.1) | Sí |
 | `readyAt` | No | **ISO o `null`** (E1.1) | Sí |
 | `dispatch` y `tracking` normalizados (ISO, sin `payloadHash`, `receivedAt` ni `riderId` en tracking) | No | **Sí** (E1.1) | Sí |
-| `PICKED_UP` con verificación | No | No | Sí |
+| `PICKED_UP` con verificación | No | **Sí (E2):** exige `pickupVerification` vigente de la misma asignación (también en el prepago antiguo); si no, `409 PICKUP_NOT_VERIFIED` sin consumir la secuencia | Sí |
+| Pedidos bloqueados | No | **Sí (E2):** fuera del listado; el detalle devuelve `pickupLock` y `pickupCode: null`; `ASSIGNMENT_ACCEPTED` → `409 PICKUP_LOCKED`; `ASSIGNMENT_RELEASED` borra la verificación y conserva intentos y bloqueo | Sí |
+| `pickupVerification` / `pickupLock` en el detalle | No | **Sí (E2)**; `pickupCode` es `null` si está verificado o bloqueado | Sí |
+| Eventos de efectivo | No | `PICKED_UP` (verificado) y `ARRIVED_AT_CUSTOMER` habilitados en E2; `COMPLETED_*` siguen con `409 ORDER_NOT_READY` hasta E4 | Sí |
 | `collection` | 422 | 422 | Sí |
 | Paginación y orden | No | **Sí (E1.3):** `status == READY_FOR_PICKUP` + `readyAt >= 0` ordenados por `readyAt` y luego `__name__`; `limit` 1–50 (por defecto 20) y `cursor` opaco; la elegibilidad se aplica antes de llenar la página; como máximo 200 documentos examinados por petición, en bloques de 50; `nextCursor` = último documento **examinado** (puede venir con una página vacía) y `null` al terminar. Índice compuesto `status`, `readyAt`, `__name__` añadido **solo** a `firestore.indexes.json` (no desplegado). Pedidos sin `readyAt`: fuera del listado, accesibles por el detalle | Sí |
 | `ASSIGNMENT_CONFLICT` | No | Sí | Sí |

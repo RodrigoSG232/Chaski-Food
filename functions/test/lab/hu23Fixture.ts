@@ -36,3 +36,9 @@ export function hu23Sample(sequence: number, now = Date.now(), version = 1) {
     latitude: -12.105, longitude: -77.105, accuracyMeters: 12, recordedAt: new Date(now).toISOString(),
     estimatedArrivalAt: new Date(now + 600_000).toISOString() };
 }
+
+/** E2: store-side pickup verification for LOCAL fixtures (the real flow goes through POST .../pickup-verifications). */
+export function hu23Verification(version = 1) {
+  return { pickupSecurity: { cycle: 1, failures: 0, lockedAt: null, verification: { assignmentId: "hu23-assignment-" + version,
+    assignmentVersion: version, verifiedAt: Timestamp.now(), verifiedByUid: "hu23-lab-manager" } } };
+}

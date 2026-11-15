@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { initializeApp, deleteApp } from "firebase-admin/app";
 import { getFirestore, Timestamp } from "firebase-admin/firestore";
-import { hu23Event, hu23Order, hu23Sample } from "./lab/hu23Fixture";
+import { hu23Event, hu23Order, hu23Sample, hu23Verification } from "./lab/hu23Fixture";
 
 /** E1.1: what the Rider backend receives from riderApi (LOCAL emulator, synthetic data only). */
 process.env.FIRESTORE_EMULATOR_HOST = "127.0.0.1:8089";
@@ -58,6 +58,10 @@ test("E1.1: detail gives the code only while a current assignment exists, with n
   assert.match(assigned.body.order.dispatch.updatedAt, /Z$/);
   assertClean(assigned.body, [buyer]);
 
+  await db.doc("food_orders/" + id).update(hu23Verification());
+  const verified = await call("orders/" + id);
+  assert.equal(verified.body.order.pickupCode, null);
+  assert.equal(verified.body.order.pickupVerification.assignmentVersion, 1);
   assert.equal((await call("rider-events", "POST", hu23Event(id, "PICKED_UP", 2))).status, 200);
   assert.equal((await call("orders/" + id + "/tracking", "PUT", hu23Sample(1))).status, 200);
   const moving = await call("orders/" + id);
@@ -102,18 +106,26 @@ test("E1.2: a cash order is discoverable, assignable, reaches the store and can 
   assert.equal(reassigned.body.order.dispatch.lastEventSequence, 4);
 });
 
-test("E1.2: pickup and completion stay blocked for cash orders without consuming the sequence", async () => {
+test("E1.2/E2: unverified pickup and cash completion stay blocked without consuming the sequence", async () => {
   const { id } = await seed(5, true);
   assert.equal((await sendEvent(hu23Event(id, "ASSIGNMENT_ACCEPTED", 1))).status, 200);
-  for (const type of ["PICKED_UP", "ARRIVED_AT_CUSTOMER", "COMPLETED_SUCCESSFULLY", "COMPLETED_UNSUCCESSFULLY"]) {
+  const expected: Record<string, string> = { PICKED_UP: "PICKUP_NOT_VERIFIED", ARRIVED_AT_CUSTOMER: "ORDER_STATE_CONFLICT",
+    COMPLETED_SUCCESSFULLY: "ORDER_NOT_READY", COMPLETED_UNSUCCESSFULLY: "ORDER_NOT_READY" };
+  for (const [type, code] of Object.entries(expected)) {
     const blocked = await sendEvent(hu23Event(id, type, 2));
-    assert.equal(blocked.status, 409, type); assert.equal(blocked.body.error.code, "ORDER_NOT_READY", type);
+    assert.equal(blocked.status, 409, type); assert.equal(blocked.body.error.code, code, type);
   }
   const order = (await db.doc("food_orders/" + id).get()).data()!;
   assert.equal(order.status, "READY_FOR_PICKUP"); assert.equal(order.paymentStatus, "PENDING");
   assert.equal(order.riderIntegration.lastEventSequence, 1);
   assert.equal((await db.collection("food_orders/" + id + "/rider_events").get()).size, 1);
   assert.equal((await sendEvent(hu23Event(id, "ARRIVED_AT_MERCHANT", 2))).status, 200);
+  await db.doc("food_orders/" + id).update(hu23Verification());
+  assert.equal((await sendEvent(hu23Event(id, "PICKED_UP", 3))).status, 200);
+  assert.equal((await sendEvent(hu23Event(id, "ARRIVED_AT_CUSTOMER", 4))).status, 200);
+  const completion = await sendEvent(hu23Event(id, "COMPLETED_SUCCESSFULLY", 5));
+  assert.equal(completion.body.error.code, "ORDER_NOT_READY"); // E4 pending: no cash completion without collection rules
+  assert.equal((await db.doc("food_orders/" + id).get()).get("paymentStatus"), "PENDING");
 });
 
 test("E1.2: unsupported payment combinations stay invisible and cannot be operated", async () => {

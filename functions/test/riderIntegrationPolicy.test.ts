@@ -75,10 +75,10 @@ test("E1.2: cash pending and legacy prepaid are the only eligible payment situat
   assert.deepEqual(projectRiderOrder(cashOrder,"LIST").payment,{method:"CASH_ON_DELIVERY",status:"PENDING",amountToCollectMinor:2400,currency:"PEN"});
   assert.throws(()=>projectRiderOrder({...cashOrder,paymentMethod:"CARD"},"DETAIL"),/ORDER_NOT_READY/);
 });
-test("E1.2: cash orders only accept events before pickup; legacy prepaid keeps every event",()=>{
-  for(const type of ["ASSIGNMENT_ACCEPTED","ARRIVED_AT_MERCHANT","ASSIGNMENT_RELEASED"] as const)
+test("E2: cash orders accept the verified pickup flow but not completion (E4); legacy prepaid keeps every event",()=>{
+  for(const type of ["ASSIGNMENT_ACCEPTED","ARRIVED_AT_MERCHANT","ASSIGNMENT_RELEASED","PICKED_UP","ARRIVED_AT_CUSTOMER"] as const)
     assert.equal(riderEventAllowedForPayment("CASH_PENDING",type),true,type);
-  for(const type of ["PICKED_UP","ARRIVED_AT_CUSTOMER","COMPLETED_SUCCESSFULLY","COMPLETED_UNSUCCESSFULLY"] as const) {
+  for(const type of ["COMPLETED_SUCCESSFULLY","COMPLETED_UNSUCCESSFULLY"] as const) {
     assert.equal(riderEventAllowedForPayment("CASH_PENDING",type),false,type);
     assert.equal(riderEventAllowedForPayment("LEGACY_PREPAID",type),true,type);
   }

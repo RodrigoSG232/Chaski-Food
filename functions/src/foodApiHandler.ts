@@ -7,6 +7,9 @@ import { parseOrderDecision } from "./orders/orderDecisionPolicy";
 import { PreparationEstimateService } from "./orders/preparationEstimateService";
 import { parsePreparationExtension } from "./orders/preparationEstimatePolicy";
 import { OrderReadyService } from "./orders/orderReadyService";
+import { PickupVerificationService } from "./orders/pickupVerificationService";
+import { PickupIncidentService } from "./orders/pickupIncidentService";
+import { parsePickupUnlockRequest, parsePickupVerificationRequest } from "./orders/pickupSecurityPolicy";
 import { FoodDeliverySimulationService } from "./orders/foodDeliverySimulationService";
 import { BuyerOrdersReader } from "./orders/buyerOrdersReader";
 import { OrderCancellationService } from "./orders/orderCancellationService";
@@ -89,6 +92,35 @@ export function createFoodApiHandler(dependencies: FoodApiDependencies): FoodHtt
       const extensionPath = /^\/api\/v1\/stores\/([^/]+)\/orders\/([^/]+)\/preparation-extensions\/?$/.exec(request.path);
       const readyPath = /^\/api\/v1\/stores\/([^/]+)\/orders\/([^/]+)\/ready-for-pickup\/?$/.exec(request.path);
       const storeSimulationPath = /^\/api\/v1\/stores\/([^/]+)\/orders\/([^/]+)\/simulate-(pickup|arrival)\/?$/.exec(request.path);
+      const pickupVerificationPath = /^\/api\/v1\/stores\/([^/]+)\/orders\/([^/]+)\/pickup-verifications\/?$/.exec(request.path);
+      const pickupIncidentsPath = /^\/api\/v1\/admin\/pickup-incidents\/?$/.test(request.path);
+      const pickupUnlockPath = /^\/api\/v1\/admin\/pickup-incidents\/([^/]+)\/unlock\/?$/.exec(request.path);
+      if (pickupVerificationPath || pickupIncidentsPath || pickupUnlockPath) {
+        const expected = pickupIncidentsPath ? "GET" : "POST";
+        if (request.method !== expected) { response.status(405).set("Allow", expected).json({ error: "METHOD_NOT_ALLOWED" }); return; }
+        try {
+          if (Object.keys(request.query).length) throw new OrderHttpError("INVALID_REQUEST", 400);
+          const app = dependencies.app(runtime), auth = getAuth(app), db = getFirestore(app);
+          const actor = await verifyCommercialIdentity(auth, request.get("authorization"));
+          if (pickupVerificationPath) {
+            const result = await new PickupVerificationService(db, auth).verify(actor, decodeURIComponent(pickupVerificationPath[1]),
+              decodeURIComponent(pickupVerificationPath[2]), parsePickupVerificationRequest(request.body));
+            response.status(result.httpStatus).json(result.httpStatus === 200 ? result.body :
+              { error: result.body.outcome, attemptsRemaining: result.body.attemptsRemaining });
+          } else if (pickupUnlockPath) {
+            response.status(200).json(await new PickupIncidentService(db).unlock(actor, decodeURIComponent(pickupUnlockPath[1]),
+              parsePickupUnlockRequest(request.body)));
+          } else response.status(200).json(await new PickupIncidentService(db).list(actor));
+        } catch (error) {
+          if (error instanceof AuthenticationRequired) response.status(401).json({ error: "AUTHENTICATION_REQUIRED" });
+          else if (error instanceof OrderHttpError) response.status(error.status).json({ error: error.code });
+          else if (error instanceof CommercialAccessError) response.status(error.status === 403 ? 403 : 503)
+            .json({ error: error.status === 403 ? "ACCESS_DENIED" : "AUTHORIZATION_UNAVAILABLE" });
+          else if (error instanceof URIError) response.status(404).json({ error: "ORDER_NOT_FOUND" });
+          else response.status(503).json({ error: "PICKUP_SECURITY_UNAVAILABLE" });
+        }
+        return;
+      }
       if (storeSimulationPath) {
         if (request.method !== "POST") { response.status(405).set("Allow", "POST").json({error:"METHOD_NOT_ALLOWED"}); return; }
         try {

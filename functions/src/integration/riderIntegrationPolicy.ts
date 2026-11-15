@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { Timestamp } from "firebase-admin/firestore";
 import { validCoordinates } from "../delivery/routeReader";
 import { OrderHttpError } from "../orders/orderRequest";
+import { readPickupSecurity, verificationIsCurrent } from "../orders/pickupSecurityPolicy";
 
 const idPattern=/^[A-Za-z0-9_-]{1,100}$/;
 const eventTypes=["ASSIGNMENT_ACCEPTED","ARRIVED_AT_MERCHANT","PICKED_UP","ARRIVED_AT_CUSTOMER",
@@ -157,8 +158,8 @@ export function riderPaymentEligibility(data:Record<string,any>):RiderPaymentEli
   return null;
 }
 
-/** E1.2: cash orders may be assigned, reach the store and be released; pickup (E2) and completion (E4) are not enabled yet. */
-const cashEventsEnabled:readonly RiderEventType[]=["ASSIGNMENT_ACCEPTED","ARRIVED_AT_MERCHANT","ASSIGNMENT_RELEASED"];
+/** E2: cash orders follow the verified pickup flow; completion stays blocked until the collection rules of E4. */
+const cashEventsEnabled:readonly RiderEventType[]=["ASSIGNMENT_ACCEPTED","ARRIVED_AT_MERCHANT","ASSIGNMENT_RELEASED","PICKED_UP","ARRIVED_AT_CUSTOMER"];
 export function riderEventAllowedForPayment(eligibility:RiderPaymentEligibility,eventType:RiderEventType):boolean{
   return eligibility==="LEGACY_PREPAID"||cashEventsEnabled.includes(eventType);
 }
@@ -181,7 +182,12 @@ export function projectRiderOrder(data:Record<string,any>,view:RiderOrderView){
     amounts:{subtotalMinor:data.subtotalMinor,deliveryFeeMinor:data.deliveryFeeMinor,tipMinor:data.tipMinor??0,totalMinor:data.totalMinor,currency:data.currency},
     payment:riderPayment(data),dispatch,tracking:riderTrackingView(data.riderTracking)};
   if(view==="LIST")return order;
-  // Only the backend of the current assignment may receive the code; Rider must still restrict it to that rider.
-  const pickupCode=data.status==="READY_FOR_PICKUP"&&dispatch.assignment!==null?data.pickupCode:null;
-  return {...order,pickupCode};
+  const security=readPickupSecurity(data.pickupSecurity),current=verificationIsCurrent(security,dispatch.assignment);
+  // Only the backend of the current assignment receives the code, and only while it is still useful (not verified, not locked).
+  // Rider must still restrict it to that rider.
+  const pickupCode=data.status==="READY_FOR_PICKUP"&&dispatch.assignment!==null&&!security.lockedAt&&!current?data.pickupCode:null;
+  return {...order,pickupCode,
+    pickupVerification:current?{assignmentId:security.verification!.assignmentId,assignmentVersion:security.verification!.assignmentVersion,
+      verifiedAt:security.verification!.verifiedAt.toDate().toISOString()}:null,
+    pickupLock:security.lockedAt?{lockedAt:security.lockedAt.toDate().toISOString(),reason:"MAX_ATTEMPTS"}:null};
 }

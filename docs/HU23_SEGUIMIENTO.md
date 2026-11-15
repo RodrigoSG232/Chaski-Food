@@ -46,6 +46,7 @@ Entrar al APK LOCAL con el comprador ficticio del laboratorio (`buyer@chaski.tes
 ```powershell
 node lib/test/lab/hu23Simulation.js assign
 node lib/test/lab/hu23Simulation.js merchant
+node lib/test/lab/hu23Simulation.js verify   # E2: el recojo exige la verificación del código por el local
 node lib/test/lab/hu23Simulation.js pickup
 node lib/test/lab/hu23Simulation.js move
 node lib/test/lab/hu23Simulation.js arrive

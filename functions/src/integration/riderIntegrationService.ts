@@ -2,6 +2,7 @@ import { FieldPath,Firestore,Timestamp } from "firebase-admin/firestore";
 import { OrderHttpError } from "../orders/orderRequest";
 import { encodeRiderOrdersCursor,payloadHash,projectRiderOrder,RIDER_PAGE_MAX,RIDER_SCAN_BATCH,RIDER_SCAN_MAX,RiderOrdersCursor,RiderEvent,riderEventAllowedForPayment,riderOrderId,riderPaymentEligibility,RiderTracking } from "./riderIntegrationPolicy";
 import { BuyerNoticeType,createBuyerNoticeEvent } from "../notifications/buyerNoticeEvent";
+import { PickupSecurity,readPickupSecurity,storedPickupSecurity,verificationIsCurrent,withoutVerification } from "../orders/pickupSecurityPolicy";
 
 export class RiderIntegrationService{
   constructor(private readonly db:Firestore,private readonly now:()=>number=Date.now){}
@@ -23,7 +24,11 @@ export class RiderIntegrationService{
         consumed++;examined++;
         const readyAt=document.get("readyAt") as Timestamp;
         last={seconds:readyAt.seconds,nanoseconds:readyAt.nanoseconds,orderId:document.id};
-        try{const order=projectRiderOrder(document.data(),"LIST");if(!order.dispatch.assignment)orders.push(order);}
+        try{
+          const data=document.data(),order=projectRiderOrder(data,"LIST");
+          // Offers only: assigned or pickup-locked orders are reconciled through the detail endpoint.
+          if(!order.dispatch.assignment&&!readPickupSecurity(data.pickupSecurity).lockedAt)orders.push(order);
+        }
         catch(error){if(!(error instanceof OrderHttpError)||error.code!=="ORDER_NOT_READY")throw error;}
         if(orders.length===limit)break;
       }
@@ -57,17 +62,25 @@ export class RiderIntegrationService{
       const assignment=integration.assignment as {id:string;version:number}|null;
       const sameAssignment=assignment?.id===event.assignmentId&&assignment.version===event.assignmentVersion;
       let nextStatus=order.status,nextAssignment=assignment,nextRider=integration.rider,nextDeliveryStatus=event.status;
+      const security=readPickupSecurity(order.pickupSecurity);
+      let nextSecurity:PickupSecurity|null=null;
       if(event.eventType==="ASSIGNMENT_ACCEPTED"){
         if(order.status!=="READY_FOR_PICKUP"||assignment!==null||event.assignmentVersion!==(integration.lastAssignmentVersion??0)+1)
           throw new OrderHttpError("ASSIGNMENT_CONFLICT",409);
+        if(security.lockedAt)throw new OrderHttpError("PICKUP_LOCKED",409);
         nextAssignment={id:event.assignmentId,version:event.assignmentVersion};nextRider=event.rider;
       }else{
         if(!sameAssignment)throw new OrderHttpError("ASSIGNMENT_STALE",409);
         if(event.eventType==="ASSIGNMENT_RELEASED"){
           if(order.status!=="READY_FOR_PICKUP")throw new OrderHttpError("ORDER_STATE_CONFLICT",409);
           nextAssignment=null;nextRider=null;
+          if(security.verification)nextSecurity=withoutVerification(security);
         }else if(event.eventType==="PICKED_UP"){
-          if(order.status!=="READY_FOR_PICKUP")throw new OrderHttpError("ORDER_STATE_CONFLICT",409);nextStatus="IN_DELIVERY";
+          if(order.status!=="READY_FOR_PICKUP")throw new OrderHttpError("ORDER_STATE_CONFLICT",409);
+          // E2: the store must have verified the code for this exact assignment before any physical pickup is accepted.
+          if(!verificationIsCurrent(security,{id:event.assignmentId,version:event.assignmentVersion}))
+            throw new OrderHttpError("PICKUP_NOT_VERIFIED",409);
+          nextStatus="IN_DELIVERY";
         }else if(event.eventType==="ARRIVED_AT_MERCHANT"){
           if(order.status!=="READY_FOR_PICKUP")throw new OrderHttpError("ORDER_STATE_CONFLICT",409);
         }else if(event.eventType==="ARRIVED_AT_CUSTOMER"){
@@ -81,6 +94,7 @@ export class RiderIntegrationService{
         event.assignmentVersion:(integration.lastAssignmentVersion??event.assignmentVersion),status:nextDeliveryStatus,assignment:nextAssignment,rider:nextRider,
         deliveryOutcome:event.deliveryOutcome,reason:event.reason,updatedAt:at};
       const update:Record<string,unknown>={riderIntegration:nextIntegration,updatedAt:at};
+      if(nextSecurity)update.pickupSecurity=storedPickupSecurity(nextSecurity);
       if(nextStatus!==order.status)update.status=nextStatus;
       if(nextStatus==="COMPLETED")update.completedAt=at;
       tx.update(orderRef,update as Record<string,any>);

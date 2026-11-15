@@ -83,6 +83,15 @@ Decisiones **aprobadas** por el equipo que siguen aplicando y condicionan las pr
   - Rider ve `pickupLock`, pero no la auditoría administrativa;
   - Food muestra al responsable la identidad del repartidor vigente.
 
+- **Implementación E2 aprobada (15-11-2026, LOCAL):**
+  - rutas y códigos de `API_CHASKI_RIDER` §8;
+  - la verificación también se exige al prepago antiguo;
+  - desbloqueo por un endpoint de foodApi con el claim `admin` (pantalla en E3);
+  - pedidos bloqueados fuera del listado, con `ASSIGNMENT_ACCEPTED` → `409 PICKUP_LOCKED`;
+  - `pickupCode` es `null` en el detalle una vez verificado.
+
+  El PIN sigue visible para el responsable de forma **transitoria** hasta E3/E5.
+
 ### Pago contra entrega (HU22)
 - **Medio y saldo:**
   - `CASH_ON_DELIVERY` con pago inicial `PENDING`;
