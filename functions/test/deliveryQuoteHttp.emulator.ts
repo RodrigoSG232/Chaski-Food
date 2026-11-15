@@ -62,14 +62,14 @@ test("local y dirección propios devuelven una cotización temporal simulada", a
   assert.match(response.headers.get("server-timing") ?? "", /quote;dur=.+, route;dur=.+/);
   assert.equal(response.headers.get("cache-control"), "no-store");
   assert.equal(body.distanceMeters, 1_250.5);
-  assert.equal(body.deliveryFeeMinor, 300);
+  assert.equal(body.deliveryFeeMinor, 113); // 1 250,5 m × 90 céntimos/km = 112,545 → 113
   assert.equal(body.currency, "PEN");
   assert.match(String(body.quoteId), /^[A-Za-z0-9_-]+$/);
   assert.equal(response.headers.get("x-quote-reused"), "false");
   const persisted = (await db.doc(`delivery_quotes/${body.quoteId}`).get()).data()!;
   assert.equal(persisted.customerUid, uid);
   assert.equal(persisted.deliveryFeeMinor, body.deliveryFeeMinor);
-  assert.equal(body.tariffVersion, "lima-driving-car-v1");
+  assert.equal(body.tariffVersion, "lima-driving-car-v2");
   assert.deepEqual(body.storeLocation, { latitude: -12.04596, longitude: -77.03054 });
   assert.deepEqual(body.deliveryLocation, { latitude: -12.0515, longitude: -77.0345 });
   assert.equal(Date.parse(String(body.expiresAt)) - Date.parse(String(body.quotedAt)), 300_000);
@@ -91,7 +91,7 @@ test("el servicio envía solo coordenadas de Firestore al lector y calcula el im
     return 1_837.5;
   } };
   const result = await createDeliveryQuote(db, reader, uid, "quote-store", "quote-address");
-  assert.equal(result.quote.deliveryFeeMinor, 371);
+  assert.equal(result.quote.deliveryFeeMinor, 165); // 1 837,5 m × 90 céntimos/km = 165,375 → 165
   assert.deepEqual(result.quote.storeLocation, { latitude: -12.04596, longitude: -77.03054 });
   assert.deepEqual(result.quote.deliveryLocation, { latitude: -12.0515, longitude: -77.0345 });
   assert.equal(result.firestoreReads, 8);

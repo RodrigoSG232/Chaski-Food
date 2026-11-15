@@ -33,6 +33,7 @@ async function order(businessId:string,storeId:string,id:string,success:boolean)
   await db.doc(`food_orders/${id}`).set({schemaVersion:1,orderId:id,businessId,storeId,createdAt:created,
     updatedAt:completed,completedAt:completed,acceptedAt:created,status:"COMPLETED",currency:"PEN",
     subtotalMinor:success?2400:9100,riderIntegration:{deliveryOutcome:success?"SUCCESS":"UNSUCCESSFUL"},
+    ...(success?{paymentStatus:"PAID"}:{}),
     buyerSnapshot:{phone:"PRIVATE"}});
 }
 before(async()=>{admin=await actor(true);await prepare(admin);});

@@ -225,6 +225,100 @@ test("marking a paid order ready creates one buyer notice atomically",async()=>{
   assert.equal(notice.get("buyerUid"),"PRIVATE_BUYER");
   assert.equal((await db.collection("order_events").where("orderId","==",id).get()).size,2);
 });
+const readyPath=(store:string,id:string)=>`/stores/${store}/orders/${id}/ready-for-pickup`;
+async function cashPreparing(f:Awaited<ReturnType<typeof fixture>>,id:string) {
+  await seedOrder(f.store,f.owner.uid,id);
+  await db.doc(`food_orders/${id}`).update({paymentStatus:"PENDING"});
+  assert.equal((await decide(f.manager,f.store,id,{action:"ACCEPT",estimatedPreparationMinutes:20})).status,200);
+}
+test("HU21-A: solo el responsable VERIFIED asignado marca listo; los demás no cambian nada",async()=>{
+  const f=await fixture(),id="71".repeat(32),send=connectedHttp(app);await cashPreparing(f,id);
+  const before=(await db.doc(`food_orders/${id}`).get()).data();
+  for(const [a,store] of [[f.owner,f.store],[f.buyer,f.store],[f.manager,f.other]] as const)
+    assert.equal((await send(a.token,readyPath(store,id),{},"POST")).status,403);
+  const unverified=await fixture(false),uid="72".repeat(32);await seedOrder(unverified.store,unverified.owner.uid,uid);
+  await db.doc(`food_orders/${uid}`).update({status:"PREPARING",paymentStatus:"PENDING"});
+  assert.equal((await send(unverified.manager.token,readyPath(unverified.store,uid),{},"POST")).status,403);
+  assert.equal((await db.doc(`food_orders/${uid}`).get()).get("status"),"PREPARING");
+  assert.deepEqual((await db.doc(`food_orders/${id}`).get()).data(),before);
+  assert.equal((await db.doc(`food_orders/${id}/status_history/ready_for_pickup`).get()).exists,false);
+});
+test("HU21-A: PREPARING en efectivo pasa a listo con historial, código y aviso; el reintento no cambia nada",async()=>{
+  const f=await fixture(),id="73".repeat(32),send=connectedHttp(app);await cashPreparing(f,id);
+  const first=await send(f.manager.token,readyPath(f.store,id),{},"POST");
+  assert.equal(first.status,200);assert.equal(first.body.outcome,"UPDATED");assert.match(first.body.pickupCode,/^[0-9]{4}$/);
+  const order=(await db.doc(`food_orders/${id}`).get()).data()!;
+  assert.equal(order.status,"READY_FOR_PICKUP");assert.equal(order.pickupCode,first.body.pickupCode);
+  assert.equal(order.readyByUid,f.manager.uid);assert.equal(order.readyAt.toMillis(),first.body.readyAtEpochMillis);
+  assert.equal(order.paymentStatus,"PENDING");assert.equal(order.estimatedPreparationMinutes,20);
+  const history=(await db.doc(`food_orders/${id}/status_history/ready_for_pickup`).get()).data()!;
+  assert.deepEqual({...history,occurredAt:history.occurredAt.toMillis()},{schemaVersion:1,fromStatus:"PREPARING",
+    toStatus:"READY_FOR_PICKUP",actorUid:f.manager.uid,occurredAt:first.body.readyAtEpochMillis});
+  const notice=await db.doc(`order_events/${buyerNoticeEventId(id,"ORDER_READY_FOR_PICKUP",2)}`).get();
+  assert.equal(notice.exists,true);assert.equal(notice.get("buyerUid"),"PRIVATE_BUYER");
+  const again=await send(f.manager.token,readyPath(f.store,id),{},"POST");
+  assert.equal(again.status,200);assert.equal(again.body.outcome,"UNCHANGED");
+  assert.equal(again.body.pickupCode,first.body.pickupCode);assert.equal(again.body.readyAtEpochMillis,first.body.readyAtEpochMillis);
+  assert.deepEqual((await db.doc(`food_orders/${id}`).get()).data(),order);
+  assert.equal((await db.collection("order_events").where("orderId","==",id).get()).size,2);
+});
+test("HU21-A: solicitudes simultáneas producen una sola transición, un historial y un aviso",async()=>{
+  const f=await fixture(),id="74".repeat(32),send=connectedHttp(app);await cashPreparing(f,id);
+  const results=await Promise.all([0,1,2].map(()=>send(f.manager.token,readyPath(f.store,id),{},"POST")));
+  for(const r of results)assert.equal(r.status,200,JSON.stringify(r.body));
+  assert.deepEqual(results.map(r=>r.body.outcome).sort(),["UNCHANGED","UNCHANGED","UPDATED"]);
+  assert.equal(new Set(results.map(r=>r.body.pickupCode)).size,1);
+  assert.equal((await db.doc(`food_orders/${id}`).get()).get("pickupCode"),results[0].body.pickupCode);
+  assert.equal((await db.collection(`food_orders/${id}/status_history`).where("toStatus","==","READY_FOR_PICKUP").get()).size,1);
+  assert.equal((await db.collection("order_events").where("orderId","==",id).get()).size,2);
+});
+test("HU21-A: estados de origen inválidos y pedidos inexistentes o ajenos se rechazan sin escribir",async()=>{
+  const f=await fixture(),id="75".repeat(32),send=connectedHttp(app);await seedOrder(f.store,f.owner.uid,id);
+  await db.doc(`food_orders/${id}`).update({paymentStatus:"PENDING"});
+  for(const status of ["PENDING_CONFIRMATION","IN_DELIVERY","COMPLETED","CANCELLED","REJECTED"]) {
+    await db.doc(`food_orders/${id}`).update({status});
+    const r=await send(f.manager.token,readyPath(f.store,id),{},"POST");
+    assert.equal(r.status,409,status);assert.equal(r.body.error,"ORDER_STATE_CHANGED");
+  }
+  await db.doc(`food_orders/${id}`).update({status:"READY_FOR_PICKUP",pickupCode:null});
+  assert.equal((await send(f.manager.token,readyPath(f.store,id),{},"POST")).status,409);
+  assert.equal((await db.doc(`food_orders/${id}`).get()).get("pickupCode"),null);
+  assert.equal((await db.collection(`food_orders/${id}/status_history`).get()).size,0);
+  assert.equal((await send(f.manager.token,readyPath(f.store,"76".repeat(32)),{},"POST")).status,404);
+  assert.equal((await send(f.manager.token,readyPath(f.store,"no-valido"),{},"POST")).status,404);
+  const foreign="77".repeat(32);await seedOrder(f.other,f.owner.uid,foreign);
+  await db.doc(`food_orders/${foreign}`).update({status:"PREPARING",paymentStatus:"PENDING"});
+  assert.equal((await send(f.manager.token,readyPath(f.store,foreign),{},"POST")).status,404);
+  assert.equal((await db.doc(`food_orders/${foreign}`).get()).get("status"),"PREPARING");
+});
+test("HU21-A: datos históricos o de pago incoherentes no se marcan listos",async()=>{
+  const f=await fixture(),send=connectedHttp(app);
+  const cases:[string,Record<string,unknown>,number][]=[
+    ["78".repeat(32),{paymentStatus:"PENDING",schemaVersion:2},404],
+    ["79".repeat(32),{paymentStatus:"PENDING",paymentMethod:"CARD"},409],
+    ["7a".repeat(32),{paymentStatus:"PAID"},409],
+    ["7b".repeat(32),{paymentStatus:"PENDING",pickupCode:"1234"},409],
+    ["7c".repeat(32),{paymentStatus:"PAID",paymentSimulation:true,pickupCode:"12a4"},409],
+    ["7d".repeat(32),{},409]];
+  for(const [id,patch,status] of cases) {
+    await seedOrder(f.store,f.owner.uid,id);await db.doc(`food_orders/${id}`).update({status:"PREPARING",...patch});
+    const r=await send(f.manager.token,readyPath(f.store,id),{},"POST");assert.equal(r.status,status,JSON.stringify(patch));
+    assert.equal((await db.doc(`food_orders/${id}`).get()).get("status"),"PREPARING");
+  }
+  const legacy="7e".repeat(32);await seedOrder(f.store,f.owner.uid,legacy);
+  await db.doc(`food_orders/${legacy}`).update({status:"PREPARING",paymentStatus:"PAID",paymentSimulation:true,pickupCode:"0042"});
+  const r=await send(f.manager.token,readyPath(f.store,legacy),{},"POST");
+  assert.equal(r.status,200);assert.equal(r.body.pickupCode,"0042");
+});
+test("HU21-A: la suspensión del negocio o del local no impide terminar pedidos aceptados",async()=>{
+  const f=await fixture(),id="7f".repeat(32),other="70".repeat(32),send=connectedHttp(app);
+  await cashPreparing(f,id);await cashPreparing(f,other);
+  await db.doc(`business_requests/${f.owner.uid}`).update({status:"SUSPENDED"});
+  assert.equal((await send(f.manager.token,readyPath(f.store,id),{},"POST")).status,200);
+  await db.doc(`business_requests/${f.owner.uid}`).update({status:"APPROVED"});
+  await db.doc(`stores/${f.store}`).update({status:"SUSPENDED"});
+  assert.equal((await send(f.manager.token,readyPath(f.store,other),{},"POST")).status,200);
+});
 test("Food simula recojo, llegada y efectivo solo al confirmar el cliente",async()=>{
   const f=await fixture(),id="fd".repeat(32),send=connectedHttp(app);
   await seedOrder(f.store,f.owner.uid,id);
