@@ -9,7 +9,7 @@
 > Este documento no afirma que Rider haya implementado nada. Cada fila indica qué hay que **implementar** y qué hay que **confirmar**.
 
 ## 1. Autenticación (sin cambios de mecanismo)
-- Cloud Run privado: Rider llama con un **ID token de Google** de **su cuenta de servicio**, con la audiencia = URL de riderApi.
+- Cloud Run privado: Rider llama con un **ID token de Google** de **su cuenta de servicio**. **Invocar y firmar con la misma URL canónica** `https://riderapi-u65lcqarqa-tl.a.run.app` (base `/integration/v1`).
 - Food concede `run.invoker` (directo) solo a `chaski-food-client@chaski-rider.iam.gserviceaccount.com` (G7-A).
 - **[NUEVO, G7-B] Verificación del llamador en riderApi:** además de IAM, cada petición debe llevar:
   - `Authorization: Bearer <ID token de Google>` **firmado** para esa cuenta;
@@ -54,10 +54,10 @@
 
 **Para compartir con Ángel y el equipo Rider. Nada de esto está confirmado por Rider todavía.**
 
-- **Estado de Food [CLOUD, 15-11]:**
-  - índice de descubrimiento desplegado (verificar READY en ESTADO);
-  - `riderApi` publicado sigue siendo la versión anterior (`riderapi-00001-xeg`), y el contrato nuevo entrará en G5 con la integración **desactivada**;
-  - la URL base de riderApi es `https://riderapi-u65lcqarqa-tl.a.run.app` (también responde por la URL `cloudfunctions.net`): la **audiencia del ID token debe coincidir con la URL que Rider invoque**.
+- **Estado de Food [CLOUD, 16-11]:**
+  - índice de descubrimiento READY;
+  - **contrato nuevo desplegado** (`riderapi-00004-moq`, `foodapi-00013-hij`) con la integración **desactivada**; verificación del llamador activa (G7-B);
+  - la URL base de riderApi es `https://riderapi-u65lcqarqa-tl.a.run.app`. El servicio tiene además una URL `…run.app` con número de proyecto y otra `cloudfunctions.net`, pero **la aplicación solo acepta la audiencia canónica**: Rider debe **invocar esa URL y pedir el token con esa misma audiencia**. Con otra audiencia → 401 de Cloud Run o `403 CALLER_NOT_ALLOWED`.
 - **Qué debe implementar Rider:** las filas de la §2 (paginación, PIN solo para el asignado, espera de verificación, `collection`, §5b, cola duradera).
 - **Dependencias de despliegue:**
   1. Food despliega con la integración desactivada (G5);
@@ -73,3 +73,22 @@
 
   Por eso los dos despliegues deben coordinarse y el piloto no se activa hasta que ambos estén confirmados.
 - **Criterios de aceptación de la integración:** la §3 confirmada por escrito más los casos 1–14 de PRUEBAS_E6 en OK.
+
+## 5. Checklist de G6 (preparado; no ejecutado ni enviado)
+**Con la integración DISABLED (posible ya, sin tocar datos):**
+1. Ángel confirma por escrito el contrato (§2, §3).
+2. Confirma que su backend usa `chaski-food-client@chaski-rider.iam.gserviceaccount.com`.
+3. Obtiene el ID token **en su backend** (metadata server o la librería de Google; formato **full**, audiencia `https://riderapi-u65lcqarqa-tl.a.run.app`). Nunca claves JSON compartidas.
+4. Envía solo `Authorization: Bearer …`, sin `X-Serverless-Authorization`, a la URL canónica.
+5. `GET /integration/v1/orders?limit=5` → **200** `{"contractVersion":1,"orders":[],"nextCursor":null}`.
+6. `GET /integration/v1/orders/<64 hex inexistente>` → **404** `ORDER_NOT_FOUND`.
+7. La prueba 5 en 200 demuestra que Cloud Run entregó `Authorization` con firma verificable. Un `403 CALLER_NOT_ALLOWED` indica un problema de token o de audiencia.
+8. **Evidencia:** solo el código HTTP, el cuerpo sin datos personales y la hora. **Nunca el token.** Food contrasta con sus registros (sin ERROR).
+
+**Requieren `pilot:<storeId>` (G8, con autorización aparte):** ofertas reales, asignación, PIN, recojo, tracking, entrega, cobro, conciliación, liberación y bloqueo ([PRUEBAS_E6](PRUEBAS_E6.md) casos 1–14).
+
+**Criterios para autorizar G8:**
+- los puntos 1–8 en OK;
+- el local elegido sin pedidos incompatibles (consulta de nuevo antes de activar);
+- el APK `1.1.0-e6` instalado en los dispositivos participantes;
+- Rider desplegado en su versión compatible.

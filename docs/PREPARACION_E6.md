@@ -102,6 +102,8 @@ Hay dos acciones distintas y no deben confundirse:
 
 En CLOUD se aplica antes de cualquier lógica. Solo se omite cuando `resolveRuntimeEnvironment` determina LOCAL (señales del emulador, nunca cabeceras). Con esto, `roles/editor` y `roles/owner` **pueden pasar IAM pero no la aplicación**.
 
+**[CLOUD 16-11]** Desplegado en `riderapi-00004-moq`; invocador directo = solo Rider. La verificación de la aplicación **todavía no recibió ninguna petición real**: está pendiente de Cloud Shell y de G6.
+
 **Alternativa B (futura, antes de GENERAL):** identidades dedicadas de ejecución y de Eventarc, y reducción de `roles/editor` de la cuenta de cómputo. **Descartado:** retirar solo el `run.invoker` de proyecto (editor ya incluye `run.routes.invoke`).
 
 ## 6. Operaciones Cloud preparadas (no ejecutadas)
@@ -244,3 +246,18 @@ Desde la raíz, con Node 22 y `functions/node_modules/firebase-tools`. **No ejec
 3. confirmación de compatibilidad;
 4. activar el piloto (G8);
 5. pruebas conjuntas (G9).
+
+## 12. Estado de G7-B y del APK (16-11)
+- **A. LOCAL:** verificación del llamador probada (190/190, incluida criptografía RS256 real; emulador 71/71).
+- **B. CLOUD:** `riderapi-00004-moq` ACTIVE (nodejs22, `southamerica-west1`):
+  - IAM directo solo de Rider;
+  - herencia de proyecto sin cambios (editor y `run.invoker` de la cuenta de cómputo; owner);
+  - DISABLED por configuración;
+  - registros sin ERROR.
+- **C. NO PROBADO:** la respuesta autenticada de la aplicación (`CALLER_NOT_ALLOWED`, el 200 vacío y el 404) → G6 §5 de CAMBIOS_CONTRATO_RIDER_E6.
+- **APK `1.1.0-e6` sigue vigente:** sin cambios en `app/` ni en Gradle desde `9cd6336`; SHA-256 `fa53246785897da4adde8c0ae9691190a3cd338a16a7dfde7daf25098221f708`.
+- **Instalación (cuando se autorice):**
+  1. Comprobar el SHA-256 del archivo.
+  2. Instalar por USB (`adb install -r`) o copiando el APK.
+  3. Si Android indica **conflicto de firma** (el APK anterior se firmó con otra clave debug), **no desinstalar sin autorización**: desinstalar borra los datos locales de la app (sesión y caché; los pedidos están en Firestore y no se pierden).
+  4. Comprobar en Ajustes → Aplicaciones → Chaski Food que la versión es `1.1.0-e6`.
