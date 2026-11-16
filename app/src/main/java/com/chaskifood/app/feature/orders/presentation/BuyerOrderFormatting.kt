@@ -12,6 +12,7 @@ import androidx.compose.material.icons.filled.SoupKitchen
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import com.chaskifood.app.feature.orders.domain.BuyerOrderSummary
+import com.chaskifood.app.feature.orders.domain.BuyerPaymentSource
 import com.chaskifood.app.feature.orders.domain.OrderPaymentStatus
 import com.chaskifood.app.feature.orders.domain.StoreOrderRejectionReason
 import java.time.Instant
@@ -34,8 +35,12 @@ private val StoppedText = Color(0xFFB71C1C)
  * Texto del pago en efectivo (HU18). Un pago registrado se muestra tal cual; un pedido cancelado o rechazado
  * sin pago registrado no tiene cobro pendiente. No se infiere ningún reembolso.
  */
-internal fun buyerPaymentText(status: String, paymentStatus: OrderPaymentStatus): String = when {
+internal fun buyerPaymentText(status: String, paymentStatus: OrderPaymentStatus, source: BuyerPaymentSource? = null,
+    inReview: Boolean = false, deliveryOutcome: String? = null): String = when {
+    paymentStatus == OrderPaymentStatus.PAID && source == BuyerPaymentSource.RIDER -> "Pago registrado contra entrega"
     paymentStatus == OrderPaymentStatus.PAID -> "Efectivo registrado · simulación"
+    status == "COMPLETED" && inReview -> "Pago en revisión"
+    status == "COMPLETED" && deliveryOutcome == "UNSUCCESSFUL" -> "Sin cobro: la entrega no se completó"
     status == "CANCELLED" || status == "REJECTED" -> "Sin cobro: el pedido no se entregó"
     else -> "Efectivo pendiente hasta la entrega"
 }

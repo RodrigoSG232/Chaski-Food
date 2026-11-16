@@ -106,26 +106,20 @@ test("E1.2: a cash order is discoverable, assignable, reaches the store and can 
   assert.equal(reassigned.body.order.dispatch.lastEventSequence, 4);
 });
 
-test("E1.2/E2: unverified pickup and cash completion stay blocked without consuming the sequence", async () => {
+test("E1.2/E2: unverified pickup stays blocked without consuming the sequence", async () => {
   const { id } = await seed(5, true);
   assert.equal((await sendEvent(hu23Event(id, "ASSIGNMENT_ACCEPTED", 1))).status, 200);
   const expected: Record<string, string> = { PICKED_UP: "PICKUP_NOT_VERIFIED", ARRIVED_AT_CUSTOMER: "ORDER_STATE_CONFLICT",
-    COMPLETED_SUCCESSFULLY: "ORDER_NOT_READY", COMPLETED_UNSUCCESSFULLY: "ORDER_NOT_READY" };
+    COMPLETED_SUCCESSFULLY: "ORDER_STATE_CONFLICT", COMPLETED_UNSUCCESSFULLY: "ORDER_STATE_CONFLICT" };
   for (const [type, code] of Object.entries(expected)) {
-    const blocked = await sendEvent(hu23Event(id, type, 2));
+    const body = type === "COMPLETED_SUCCESSFULLY" ? hu23Event(id, type, 2, 1, { method: "CASH", amountMinor: 1300, currency: "PEN" }) : hu23Event(id, type, 2);
+    const blocked = await sendEvent(body);
     assert.equal(blocked.status, 409, type); assert.equal(blocked.body.error.code, code, type);
   }
   const order = (await db.doc("food_orders/" + id).get()).data()!;
   assert.equal(order.status, "READY_FOR_PICKUP"); assert.equal(order.paymentStatus, "PENDING");
   assert.equal(order.riderIntegration.lastEventSequence, 1);
   assert.equal((await db.collection("food_orders/" + id + "/rider_events").get()).size, 1);
-  assert.equal((await sendEvent(hu23Event(id, "ARRIVED_AT_MERCHANT", 2))).status, 200);
-  await db.doc("food_orders/" + id).update(hu23Verification());
-  assert.equal((await sendEvent(hu23Event(id, "PICKED_UP", 3))).status, 200);
-  assert.equal((await sendEvent(hu23Event(id, "ARRIVED_AT_CUSTOMER", 4))).status, 200);
-  const completion = await sendEvent(hu23Event(id, "COMPLETED_SUCCESSFULLY", 5));
-  assert.equal(completion.body.error.code, "ORDER_NOT_READY"); // E4 pending: no cash completion without collection rules
-  assert.equal((await db.doc("food_orders/" + id).get()).get("paymentStatus"), "PENDING");
 });
 
 test("E1.2: unsupported payment combinations stay invisible and cannot be operated", async () => {
@@ -212,4 +206,93 @@ test("E1.3: malformed cursors and parameters are rejected", async () => {
     const r = await call("orders?" + query);
     assert.equal(r.status, 400, query); assert.equal(r.body.error.code, "INVALID_REQUEST", query);
   }
+});
+
+// ---- E4: completion, cash collection and reconciliation (LOCAL emulator, synthetic data)
+const cash = (amountMinor: number, method = "YAPE") => ({ method, amountMinor, currency: "PEN" });
+async function delivering(n: number) {
+  const { id, buyer } = await seed(n, true);
+  assert.equal((await sendEvent(hu23Event(id, "ASSIGNMENT_ACCEPTED", 1))).status, 200);
+  await db.doc("food_orders/" + id).update(hu23Verification());
+  assert.equal((await sendEvent(hu23Event(id, "PICKED_UP", 2))).status, 200);
+  assert.equal((await sendEvent(hu23Event(id, "ARRIVED_AT_CUSTOMER", 3))).status, 200);
+  return { id, buyer };
+}
+test("E4: exact collection completes and records the payment atomically; a replay returns the same result", async () => {
+  const { id, buyer } = await delivering(30);
+  const finish = hu23Event(id, "COMPLETED_SUCCESSFULLY", 4, 1, cash(1300));
+  const done = await sendEvent(finish);
+  assert.equal(done.status, 200); assert.equal(done.body.collectionStatus, "RECORDED"); assert.equal(done.body.collectionReview, null);
+  const order = (await db.doc("food_orders/" + id).get()).data()!;
+  assert.equal(order.status, "COMPLETED"); assert.equal(order.riderIntegration.deliveryOutcome, "SUCCESS");
+  assert.equal(order.paymentStatus, "PAID"); assert.ok(order.paidAt instanceof Timestamp);
+  assert.equal(order.paymentCollection.source, "RIDER"); assert.equal(order.paymentCollection.method, "YAPE");
+  assert.equal(order.paymentCollection.amountMinor, 1300); assert.equal(order.collectionReview, undefined);
+  const history = (await db.doc("food_orders/" + id + "/payment_history/rider_collection").get()).data()!;
+  assert.equal(history.status, "RECORDED"); assert.equal(history.expectedMinor, 1300);
+  assert.equal((await db.collection("order_events").where("orderId", "==", id).where("type", "==", "ORDER_DELIVERED").get()).size, 1);
+  const replay = await sendEvent(finish);
+  assert.equal(replay.status, 200); assert.equal(replay.body.collectionStatus, "RECORDED");
+  assert.equal((await sendEvent({ ...finish, collection: cash(1200) })).body.error.code, "IDEMPOTENCY_CONFLICT");
+  assert.equal((await sendEvent(hu23Event(id, "COMPLETED_SUCCESSFULLY", 5, 1, cash(1300)))).body.error.code, "ORDER_STATE_CONFLICT");
+  assert.equal((await db.collection("food_orders/" + id + "/payment_history").get()).size, 1);
+  const detail = await call("orders/" + id);
+  assert.equal(detail.status, 200); assert.equal(detail.body.order.collectionStatus, "RECORDED");
+  assert.deepEqual(detail.body.order.payment, { method: "CASH_ON_DELIVERY", status: "PAID", amountToCollectMinor: 0, currency: "PEN" });
+  assertClean(detail.body, [buyer]);
+});
+test("E4: a lower or higher declared amount opens a review, keeps the payment PENDING and never marks PAID", async () => {
+  for (const [n, amount] of [[31, 1000], [32, 1500]] as const) {
+    const { id } = await delivering(n);
+    const done = await sendEvent(hu23Event(id, "COMPLETED_SUCCESSFULLY", 4, 1, cash(amount, "CASH")));
+    assert.equal(done.body.collectionStatus, "DISCREPANCY");
+    assert.deepEqual(done.body.collectionReview, { status: "OPEN", expectedMinor: 1300, declaredMinor: amount, method: "CASH", currency: "PEN" });
+    const order = (await db.doc("food_orders/" + id).get()).data()!;
+    assert.equal(order.status, "COMPLETED"); assert.equal(order.riderIntegration.deliveryOutcome, "SUCCESS");
+    assert.equal(order.paymentStatus, "PENDING"); assert.equal(order.paidAt, undefined); assert.equal(order.paymentCollection, undefined);
+    assert.equal(order.collectionReview.status, "OPEN"); assert.equal(order.collectionReview.declaredMinor, amount);
+    assert.equal((await db.doc("food_orders/" + id + "/payment_history/rider_collection").get()).get("status"), "DISCREPANCY");
+    assert.equal((await call("orders/" + id)).body.order.collectionStatus, "DISCREPANCY");
+  }
+});
+test("E4: a failed delivery records no collection; declaring money on a failure is rejected", async () => {
+  const { id } = await delivering(33);
+  const rejected = await sendEvent(hu23Event(id, "COMPLETED_UNSUCCESSFULLY", 4, 1, cash(1300)));
+  assert.equal(rejected.status, 422);
+  const failed = await sendEvent(hu23Event(id, "COMPLETED_UNSUCCESSFULLY", 4));
+  assert.equal(failed.status, 200); assert.equal(failed.body.collectionStatus, null);
+  const order = (await db.doc("food_orders/" + id).get()).data()!;
+  assert.equal(order.status, "COMPLETED"); assert.equal(order.riderIntegration.deliveryOutcome, "UNSUCCESSFUL");
+  assert.equal(order.paymentStatus, "PENDING");
+  assert.equal((await db.collection("food_orders/" + id + "/payment_history").get()).size, 0);
+});
+test("E4: invalid or missing collections are rejected without consuming the sequence", async () => {
+  const { id } = await delivering(34);
+  const base = hu23Event(id, "COMPLETED_SUCCESSFULLY", 4, 1, cash(1300));
+  for (const body of [hu23Event(id, "COMPLETED_SUCCESSFULLY", 4), { ...base, collection: cash(0) }, { ...base, collection: { ...cash(1300), method: "CARD" } },
+    { ...base, collection: { ...cash(1300), currency: "USD" } }, { ...hu23Event(id, "ARRIVED_AT_CUSTOMER", 4), collection: null }]) {
+    assert.equal((await sendEvent(body)).status, 422, JSON.stringify(body.collection));
+  }
+  assert.equal((await db.doc("food_orders/" + id).get()).get("riderIntegration.lastEventSequence"), 3);
+});
+test("E4: concurrent terminal events finish the order once and record one collection", async () => {
+  const { id } = await delivering(35);
+  const results = await Promise.all([
+    sendEvent({ ...hu23Event(id, "COMPLETED_SUCCESSFULLY", 4, 1, cash(1300)), eventId: "terminal-a" }),
+    sendEvent({ ...hu23Event(id, "COMPLETED_SUCCESSFULLY", 4, 1, cash(1300)), eventId: "terminal-b" }),
+    sendEvent({ ...hu23Event(id, "COMPLETED_UNSUCCESSFULLY", 4), eventId: "terminal-c" })]);
+  assert.equal(results.filter(r => r.status === 200).length, 1, JSON.stringify(results.map(r => r.body)));
+  assert.equal((await db.collection("food_orders/" + id + "/rider_events").where("eventSequence", "==", 4).get()).size, 1);
+  assert.ok((await db.collection("food_orders/" + id + "/payment_history").get()).size <= 1);
+});
+test("E4: legacy prepaid orders finish with collection null and reject a declared collection", async () => {
+  const { id } = await seed(36);
+  assert.equal((await sendEvent(hu23Event(id, "ASSIGNMENT_ACCEPTED", 1))).status, 200);
+  await db.doc("food_orders/" + id).update(hu23Verification());
+  assert.equal((await sendEvent(hu23Event(id, "PICKED_UP", 2))).status, 200);
+  assert.equal((await sendEvent(hu23Event(id, "COMPLETED_SUCCESSFULLY", 3, 1, cash(1300)))).status, 422);
+  const done = await sendEvent(hu23Event(id, "COMPLETED_SUCCESSFULLY", 3));
+  assert.equal(done.status, 200); assert.equal(done.body.collectionStatus, null);
+  const order = (await db.doc("food_orders/" + id).get()).data()!;
+  assert.equal(order.paymentStatus, "PAID"); assert.equal(order.paymentSimulation, true); assert.equal(order.paymentCollection, undefined);
 });

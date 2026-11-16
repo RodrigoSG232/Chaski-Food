@@ -1,6 +1,6 @@
 import { FieldPath,Firestore,Timestamp } from "firebase-admin/firestore";
 import { OrderHttpError } from "../orders/orderRequest";
-import { encodeRiderOrdersCursor,payloadHash,projectRiderOrder,RIDER_PAGE_MAX,RIDER_SCAN_BATCH,RIDER_SCAN_MAX,RiderOrdersCursor,RiderEvent,riderEventAllowedForPayment,riderOrderId,riderPaymentEligibility,RiderTracking } from "./riderIntegrationPolicy";
+import { decideCollection,publicCollectionReview,encodeRiderOrdersCursor,payloadHash,projectRiderOrder,RIDER_PAGE_MAX,RIDER_SCAN_BATCH,RIDER_SCAN_MAX,RiderOrdersCursor,RiderEvent,riderEventAllowedForPayment,riderOrderId,riderPaymentEligibility,RiderTracking } from "./riderIntegrationPolicy";
 import { BuyerNoticeType,createBuyerNoticeEvent } from "../notifications/buyerNoticeEvent";
 import { PickupSecurity,readPickupSecurity,storedPickupSecurity,verificationIsCurrent,withoutVerification } from "../orders/pickupSecurityPolicy";
 
@@ -51,8 +51,10 @@ export class RiderIntegrationService{
       const orderRef=this.db.doc(`food_orders/${event.orderId}`),eventRef=orderRef.collection("rider_events").doc(event.eventId);
       const [orderSnapshot,knownSnapshot]=await Promise.all([tx.get(orderRef),tx.get(eventRef)]);
       const order=orderSnapshot.data(),known=knownSnapshot.data();
+      // The hash covers the whole payload (collection included): same eventId with another amount is a conflict.
       if(known){if(known.payloadHash!==hash)throw new OrderHttpError("IDEMPOTENCY_CONFLICT",409);
-        return {contractVersion:1,eventId:event.eventId,orderId:event.orderId,applied:true,lastEventSequence:known.eventSequence};}
+        return {contractVersion:1,eventId:event.eventId,orderId:event.orderId,applied:true,lastEventSequence:known.eventSequence,
+          ...(known.collectionStatus!==undefined?{collectionStatus:known.collectionStatus,collectionReview:known.collectionReview??null}:{})};}
       if(!order||order.schemaVersion!==1)throw new OrderHttpError("ORDER_NOT_FOUND",404);
       const eligibility=riderPaymentEligibility(order);
       if(eligibility===null||!riderEventAllowedForPayment(eligibility,event.eventType))
@@ -94,11 +96,35 @@ export class RiderIntegrationService{
         event.assignmentVersion:(integration.lastAssignmentVersion??event.assignmentVersion),status:nextDeliveryStatus,assignment:nextAssignment,rider:nextRider,
         deliveryOutcome:event.deliveryOutcome,reason:event.reason,updatedAt:at};
       const update:Record<string,unknown>={riderIntegration:nextIntegration,updatedAt:at};
+      // E4: collection decided against Food's authoritative total (never the declared amount) and written atomically.
+      const collection=decideCollection(eligibility,order.totalMinor,event);
+      const terminal=event.eventType.startsWith("COMPLETED_");
+      let collectionStatus:"RECORDED"|"DISCREPANCY"|null=null,collectionReview:Record<string,unknown>|null=null;
+      if(collection==="RECORDED"){
+        collectionStatus="RECORDED";
+        update.paymentStatus="PAID";update.paidAt=at;
+        update.paymentCollection={source:"RIDER",method:event.collection!.method,amountMinor:event.collection!.amountMinor,
+          currency:event.collection!.currency,eventId:event.eventId,assignmentId:event.assignmentId,assignmentVersion:event.assignmentVersion,recordedAt:at};
+        tx.create(orderRef.collection("payment_history").doc("rider_collection"),{schemaVersion:1,type:"RIDER_COLLECTION",status:"RECORDED",
+          source:"CHASKI_RIDER",method:event.collection!.method,amountMinor:event.collection!.amountMinor,expectedMinor:order.totalMinor,
+          currency:event.collection!.currency,eventId:event.eventId,occurredAt:at});
+      }else if(collection==="DISCREPANCY"){
+        collectionStatus="DISCREPANCY";
+        collectionReview={status:"OPEN",expectedMinor:order.totalMinor,declaredMinor:event.collection!.amountMinor,
+          method:event.collection!.method,currency:event.collection!.currency,eventId:event.eventId,
+          assignmentId:event.assignmentId,assignmentVersion:event.assignmentVersion,openedAt:at};
+        update.collectionReview=collectionReview;
+        tx.create(orderRef.collection("payment_history").doc("rider_collection"),{schemaVersion:1,type:"RIDER_COLLECTION",status:"DISCREPANCY",
+          source:"CHASKI_RIDER",method:event.collection!.method,amountMinor:event.collection!.amountMinor,expectedMinor:order.totalMinor,
+          currency:event.collection!.currency,eventId:event.eventId,occurredAt:at});
+      }
+      const publicReview=publicCollectionReview(collectionReview??undefined);
       if(nextSecurity)update.pickupSecurity=storedPickupSecurity(nextSecurity);
       if(nextStatus!==order.status)update.status=nextStatus;
       if(nextStatus==="COMPLETED")update.completedAt=at;
       tx.update(orderRef,update as Record<string,any>);
-      tx.create(eventRef,{schemaVersion:1,...event,payloadHash:hash,receivedAt});
+      tx.create(eventRef,{schemaVersion:1,...event,payloadHash:hash,receivedAt,
+        ...(terminal?{collectionStatus,collectionReview:publicReview}:{})});
       if(nextStatus!==order.status)tx.create(orderRef.collection("status_history").doc(`rider_${event.eventSequence}`),{
         schemaVersion:1,fromStatus:order.status,toStatus:nextStatus,actorUid:"CHASKI_RIDER",occurredAt:at});
       const noticeType:Partial<Record<RiderEvent["eventType"],BuyerNoticeType>>={
@@ -107,7 +133,8 @@ export class RiderIntegrationService{
       const type=noticeType[event.eventType];
       if(type)createBuyerNoticeEvent(tx,this.db,{orderId:event.orderId,buyerUid:order.buyerUid,type,
         sequence:event.eventSequence,at,assignmentId:event.assignmentId,assignmentVersion:event.assignmentVersion});
-      return {contractVersion:1,eventId:event.eventId,orderId:event.orderId,applied:true,lastEventSequence:event.eventSequence};
+      return {contractVersion:1,eventId:event.eventId,orderId:event.orderId,applied:true,lastEventSequence:event.eventSequence,
+        ...(terminal?{collectionStatus,collectionReview:publicReview}:{})};
     });
   }
 

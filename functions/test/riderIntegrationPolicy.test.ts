@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { Timestamp } from "firebase-admin/firestore";
-import { encodeRiderOrdersCursor,parseRiderEvent,parseRiderOrdersQuery,parseRiderTracking,projectRiderOrder,riderEventAllowedForPayment,riderPaymentEligibility } from "../src/integration/riderIntegrationPolicy";
+import { decideCollection,encodeRiderOrdersCursor,parseRiderEvent,parseRiderOrdersQuery,parseRiderTracking,projectRiderOrder,riderEventAllowedForPayment,riderPaymentEligibility } from "../src/integration/riderIntegrationPolicy";
 
 const event={schemaVersion:1,eventId:"EV_1",eventType:"ASSIGNMENT_ACCEPTED",eventSequence:1,
   occurredAt:"2026-11-08T15:00:00.000Z",orderId:"a".repeat(64),assignment:{id:"ASG_1",version:1},status:"ACCEPTED",reason:null,
@@ -75,13 +75,10 @@ test("E1.2: cash pending and legacy prepaid are the only eligible payment situat
   assert.deepEqual(projectRiderOrder(cashOrder,"LIST").payment,{method:"CASH_ON_DELIVERY",status:"PENDING",amountToCollectMinor:2400,currency:"PEN"});
   assert.throws(()=>projectRiderOrder({...cashOrder,paymentMethod:"CARD"},"DETAIL"),/ORDER_NOT_READY/);
 });
-test("E2: cash orders accept the verified pickup flow but not completion (E4); legacy prepaid keeps every event",()=>{
-  for(const type of ["ASSIGNMENT_ACCEPTED","ARRIVED_AT_MERCHANT","ASSIGNMENT_RELEASED","PICKED_UP","ARRIVED_AT_CUSTOMER"] as const)
-    assert.equal(riderEventAllowedForPayment("CASH_PENDING",type),true,type);
-  for(const type of ["COMPLETED_SUCCESSFULLY","COMPLETED_UNSUCCESSFULLY"] as const) {
-    assert.equal(riderEventAllowedForPayment("CASH_PENDING",type),false,type);
-    assert.equal(riderEventAllowedForPayment("LEGACY_PREPAID",type),true,type);
-  }
+test("E4: every payment situation accepts the full event flow (state and collection rules decide)",()=>{
+  for(const type of ["ASSIGNMENT_ACCEPTED","ARRIVED_AT_MERCHANT","ASSIGNMENT_RELEASED","PICKED_UP","ARRIVED_AT_CUSTOMER",
+    "COMPLETED_SUCCESSFULLY","COMPLETED_UNSUCCESSFULLY"] as const)
+    for(const e of ["CASH_PENDING","LEGACY_PREPAID","CASH_COLLECTED"] as const)assert.equal(riderEventAllowedForPayment(e,type),true,e+type);
 });
 
 test("E1.3: the cursor keeps exact seconds, nanoseconds and id and rejects anything else",()=>{
@@ -96,4 +93,32 @@ test("E1.3: the cursor keeps exact seconds, nanoseconds and id and rejects anyth
   for(const cursorValue of bad)assert.throws(()=>parseRiderOrdersQuery({cursor:cursorValue}),/INVALID_REQUEST/,JSON.stringify(cursorValue));
   for(const limit of ["0","51","05","1.5","-1",["1","2"]])assert.throws(()=>parseRiderOrdersQuery({limit}),/INVALID_REQUEST/,String(limit));
   assert.throws(()=>parseRiderOrdersQuery({status:"READY"}),/INVALID_REQUEST/);
+});
+
+const terminal=(type:string,collection:unknown)=>({...event,eventType:type,eventSequence:5,assignment:{id:"ASG_1",version:1},
+  status:"COMPLETED",rider:null,deliveryOutcome:type==="COMPLETED_SUCCESSFULLY"?"SUCCESS":"UNSUCCESSFUL",collection});
+test("E4: collection is mandatory in COMPLETED_*, forbidden elsewhere and strictly typed",()=>{
+  const ok={method:"YAPE",amountMinor:3150,currency:"PEN"};
+  assert.deepEqual(parseRiderEvent(terminal("COMPLETED_SUCCESSFULLY",ok)).collection,ok);
+  assert.equal(parseRiderEvent(terminal("COMPLETED_SUCCESSFULLY",null)).collection,null);
+  assert.equal(parseRiderEvent(terminal("COMPLETED_UNSUCCESSFULLY",null)).collection,null);
+  const {collection:_,...missing}=terminal("COMPLETED_SUCCESSFULLY",null);
+  assert.throws(()=>parseRiderEvent(missing),/INVALID_REQUEST/);
+  assert.throws(()=>parseRiderEvent({...event,collection:null}),/INVALID_REQUEST/);
+  assert.equal("collection" in parseRiderEvent(event),false);
+  assert.throws(()=>parseRiderEvent(terminal("COMPLETED_UNSUCCESSFULLY",ok)),/INVALID_REQUEST/);
+  for(const bad of [{...ok,method:"CARD"},{...ok,currency:"USD"},{...ok,amountMinor:0},{...ok,amountMinor:1.5},{...ok,amountMinor:-1},
+    {...ok,amountMinor:10_000_001},{method:"CASH",amountMinor:1},{...ok,extra:1}])
+    assert.throws(()=>parseRiderEvent(terminal("COMPLETED_SUCCESSFULLY",bad)),/INVALID_REQUEST/,JSON.stringify(bad));
+});
+test("E4: the expected amount is Food's total; legacy prepaid and failures never record a collection",()=>{
+  const at=(amountMinor:number)=>parseRiderEvent(terminal("COMPLETED_SUCCESSFULLY",{method:"CASH",amountMinor,currency:"PEN"}));
+  assert.equal(decideCollection("CASH_PENDING",3150,at(3150)),"RECORDED");
+  assert.equal(decideCollection("CASH_PENDING",3150,at(3000)),"DISCREPANCY");
+  assert.equal(decideCollection("CASH_PENDING",3150,at(3200)),"DISCREPANCY");
+  assert.throws(()=>decideCollection("CASH_PENDING",3150,parseRiderEvent(terminal("COMPLETED_SUCCESSFULLY",null))),/INVALID_REQUEST/);
+  assert.equal(decideCollection("LEGACY_PREPAID",3150,parseRiderEvent(terminal("COMPLETED_SUCCESSFULLY",null))),"NONE");
+  assert.throws(()=>decideCollection("LEGACY_PREPAID",3150,at(3150)),/INVALID_REQUEST/);
+  assert.equal(decideCollection("CASH_PENDING",3150,parseRiderEvent(terminal("COMPLETED_UNSUCCESSFULLY",null))),"NONE");
+  assert.equal(decideCollection("CASH_PENDING",3150,parseRiderEvent(event)),"NONE");
 });

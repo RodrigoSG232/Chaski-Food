@@ -35,13 +35,31 @@ function optionalText(value:unknown,max:number):string|null{
 
 export type RiderEvent={eventId:string;eventType:RiderEventType;eventSequence:number;occurredAt:Timestamp;orderId:string;
   assignmentId:string;assignmentVersion:number;status:string;reason:string|null;rider:null|{id:string;displayName:string;phone:string|null;
-  vehicleType:"MOTORCYCLE"|"BICYCLE";vehiclePlate:string|null};deliveryOutcome:null|"SUCCESS"|"UNSUCCESSFUL"};
+  vehicleType:"MOTORCYCLE"|"BICYCLE";vehiclePlate:string|null};deliveryOutcome:null|"SUCCESS"|"UNSUCCESSFUL";
+  /** E4: present (object or null) only in COMPLETED_* events; undefined for every other event. */
+  collection?:RiderCollection|null};
+
+/** E4: what the rider declares to have collected. It is logistics evidence, not a bank confirmation. */
+export type RiderCollectionMethod="CASH"|"YAPE"|"PLIN";
+export type RiderCollection={method:RiderCollectionMethod;amountMinor:number;currency:"PEN"};
+const collectionMethods:readonly string[]=["CASH","YAPE","PLIN"];
+const MAX_COLLECTION_MINOR=10_000_000;
+function parseCollection(value:unknown):RiderCollection|null{
+  if(value===null)return null;
+  const c=object(value);exact(c,["method","amountMinor","currency"]);
+  if(typeof c.method!=="string"||!collectionMethods.includes(c.method)||c.currency!=="PEN"||!Number.isSafeInteger(c.amountMinor)||
+    (c.amountMinor as number)<1||(c.amountMinor as number)>MAX_COLLECTION_MINOR)throw new OrderHttpError("INVALID_REQUEST",422);
+  return {method:c.method as RiderCollectionMethod,amountMinor:c.amountMinor as number,currency:"PEN"};
+}
 
 export function parseRiderEvent(value:unknown):RiderEvent{
-  const body=object(value);exact(body,["schemaVersion","eventId","eventType","eventSequence","occurredAt","orderId","assignment",
-    "status","reason","rider","deliveryOutcome"]);
+  const body=object(value);
   if(body.schemaVersion!==1||typeof body.eventType!=="string"||!eventTypes.includes(body.eventType as RiderEventType))
     throw new OrderHttpError("INVALID_REQUEST",422);
+  // E4: `collection` is mandatory in COMPLETED_* and forbidden in every other event (strict keys as before).
+  const terminal=(body.eventType as string).startsWith("COMPLETED_");
+  exact(body,["schemaVersion","eventId","eventType","eventSequence","occurredAt","orderId","assignment",
+    "status","reason","rider","deliveryOutcome",...(terminal?["collection"]:[])]);
   const assignment=object(body.assignment);exact(assignment,["id","version"]);
   let rider:RiderEvent["rider"]=null;
   if(body.rider!==null){const r=object(body.rider);exact(r,["id","displayName","phone","vehicleType","vehiclePlate"]);
@@ -60,9 +78,13 @@ export function parseRiderEvent(value:unknown):RiderEvent{
   if((eventType==="COMPLETED_SUCCESSFULLY"&&outcome!=="SUCCESS")||
     (eventType==="COMPLETED_UNSUCCESSFULLY"&&outcome!=="UNSUCCESSFUL")||
     (!eventType.startsWith("COMPLETED_")&&outcome!==null))throw new OrderHttpError("INVALID_REQUEST",422);
+  const collection=terminal?parseCollection(body.collection):undefined;
+  // A failed delivery never declares money: rejected, not silently turned into "no collection" (incident handled with Rider).
+  if(eventType==="COMPLETED_UNSUCCESSFULLY"&&collection!==null)throw new OrderHttpError("INVALID_REQUEST",422);
   return {eventId:id(body.eventId),eventType,eventSequence:integer(body.eventSequence),occurredAt:instant(body.occurredAt),
     orderId:id(body.orderId),assignmentId:id(assignment.id),assignmentVersion:integer(assignment.version),status:body.status as string,
-    reason:body.reason===null?null:optionalText(body.reason,120),rider,deliveryOutcome:outcome as RiderEvent["deliveryOutcome"]};
+    reason:body.reason===null?null:optionalText(body.reason,120),rider,deliveryOutcome:outcome as RiderEvent["deliveryOutcome"],
+    ...(terminal?{collection}:{})};
 }
 
 export type RiderTracking={assignmentId:string;assignmentVersion:number;sequence:number;riderId:string;latitude:number;longitude:number;
@@ -149,19 +171,47 @@ function riderTrackingView(stored:Record<string,any>|undefined){
     recordedAt:isoOrNull(stored.recordedAt),estimatedArrivalAt:isoOrNull(stored.estimatedArrivalAt)};
 }
 
-/** Payment situations Rider may handle: legacy simulated prepayment (nothing to collect) or cash still to be collected. */
-export type RiderPaymentEligibility="LEGACY_PREPAID"|"CASH_PENDING";
+/**
+ * Payment situations Rider may handle: legacy simulated prepayment (nothing to collect), cash still to be collected, or
+ * cash already collected by Rider (E4; kept visible in the detail for reconciliation).
+ */
+export type RiderPaymentEligibility="LEGACY_PREPAID"|"CASH_PENDING"|"CASH_COLLECTED";
 export function riderPaymentEligibility(data:Record<string,any>):RiderPaymentEligibility|null{
   if(typeof data.pickupCode!=="string"||!/^[0-9]{4}$/.test(data.pickupCode))return null;
   if(data.paymentStatus==="PAID"&&data.paymentSimulation===true)return "LEGACY_PREPAID";
+  if(data.paymentMethod==="CASH_ON_DELIVERY"&&data.paymentStatus==="PAID"&&data.paymentCollection?.source==="RIDER")return "CASH_COLLECTED";
   if(data.paymentMethod==="CASH_ON_DELIVERY"&&data.paymentStatus==="PENDING"&&data.paymentSimulation!==true)return "CASH_PENDING";
   return null;
 }
 
-/** E2: cash orders follow the verified pickup flow; completion stays blocked until the collection rules of E4. */
-const cashEventsEnabled:readonly RiderEventType[]=["ASSIGNMENT_ACCEPTED","ARRIVED_AT_MERCHANT","ASSIGNMENT_RELEASED","PICKED_UP","ARRIVED_AT_CUSTOMER"];
-export function riderEventAllowedForPayment(eligibility:RiderPaymentEligibility,eventType:RiderEventType):boolean{
-  return eligibility==="LEGACY_PREPAID"||cashEventsEnabled.includes(eventType);
+/** E4: every payment situation accepts the full event flow; state, assignment and collection rules decide the rest. */
+export function riderEventAllowedForPayment(eligibility:RiderPaymentEligibility,_eventType:RiderEventType):boolean{
+  return eligibility==="LEGACY_PREPAID"||eligibility==="CASH_PENDING"||eligibility==="CASH_COLLECTED";
+}
+
+export type CollectionDecision="RECORDED"|"DISCREPANCY"|"NONE";
+/**
+ * E4: the expected amount is Food's authoritative total, never a value declared by Rider. Cash success needs a
+ * collection; legacy prepaid and failed deliveries must declare none.
+ */
+export function decideCollection(eligibility:RiderPaymentEligibility,expectedMinor:number,event:RiderEvent):CollectionDecision{
+  if(!event.eventType.startsWith("COMPLETED_"))return "NONE";
+  if(event.eventType==="COMPLETED_UNSUCCESSFULLY")return "NONE";
+  if(eligibility!=="CASH_PENDING"){
+    if(event.collection!==null)throw new OrderHttpError("INVALID_REQUEST",422);
+    return "NONE";
+  }
+  if(!event.collection)throw new OrderHttpError("INVALID_REQUEST",422);
+  return event.collection.amountMinor===expectedMinor?"RECORDED":"DISCREPANCY";
+}
+
+/** Public view of an open review: amounts and method only (no actors, no internal ids). */
+export function publicCollectionReview(review:Record<string,any>|undefined){
+  return review?.status==="OPEN"?{status:"OPEN",expectedMinor:review.expectedMinor,declaredMinor:review.declaredMinor,
+    method:review.method,currency:review.currency}:null;
+}
+export function collectionStatusOf(data:Record<string,any>):"RECORDED"|"DISCREPANCY"|null{
+  return data.paymentCollection?.source==="RIDER"?"RECORDED":data.collectionReview?.status==="OPEN"?"DISCREPANCY":null;
 }
 
 export function projectRiderOrder(data:Record<string,any>,view:RiderOrderView){
@@ -186,7 +236,7 @@ export function projectRiderOrder(data:Record<string,any>,view:RiderOrderView){
   // Only the backend of the current assignment receives the code, and only while it is still useful (not verified, not locked).
   // Rider must still restrict it to that rider.
   const pickupCode=data.status==="READY_FOR_PICKUP"&&dispatch.assignment!==null&&!security.lockedAt&&!current?data.pickupCode:null;
-  return {...order,pickupCode,
+  return {...order,pickupCode,collectionStatus:collectionStatusOf(data),collectionReview:publicCollectionReview(data.collectionReview),
     pickupVerification:current?{assignmentId:security.verification!.assignmentId,assignmentVersion:security.verification!.assignmentVersion,
       verifiedAt:security.verification!.verifiedAt.toDate().toISOString()}:null,
     pickupLock:security.lockedAt?{lockedAt:security.lockedAt.toDate().toISOString(),reason:"MAX_ATTEMPTS"}:null};

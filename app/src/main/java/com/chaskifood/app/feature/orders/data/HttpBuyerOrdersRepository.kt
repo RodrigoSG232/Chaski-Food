@@ -165,7 +165,8 @@ private fun BuyerOrderDetailResponse.toDomain(): BuyerOrderDetail {
         statusHistory.map { BuyerOrderStatusEntry(it.status, it.statusKnown, it.occurredAtEpochMillis) },
         estimatedPreparationMinutes,estimatedReadyAtEpochMillis,OrderPaymentStatus.valueOf(paymentStatus),
         rejection = if (status == "REJECTED") rejectionOf(rejectionReason, rejectionExplanation) else null,
-        preparationExtendedMinutes = if (estimatedReadyAtEpochMillis != null) preparationExtendedMinutes else 0)
+        preparationExtendedMinutes = if (estimatedReadyAtEpochMillis != null) preparationExtendedMinutes else 0,
+        paymentSource = paymentSource?.let { BuyerPaymentSource.valueOf(it) }, paymentInReview = paymentReview == "OPEN")
 }
 
 /** Tolerant on purpose: an unknown or missing reason must never stop the buyer from opening a historical order. */

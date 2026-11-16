@@ -11,7 +11,8 @@ import retrofit2.http.*
     val items:List<StoreOrderLineResponse>,val subtotalMinor:Long,val deliveryFeeMinor:Long,val totalMinor:Long,
     val currency:String,val paymentMethod:String,val estimatedPreparationMinutes:Int?=null,val estimatedReadyAtEpochMillis:Long?=null,
     val readyAtEpochMillis:Long?=null,val tipMinor:Long=0,val simulationStage:String?=null,
-    val estimateRevision:Long=0,val preparationExtendedMinutes:Int=0,val pickup:StorePickupResponse?=null)
+    val estimateRevision:Long=0,val preparationExtendedMinutes:Int=0,val pickup:StorePickupResponse?=null,
+    val paymentStatus:String?=null,val amountToCollectMinor:Long?=null)
 /** foodApi still sends pickupCode for older APKs (transitional): this app never declares nor reads it. */
 @Serializable internal data class StorePickupResponse(val assignment:StoreRiderAssignmentResponse?=null,val verified:Boolean,
     val locked:Boolean,val attemptsRemaining:Int)

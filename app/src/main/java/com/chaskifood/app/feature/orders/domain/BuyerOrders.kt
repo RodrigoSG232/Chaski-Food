@@ -58,6 +58,8 @@ data class BuyerOrderRejection(val reason: StoreOrderRejectionReason?, val expla
     }
 }
 
+enum class BuyerPaymentSource { RIDER, SIMULATED }
+
 /** Copia histórica del pedido (snapshots de HU16): no cambia aunque se editen la dirección o el catálogo actuales. */
 class BuyerOrderDetail(
     val summary: BuyerOrderSummary, val storePhone: String?, val pickupAddressText: String, val delivery: BuyerOrderDelivery,
@@ -67,6 +69,9 @@ class BuyerOrderDetail(
     val rejection: BuyerOrderRejection? = null,
     /** HU20: minutos sumados mediante ampliaciones; 0 si no hubo o si el pedido es anterior a esta regla. */
     val preparationExtendedMinutes: Int = 0,
+    /** E4: quién registró el pago (Rider o la simulación histórica) y si el cobro está en revisión. */
+    val paymentSource: BuyerPaymentSource? = null,
+    val paymentInReview: Boolean = false,
 ) {
     val items: List<StoreOrderLine> = frozenOrderList(items)
     val statusHistory: List<BuyerOrderStatusEntry> = frozenOrderList(statusHistory)

@@ -335,7 +335,7 @@ Cuerpo de error de Food: `{"error":{"code":"…","retryable":<true solo en 5xx>}
 
 ## 11. Estado de despliegue y diferencias publicadas
 
-| Elemento | [CLOUD] `riderapi-00001-xeg` | [REPO] `630b633` (E1) + E2 local sin commit (15-11) | [ACORDADO] |
+| Elemento | [CLOUD] `riderapi-00001-xeg` | [REPO] `c98a32a` (E1–E3) + E4 local sin commit (15-11) | [ACORDADO] |
 |---|---|---|---|
 | Elegibilidad del efectivo | No | **Sí (E1.2):** `CASH_ON_DELIVERY` + `PENDING` con código, en listado, detalle y eventos `ASSIGNMENT_ACCEPTED`, `ARRIVED_AT_MERCHANT` y `ASSIGNMENT_RELEASED`. `PICKED_UP`, `ARRIVED_AT_CUSTOMER` y `COMPLETED_*` → `409 ORDER_NOT_READY` **temporal** hasta E2/E4 (no apto para la integración real). Prepago antiguo sin cambios | Sí |
 | `pickupCode` en el listado | Sí | **No** (E1.1) | No |
@@ -347,8 +347,8 @@ Cuerpo de error de Food: `{"error":{"code":"…","retryable":<true solo en 5xx>}
 | `PICKED_UP` con verificación | No | **Sí (E2):** exige `pickupVerification` vigente de la misma asignación (también en el prepago antiguo); si no, `409 PICKUP_NOT_VERIFIED` sin consumir la secuencia | Sí |
 | Pedidos bloqueados | No | **Sí (E2):** fuera del listado; el detalle devuelve `pickupLock` y `pickupCode: null`; `ASSIGNMENT_ACCEPTED` → `409 PICKUP_LOCKED`; `ASSIGNMENT_RELEASED` borra la verificación y conserva intentos y bloqueo | Sí |
 | `pickupVerification` / `pickupLock` en el detalle | No | **Sí (E2)**; `pickupCode` es `null` si está verificado o bloqueado | Sí |
-| Eventos de efectivo | No | `PICKED_UP` (verificado) y `ARRIVED_AT_CUSTOMER` habilitados en E2; `COMPLETED_*` siguen con `409 ORDER_NOT_READY` hasta E4 | Sí |
-| `collection` | 422 | 422 | Sí |
+| Eventos de efectivo | No | Recorrido completo habilitado (E4); el bloqueo temporal de `COMPLETED_*` quedó retirado | Sí |
+| `collection` y cobro | 422 | **Sí (E4):** obligatoria en `COMPLETED_*` y prohibida en el resto (422); `COMPLETED_SUCCESSFULLY` en efectivo exige un objeto (`CASH`, `YAPE` o `PLIN`, entero de 1 a 10 000 000, `PEN`); `COMPLETED_UNSUCCESSFULLY` y el prepago antiguo exigen `null`. Importe exacto respecto del total de Food → `PAID` más `paymentCollection` más `payment_history/rider_collection` (`RECORDED`); distinto → `PENDING` más `collectionReview` `OPEN` (`DISCREPANCY`). La respuesta y el detalle incluyen `collectionStatus` y `collectionReview`; repetir el evento devuelve el resultado original | Sí |
 | Paginación y orden | No | **Sí (E1.3):** `status == READY_FOR_PICKUP` + `readyAt >= 0` ordenados por `readyAt` y luego `__name__`; `limit` 1–50 (por defecto 20) y `cursor` opaco; la elegibilidad se aplica antes de llenar la página; como máximo 200 documentos examinados por petición, en bloques de 50; `nextCursor` = último documento **examinado** (puede venir con una página vacía) y `null` al terminar. Índice compuesto `status`, `readyAt`, `__name__` añadido **solo** a `firestore.indexes.json` (no desplegado). Pedidos sin `readyAt`: fuera del listado, accesibles por el detalle | Sí |
 | `ASSIGNMENT_CONFLICT` | No | Sí | Sí |
 | Avisos al comprador por eventos Rider | No | Sí | Sí |

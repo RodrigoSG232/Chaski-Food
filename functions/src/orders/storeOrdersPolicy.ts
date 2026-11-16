@@ -80,6 +80,13 @@ function storePickupView(data:Record<string,any>){
     attemptsRemaining:security.lockedAt?0:MAX_PICKUP_FAILURES-security.failures};
 }
 
+function storePayment(data:Record<string,any>,totalMinor:number){
+  // Older orders may predate paymentStatus: nothing is projected (the app keeps its neutral text). Unknown values are corrupt.
+  if(data.paymentStatus===undefined)return {};
+  if(data.paymentStatus!=="PENDING"&&data.paymentStatus!=="PAID")throw new Error();
+  return {paymentStatus:data.paymentStatus as "PENDING"|"PAID",amountToCollectMinor:data.paymentStatus==="PENDING"?totalMinor:0};
+}
+
 export function projectStoreOrder(id:string,data:Record<string,any>,status:StoreOrderStatus) {
   if(status==="PENDING_CONFIRMATION")return projectPendingOrder(id,data);
   try {
@@ -96,6 +103,8 @@ export function projectStoreOrder(id:string,data:Record<string,any>,status:Store
     return {orderId:id,createdAtEpochMillis:core.createdAtEpochMillis,status,items:core.items,
       subtotalMinor:core.subtotalMinor,deliveryFeeMinor:core.deliveryFeeMinor,tipMinor:core.tipMinor,totalMinor:core.totalMinor,currency:core.currency,
       paymentMethod:core.paymentMethod,
+      // E4 (additive): what the rider must still collect; a PAID order (legacy prepaid or collected) owes nothing.
+      ...storePayment(data,core.totalMinor),
       ...(status!=="IN_DELIVERY"?{estimatedPreparationMinutes:data.estimatedPreparationMinutes,
         estimatedReadyAtEpochMillis:data.estimatedReadyAt.toMillis(),estimateRevision,preparationExtendedMinutes}:{}),
       ...(status==="IN_DELIVERY"?{simulationStage}:{}),

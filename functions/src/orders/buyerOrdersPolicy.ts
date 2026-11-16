@@ -111,7 +111,10 @@ export function projectBuyerOrderDetail(id: string, data: Record<string, any>, u
       delivery: { label: optionalText(dropoff.label), addressText: orderText(dropoff.addressText),
         reference: optionalText(dropoff.reference), instructions: optionalText(dropoff.instructions) },
       items: core.items, subtotalMinor: core.subtotalMinor, deliveryFeeMinor: core.deliveryFeeMinor,tipMinor:core.tipMinor,
-      paymentMethod: core.paymentMethod,paymentStatus:data.paymentStatus, statusHistory, estimatedPreparationMinutes, estimatedReadyAtEpochMillis,
+      paymentMethod: core.paymentMethod,paymentStatus:data.paymentStatus,
+      // E4 (additive): who registered the payment and whether a collection is under review; never amounts or actors.
+      paymentSource: data.paymentCollection?.source === "RIDER" ? "RIDER" : data.paymentStatus === "PAID" && data.paymentSimulation === true ? "SIMULATED" : null,
+      paymentReview: data.collectionReview?.status === "OPEN" ? "OPEN" : null, statusHistory, estimatedPreparationMinutes, estimatedReadyAtEpochMillis,
       ...extension, ...(summary.status === "REJECTED" ? buyerRejection(data) : {}) };
   } catch (error) {
     if (error instanceof OrderHttpError) throw error;

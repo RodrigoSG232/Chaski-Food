@@ -287,4 +287,13 @@ class StoreOrdersViewModelTest {
         assertEquals(setOf(orderId),vm.state.value.riderChangedOrderIds)
         vm.dismissRiderChange(orderId);assertTrue(vm.state.value.riderChangedOrderIds.isEmpty())
     }
+    @Test fun e4StorePaymentTextNeverShowsAPaidOrderAsPendingCollection() {
+        fun order(status:OrderPaymentStatus?,amount:Long?)=StoreOrderSummary("o",1800000000000,listOf(StoreOrderLine("p","Plato",1,1000,1000)),
+            OrderAmounts(1000,300,1300),paymentStatus=status,amountToCollectMinor=amount)
+        assertTrue(storePaymentText(order(OrderPaymentStatus.PENDING,1300)).startsWith("Por cobrar contra entrega:"))
+        assertEquals("Pago registrado",storePaymentText(order(OrderPaymentStatus.PAID,0)))
+        assertEquals("Efectivo al recibir · PEN",storePaymentText(order(null,null)))
+        assertThrows(IllegalArgumentException::class.java){order(OrderPaymentStatus.PAID,1300)}
+        assertThrows(IllegalArgumentException::class.java){order(OrderPaymentStatus.PENDING,500)}
+    }
 }

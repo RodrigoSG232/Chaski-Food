@@ -106,6 +106,20 @@ Decisiones **aprobadas** por el equipo que siguen aplicando y condicionan las pr
   - la conciliación posterior, que debe conservar trazabilidad como ajuste;
   - una entrega fallida con movimiento de dinero, que es una incidencia y no `collection:null`.
 
+- **E4 implementado en LOCAL (15-11-2026):**
+  - `paymentStatus` sigue siendo `PENDING` o `PAID`, sin estados nuevos;
+  - el cobro exacto se registra con `paymentCollection` (fuente `RIDER`) y la discrepancia con `collectionReview` `OPEN`;
+  - una entrega fallida que declare dinero se **rechaza** (422) y se trata como incidencia con Rider;
+  - el panel HU28 excluye de las ventas un pedido entregado con la revisión abierta, sin fallar;
+  - la declaración de Rider es evidencia logística, no una confirmación bancaria de Yape o Plin.
+- **Conciliación pendiente (sin implementar):** E4 solo abre la revisión, y no existe un procedimiento autorizado para cerrarla. **No se permite corregir Firestore a mano.** Antes de operar con cobros reales hay que decidir:
+  - **quién la resuelve:** se propone un administrador de Food, como excepción acotada similar a la del recojo;
+  - **con qué evidencia:** declaración del repartidor, comprobante de Yape o Plin, confirmación del cliente o del local;
+  - **qué auditoría se conserva:** actor, motivo, resultado (cobro confirmado por un importe o incobrable) y fecha, sin reescribir el evento ni el historial;
+  - **qué hace falta implementar:** el endpoint y la pantalla correspondientes (con aprobación visual en Pencil).
+
+  Hasta entonces, el ciclo de conciliación **no está completo**.
+
 ### Secuencias y resiliencia
 - **Secuencia:** `eventSequence` es por pedido, no por repartidor; continúa tras liberaciones y reasignaciones; un evento rechazado sin aplicarse no consume su secuencia.
 - **Responsabilidades de Rider:**

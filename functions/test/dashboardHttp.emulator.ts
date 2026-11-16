@@ -69,3 +69,18 @@ test("owner sees own business; manager only assigned store; admin claim grants n
   await db.doc(`business_requests/${owner.uid}`).update({status:"SUSPENDED"});
   assert.equal((await http(owner.token,route)).status,200);
 });
+
+test("E4: a delivered order under collection review is not a sale and does not break the dashboard; corrupt data still does",async()=>{
+  const owner=await actor();const store=`${owner.uid}-review`;
+  await db.doc(`business_requests/${owner.uid}`).set({ownerUid:owner.uid,status:"APPROVED",businessName:"Ficticio"});
+  await db.doc(`stores/${store}`).set({businessId:owner.uid,name:"Local revisión"});
+  await prepare(owner);
+  await order(owner.uid,store,`${prefix}-paid`,true);
+  const review=`${prefix}-review`;await order(owner.uid,store,review,true);
+  await db.doc(`food_orders/${review}`).update({paymentStatus:"PENDING",collectionReview:{status:"OPEN",expectedMinor:2400,declaredMinor:2000}});
+  const route=`/commercial/dashboard?businessId=${owner.uid}&days=7`;
+  const ok=await http(owner.token,route);
+  assert.equal(ok.status,200);assert.equal(ok.body.orders,2);assert.equal(ok.body.salesMinor,2400);
+  await db.doc(`food_orders/${review}`).update({collectionReview:{status:"CLOSED"}});
+  assert.equal((await http(owner.token,route)).status,503);
+});

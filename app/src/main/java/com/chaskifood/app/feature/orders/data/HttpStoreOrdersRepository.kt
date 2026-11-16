@@ -190,7 +190,8 @@ internal class HttpStoreOrdersRepository @Inject constructor(private val api:Sto
                                 readyAtEpochMillis=o.readyAtEpochMillis,
                                 simulationStage=o.simulationStage,estimateRevision=o.estimateRevision,
                                 preparationExtendedMinutes=o.preparationExtendedMinutes,
-                                pickup=if(status==OrderStatus.READY_FOR_PICKUP)o.pickup?.toDomain() else null)
+                                pickup=if(status==OrderStatus.READY_FOR_PICKUP)o.pickup?.toDomain() else null,
+                                paymentStatus=o.paymentStatus?.let{OrderPaymentStatus.valueOf(it)},amountToCollectMinor=o.amountToCollectMinor)
                         }
                         require(cursor==null || body.nextCursor!=cursor)
                         StoreOrdersResult.Loaded(StoreOrdersPage(body.storeId,body.storeName,orders,body.nextCursor))

@@ -234,7 +234,8 @@ private fun DetailBody(detail: BuyerOrderDetail, message: String?, notice: Strin
             DetailCard {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(ChaskiDimens.SpacingSm)) {
                     Icon(Icons.Filled.Payments, contentDescription = null, tint = ChaskiTextPrimary, modifier = Modifier.size(20.dp))
-                    Text(buyerPaymentText(summary.status, detail.paymentStatus),
+                    Text(buyerPaymentText(summary.status, detail.paymentStatus, detail.paymentSource, detail.paymentInReview,
+                        summary.deliveryOutcome),
                         style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold, color = ChaskiTextPrimary)
                 }
                 Text("No se realiza ningún cobro real.", style = MaterialTheme.typography.bodySmall, color = ChaskiTextTertiary)

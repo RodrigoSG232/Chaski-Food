@@ -175,6 +175,7 @@ internal fun StoreOrdersContent(state:StoreOrdersUiState,onBack:()->Unit={},onRe
                 Text(formatCartPrice(order.amounts.totalMinor),style=MaterialTheme.typography.titleMedium,
                     fontWeight=FontWeight.Bold,color=ChaskiPrice)
             }
+            Text(storePaymentText(order),style=MaterialTheme.typography.bodySmall,color=ChaskiTextMuted)
             TextButton(onClick=onToggle,modifier=Modifier.align(androidx.compose.ui.Alignment.End)) {
                 Text(if(expanded)"Ocultar detalle" else "Ver detalle")
             }
@@ -195,7 +196,6 @@ internal fun StoreOrdersContent(state:StoreOrdersUiState,onBack:()->Unit={},onRe
                 OrderAmountRow("Subtotal",order.amounts.subtotalMinor)
                 OrderAmountRow("Reparto",order.amounts.deliveryFeeMinor)
                 OrderAmountRow("Propina",order.amounts.tipMinor)
-                Text("Efectivo al recibir · PEN",style=MaterialTheme.typography.bodySmall,color=ChaskiTextMuted)
                 if(order.status==OrderStatus.PENDING_CONFIRMATION) {
                     ChaskiButton("Aceptar pedido",onClick=onAccept,enabled=actionsEnabled)
                     ChaskiButton("Rechazar pedido",onClick=onReject,enabled=actionsEnabled,
@@ -274,6 +274,13 @@ internal fun StoreOrdersContent(state:StoreOrdersUiState,onBack:()->Unit={},onRe
             Text(riderVehicleText(assignment),style=MaterialTheme.typography.bodySmall,color=ChaskiTextMuted)
         }
     }
+}
+
+/** E4: never presents an already paid order (legacy prepaid or collected by Rider) as pending collection. */
+internal fun storePaymentText(order:StoreOrderSummary):String=when(order.paymentStatus){
+    com.chaskifood.app.feature.orders.domain.OrderPaymentStatus.PENDING->"Por cobrar contra entrega: ${formatCartPrice(order.amountToCollectMinor!!)}"
+    com.chaskifood.app.feature.orders.domain.OrderPaymentStatus.PAID->"Pago registrado"
+    null->"Efectivo al recibir · PEN"
 }
 
 /** Only the contract fields: vehicle type and plate (a bicycle may have none). Never phone or rider id. */

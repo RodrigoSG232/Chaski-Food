@@ -65,6 +65,9 @@ export function aggregateDashboard(input: {businessId:string;storeIds:string[];d
     if(d.status!=="COMPLETED" || !["SUCCESS","UNSUCCESSFUL"].includes(String(outcome)))
       throw new OrderHttpError("DATA_INCONSISTENT",503,true);
     if(outcome==="SUCCESS") {
+      // HU28: a sale needs a successful delivery AND a confirmed payment. E4: a delivered order whose collection is
+      // under review (PENDING + OPEN review) is valid but not a sale yet; anything else without PAID is still corrupt data.
+      if(d.paymentStatus==="PENDING"&&(d.collectionReview as {status?:unknown}|undefined)?.status==="OPEN")continue;
       if(d.paymentStatus!=="PAID")throw new OrderHttpError("DATA_INCONSISTENT",503,true);
       const next=bucket.salesMinor+(d.subtotalMinor as number);
       if(!Number.isSafeInteger(next))throw new OrderHttpError("DATA_INCONSISTENT",503,true);

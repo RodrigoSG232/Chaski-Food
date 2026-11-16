@@ -30,6 +30,14 @@ class BuyerOrderFormattingTest {
             assertEquals("Efectivo registrado · simulación", buyerPaymentText(status, OrderPaymentStatus.PAID))
     }
 
+    @Test fun e4PaymentTextsDistinguishRiderSimulationReviewAndFailedDelivery() {
+        assertEquals("Pago registrado contra entrega", buyerPaymentText("COMPLETED", OrderPaymentStatus.PAID, BuyerPaymentSource.RIDER))
+        assertEquals("Efectivo registrado · simulación", buyerPaymentText("COMPLETED", OrderPaymentStatus.PAID, BuyerPaymentSource.SIMULATED))
+        assertEquals("Pago en revisión", buyerPaymentText("COMPLETED", OrderPaymentStatus.PENDING, inReview = true, deliveryOutcome = "SUCCESS"))
+        assertEquals("Sin cobro: la entrega no se completó",
+            buyerPaymentText("COMPLETED", OrderPaymentStatus.PENDING, deliveryOutcome = "UNSUCCESSFUL"))
+        assertEquals("Efectivo pendiente hasta la entrega", buyerPaymentText("IN_DELIVERY", OrderPaymentStatus.PENDING))
+    }
     @Test fun rejectionReasonsUseApprovedBuyerTextsAndNeverInventAMissingReason() {
         assertEquals("El local tiene alta demanda en este momento.", buyerRejectionReasonText(StoreOrderRejectionReason.STORE_BUSY))
         assertEquals("Uno o más productos no están disponibles.", buyerRejectionReasonText(StoreOrderRejectionReason.PRODUCT_UNAVAILABLE))

@@ -19,7 +19,9 @@ export function hu23Order(orderId: string, buyerUid: string, now = Date.now()) {
     estimatedPreparationMinutes: 20, estimatedReadyAt: Timestamp.fromMillis(now + 1_200_000) };
 }
 
-export function hu23Event(orderId: string, type: string, sequence: number, version = 1) {
+/** E4: COMPLETED_* must carry `collection` (null for legacy prepaid and failed deliveries). */
+export function hu23Event(orderId: string, type: string, sequence: number, version = 1,
+  collection: null | { method: string; amountMinor: number; currency: string } = null) {
   const status: Record<string, string> = { ASSIGNMENT_ACCEPTED: "ACCEPTED", ASSIGNMENT_RELEASED: "SEARCHING_RIDER",
     ARRIVED_AT_MERCHANT: "AT_MERCHANT", PICKED_UP: "ON_THE_WAY", ARRIVED_AT_CUSTOMER: "AT_CUSTOMER",
     COMPLETED_SUCCESSFULLY: "COMPLETED", COMPLETED_UNSUCCESSFULLY: "COMPLETED" };
@@ -28,7 +30,8 @@ export function hu23Event(orderId: string, type: string, sequence: number, versi
     status: status[type], reason: type === "COMPLETED_UNSUCCESSFULLY" ? "LOCAL_TEST" : null,
     rider: type === "ASSIGNMENT_ACCEPTED" ? { id: "hu23-rider", displayName: "Ana (simulación LOCAL)",
       phone: null, vehicleType: "BICYCLE", vehiclePlate: null } : null,
-    deliveryOutcome: type === "COMPLETED_SUCCESSFULLY" ? "SUCCESS" : type === "COMPLETED_UNSUCCESSFULLY" ? "UNSUCCESSFUL" : null };
+    deliveryOutcome: type === "COMPLETED_SUCCESSFULLY" ? "SUCCESS" : type === "COMPLETED_UNSUCCESSFULLY" ? "UNSUCCESSFUL" : null,
+    ...(type.startsWith("COMPLETED_") ? { collection } : {}) };
 }
 
 export function hu23Sample(sequence: number, now = Date.now(), version = 1) {

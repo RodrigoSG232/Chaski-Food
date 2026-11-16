@@ -65,7 +65,9 @@ class StoreOrderSummary(val orderId:String,val createdAtEpochMillis:Long,items:L
     val status:OrderStatus=OrderStatus.PENDING_CONFIRMATION,val paymentMethod:OrderPaymentMethod=OrderPaymentMethod.CASH_ON_DELIVERY,
     val estimatedPreparationMinutes:Int?=null,val estimatedReadyAtEpochMillis:Long?=null,
     val readyAtEpochMillis:Long?=null,val simulationStage:String?=null,
-    val estimateRevision:Long=0,val preparationExtendedMinutes:Int=0,val pickup:StorePickup?=null) {
+    val estimateRevision:Long=0,val preparationExtendedMinutes:Int=0,val pickup:StorePickup?=null,
+    /** E4: null on older backends; PENDING carries what the rider still has to collect. */
+    val paymentStatus:OrderPaymentStatus?=null,val amountToCollectMinor:Long?=null) {
     val items:List<StoreOrderLine> = frozenOrderList(items)
     init {
         orderId(orderId);require(createdAtEpochMillis in 1..MAX_ORDER_EPOCH_MILLIS)
@@ -79,10 +81,15 @@ class StoreOrderSummary(val orderId:String,val createdAtEpochMillis:Long,items:L
         else require(readyAtEpochMillis==null&&pickup==null)
         require(simulationStage==null || (status==OrderStatus.IN_DELIVERY && simulationStage in setOf("ON_THE_WAY","AT_CUSTOMER")))
         require(estimateRevision>=0 && preparationExtendedMinutes>=0)
+        when(paymentStatus){
+            OrderPaymentStatus.PENDING->require(amountToCollectMinor==amounts.totalMinor)
+            OrderPaymentStatus.PAID->require(amountToCollectMinor==0L)
+            null->require(amountToCollectMinor==null)
+        }
     }
     fun withExtension(estimatedReadyAtEpochMillis:Long,estimateRevision:Long,preparationExtendedMinutes:Int)=StoreOrderSummary(orderId,
         createdAtEpochMillis,items,amounts,status,paymentMethod,estimatedPreparationMinutes,estimatedReadyAtEpochMillis,
-        readyAtEpochMillis,simulationStage,estimateRevision,preparationExtendedMinutes,pickup)
+        readyAtEpochMillis,simulationStage,estimateRevision,preparationExtendedMinutes,pickup,paymentStatus,amountToCollectMinor)
     /** Rider manages the order once assigned, or once picked up without a Food simulation stage (UI hint only, not security). */
     val riderManaged get()=pickup?.assignment!=null || (status==OrderStatus.IN_DELIVERY && simulationStage==null)
 }
