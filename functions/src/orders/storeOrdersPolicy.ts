@@ -1,4 +1,5 @@
 import { Timestamp } from "firebase-admin/firestore";
+import { MAX_PICKUP_FAILURES, readPickupSecurity, verificationIsCurrent } from "./pickupSecurityPolicy";
 import { MAX_ORDER_EPOCH_MILLIS, orderId, orderMinor, orderText } from "./orderModels";
 import { OrderHttpError } from "./orderRequest";
 import { validId, digest } from "../access/commercialAccessPolicy";
@@ -61,6 +62,31 @@ export function projectPendingOrder(id:string,data:Record<string,any>) {
       currency:core.currency,paymentMethod:core.paymentMethod};
   }catch{throw new OrderHttpError("DATA_INCONSISTENT",503,true);}
 }
+/** HU20 counters: absent on orders that were never extended (or predate HU20) and read as 0; malformed values fail closed. */
+export function optionalCounter(value:unknown):number {
+  if(value===undefined||value===null)return 0;
+  if(!Number.isSafeInteger(value)||(value as number)<0)throw new Error();
+  return value as number;
+}
+/**
+ * E2 (additive, for E3): what the store needs to verify the rider — current assignment, rider name and plate, and the
+ * pickup security state. Never the rider id or phone, and never the pickup code (E5.2).
+ */
+function storePickupView(data:Record<string,any>){
+  const security=readPickupSecurity(data.pickupSecurity),assignment=data.riderIntegration?.assignment,rider=data.riderIntegration?.rider;
+  return {assignment:assignment?{assignmentId:assignment.id,assignmentVersion:assignment.version,
+      riderDisplayName:rider?.displayName??null,vehicleType:rider?.vehicleType??null,vehiclePlate:rider?.vehiclePlate??null}:null,
+    verified:verificationIsCurrent(security,assignment),locked:!!security.lockedAt,
+    attemptsRemaining:security.lockedAt?0:MAX_PICKUP_FAILURES-security.failures};
+}
+
+function storePayment(data:Record<string,any>,totalMinor:number){
+  // Older orders may predate paymentStatus: nothing is projected (the app keeps its neutral text). Unknown values are corrupt.
+  if(data.paymentStatus===undefined)return {};
+  if(data.paymentStatus!=="PENDING"&&data.paymentStatus!=="PAID")throw new Error();
+  return {paymentStatus:data.paymentStatus as "PENDING"|"PAID",amountToCollectMinor:data.paymentStatus==="PENDING"?totalMinor:0};
+}
+
 export function projectStoreOrder(id:string,data:Record<string,any>,status:StoreOrderStatus) {
   if(status==="PENDING_CONFIRMATION")return projectPendingOrder(id,data);
   try {
@@ -70,14 +96,19 @@ export function projectStoreOrder(id:string,data:Record<string,any>,status:Store
     const core=validatedOrderCore(id,data);
     const ready=status==="READY_FOR_PICKUP";
     if(ready&&(!(data.readyAt instanceof Timestamp)||typeof data.pickupCode!=="string"||!/^\d{4}$/.test(data.pickupCode)))throw new Error();
+    const estimateRevision=status!=="IN_DELIVERY" ? optionalCounter(data.estimateRevision) : 0;
+    const preparationExtendedMinutes=status!=="IN_DELIVERY" ? optionalCounter(data.preparationExtendedMinutes) : 0;
     const simulationStage=status==="IN_DELIVERY" ? data.fulfillmentSimulation?.stage ?? null : null;
     if(simulationStage!==null && !["ON_THE_WAY","AT_CUSTOMER"].includes(simulationStage))throw new Error();
     return {orderId:id,createdAtEpochMillis:core.createdAtEpochMillis,status,items:core.items,
       subtotalMinor:core.subtotalMinor,deliveryFeeMinor:core.deliveryFeeMinor,tipMinor:core.tipMinor,totalMinor:core.totalMinor,currency:core.currency,
       paymentMethod:core.paymentMethod,
+      // E4 (additive): what the rider must still collect; a PAID order (legacy prepaid or collected) owes nothing.
+      ...storePayment(data,core.totalMinor),
       ...(status!=="IN_DELIVERY"?{estimatedPreparationMinutes:data.estimatedPreparationMinutes,
-        estimatedReadyAtEpochMillis:data.estimatedReadyAt.toMillis()}:{}),
+        estimatedReadyAtEpochMillis:data.estimatedReadyAt.toMillis(),estimateRevision,preparationExtendedMinutes}:{}),
       ...(status==="IN_DELIVERY"?{simulationStage}:{}),
-      ...(ready?{pickupCode:data.pickupCode,readyAtEpochMillis:data.readyAt.toMillis()}:{})};
+      // E5.2: the pickup code is never sent to the store; the rider dictates it (verification endpoint).
+      ...(ready?{readyAtEpochMillis:data.readyAt.toMillis(),pickup:storePickupView(data)}:{})};
   }catch{throw new OrderHttpError("DATA_INCONSISTENT",503,true);}
 }

@@ -33,6 +33,7 @@ async function order(businessId:string,storeId:string,id:string,success:boolean)
   await db.doc(`food_orders/${id}`).set({schemaVersion:1,orderId:id,businessId,storeId,createdAt:created,
     updatedAt:completed,completedAt:completed,acceptedAt:created,status:"COMPLETED",currency:"PEN",
     subtotalMinor:success?2400:9100,riderIntegration:{deliveryOutcome:success?"SUCCESS":"UNSUCCESSFUL"},
+    ...(success?{paymentStatus:"PAID"}:{}),
     buyerSnapshot:{phone:"PRIVATE"}});
 }
 before(async()=>{admin=await actor(true);await prepare(admin);});
@@ -67,4 +68,37 @@ test("owner sees own business; manager only assigned store; admin claim grants n
   assert.equal((await http(manager.token,route)).status,403);
   await db.doc(`business_requests/${owner.uid}`).update({status:"SUSPENDED"});
   assert.equal((await http(owner.token,route)).status,200);
+});
+
+test("E4: a delivered order under collection review is not a sale and does not break the dashboard; corrupt data still does",async()=>{
+  const owner=await actor();const store=`${owner.uid}-review`;
+  await db.doc(`business_requests/${owner.uid}`).set({ownerUid:owner.uid,status:"APPROVED",businessName:"Ficticio"});
+  await db.doc(`stores/${store}`).set({businessId:owner.uid,name:"Local revisión"});
+  await prepare(owner);
+  await order(owner.uid,store,`${prefix}-paid`,true);
+  const review=`${prefix}-review`;await order(owner.uid,store,review,true);
+  await db.doc(`food_orders/${review}`).update({paymentStatus:"PENDING",collectionReview:{status:"OPEN",expectedMinor:2400,declaredMinor:2000}});
+  const route=`/commercial/dashboard?businessId=${owner.uid}&days=7`;
+  const ok=await http(owner.token,route);
+  assert.equal(ok.status,200);assert.equal(ok.body.orders,2);assert.equal(ok.body.salesMinor,2400);
+  await db.doc(`food_orders/${review}`).update({collectionReview:{status:"CLOSED"}});
+  assert.equal((await http(owner.token,route)).status,503);
+});
+
+test("E5.4a: reconciled orders count once by subtotal; NOT_FULLY_COLLECTED and excess never add sales",async()=>{
+  const owner=await actor();const store=`${owner.uid}-reconciled`;
+  await db.doc(`business_requests/${owner.uid}`).set({ownerUid:owner.uid,status:"APPROVED",businessName:"Ficticio"});
+  await db.doc(`stores/${store}`).set({businessId:owner.uid,name:"Local conciliación"});
+  await prepare(owner);
+  const resolved=(resolution:Record<string,unknown>)=>({status:"RESOLVED",expectedMinor:2700,declaredMinor:1000,resolution});
+  const full=`${prefix}-full`,short=`${prefix}-short`,excess=`${prefix}-excess`;
+  for(const id of [full,short,excess])await order(owner.uid,store,id,true);
+  await db.doc(`food_orders/${full}`).update({paymentCollection:{source:"RECONCILED"},collectionReview:resolved({outcome:"FULLY_COLLECTED",excessMinor:0})});
+  await db.doc(`food_orders/${short}`).update({paymentStatus:"PENDING",collectionReview:resolved({outcome:"NOT_FULLY_COLLECTED",shortfallMinor:1700})});
+  await db.doc(`food_orders/${excess}`).update({paymentCollection:{source:"RECONCILED"},
+    collectionReview:resolved({outcome:"FULLY_COLLECTED",excessMinor:300,excessStatus:"PENDING_REFUND"})});
+  const route=`/commercial/dashboard?businessId=${owner.uid}&days=7`,ok=await http(owner.token,route);
+  assert.equal(ok.status,200);assert.equal(ok.body.salesMinor,2*2400);
+  await db.doc(`food_orders/${short}`).update({"collectionReview.resolution.outcome":"FULLY_COLLECTED"}); // PENDING but "fully": corrupt
+  assert.equal((await http(owner.token,route)).status,503);
 });

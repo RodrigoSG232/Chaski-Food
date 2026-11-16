@@ -5,9 +5,16 @@ import { StoreOrdersReader } from "./orders/storeOrdersReader";
 import { OrderDecisionService } from "./orders/orderDecisionService";
 import { parseOrderDecision } from "./orders/orderDecisionPolicy";
 import { PreparationEstimateService } from "./orders/preparationEstimateService";
-import { parsePreparationEstimate } from "./orders/preparationEstimatePolicy";
+import { parsePreparationExtension } from "./orders/preparationEstimatePolicy";
 import { OrderReadyService } from "./orders/orderReadyService";
+import { PickupVerificationService } from "./orders/pickupVerificationService";
+import { PickupIncidentService } from "./orders/pickupIncidentService";
+import { CollectionReconciliationService } from "./orders/collectionReconciliationService";
+import { parseReconciliationCommand } from "./orders/collectionReconciliationPolicy";
+import { requireFoodAdmin } from "./orders/adminAccess";
+import { parsePickupUnlockRequest, parsePickupVerificationRequest } from "./orders/pickupSecurityPolicy";
 import { FoodDeliverySimulationService } from "./orders/foodDeliverySimulationService";
+import { RiderActivation } from "./integration/riderActivation";
 import { BuyerOrdersReader } from "./orders/buyerOrdersReader";
 import { OrderCancellationService } from "./orders/orderCancellationService";
 import { SimulatedPaymentService } from "./orders/simulatedPaymentService";
@@ -34,6 +41,8 @@ export interface FoodApiDependencies {
   runtime(): RuntimeEnvironment;
   app(runtime: RuntimeEnvironment): App;
   routeFixture?: string;
+  /** E5: Rider scope (CHASKI_RIDER_ACTIVATION). Absent = DISABLED; an invalid value makes simulations fail closed. */
+  riderActivation?: () => RiderActivation;
   routeReader(runtime: RuntimeEnvironment): { reader: RouteReader };
 }
 /** Same authoritative services in LOCAL and CLOUD; tests inject only platform boundaries. */
@@ -86,9 +95,64 @@ export function createFoodApiHandler(dependencies: FoodApiDependencies): FoodHtt
         }
         return;
       }
-      const estimatePath = /^\/api\/v1\/stores\/([^/]+)\/orders\/([^/]+)\/preparation-estimate\/?$/.exec(request.path);
+      const extensionPath = /^\/api\/v1\/stores\/([^/]+)\/orders\/([^/]+)\/preparation-extensions\/?$/.exec(request.path);
       const readyPath = /^\/api\/v1\/stores\/([^/]+)\/orders\/([^/]+)\/ready-for-pickup\/?$/.exec(request.path);
       const storeSimulationPath = /^\/api\/v1\/stores\/([^/]+)\/orders\/([^/]+)\/simulate-(pickup|arrival)\/?$/.exec(request.path);
+      const pickupVerificationPath = /^\/api\/v1\/stores\/([^/]+)\/orders\/([^/]+)\/pickup-verifications\/?$/.exec(request.path);
+      const pickupIncidentsPath = /^\/api\/v1\/admin\/pickup-incidents\/?$/.test(request.path);
+      const pickupUnlockPath = /^\/api\/v1\/admin\/pickup-incidents\/([^/]+)\/unlock\/?$/.exec(request.path);
+      if (pickupVerificationPath || pickupIncidentsPath || pickupUnlockPath) {
+        const expected = pickupIncidentsPath ? "GET" : "POST";
+        if (request.method !== expected) { response.status(405).set("Allow", expected).json({ error: "METHOD_NOT_ALLOWED" }); return; }
+        try {
+          if (Object.keys(request.query).length) throw new OrderHttpError("INVALID_REQUEST", 400);
+          const app = dependencies.app(runtime), auth = getAuth(app), db = getFirestore(app);
+          const actor = await verifyCommercialIdentity(auth, request.get("authorization"));
+          if (pickupVerificationPath) {
+            const result = await new PickupVerificationService(db, auth).verify(actor, decodeURIComponent(pickupVerificationPath[1]),
+              decodeURIComponent(pickupVerificationPath[2]), parsePickupVerificationRequest(request.body));
+            response.status(result.httpStatus).json(result.httpStatus === 200 ? result.body :
+              { error: result.body.outcome, attemptsRemaining: result.body.attemptsRemaining });
+          } else if (pickupUnlockPath) {
+            response.status(200).json(await new PickupIncidentService(db).unlock(actor, decodeURIComponent(pickupUnlockPath[1]),
+              parsePickupUnlockRequest(request.body)));
+          } else response.status(200).json(await new PickupIncidentService(db).list(actor));
+        } catch (error) {
+          if (error instanceof AuthenticationRequired) response.status(401).json({ error: "AUTHENTICATION_REQUIRED" });
+          else if (error instanceof OrderHttpError) response.status(error.status).json({ error: error.code });
+          else if (error instanceof CommercialAccessError) response.status(error.status === 403 ? 403 : 503)
+            .json({ error: error.status === 403 ? "ACCESS_DENIED" : "AUTHORIZATION_UNAVAILABLE" });
+          else if (error instanceof URIError) response.status(404).json({ error: "ORDER_NOT_FOUND" });
+          else response.status(503).json({ error: "PICKUP_SECURITY_UNAVAILABLE" });
+        }
+        return;
+      }
+      // E5.4a: admin-only collection reconciliation (narrow exception, same claim checks as pickup incidents).
+      const reviewsPath = /^\/api\/v1\/admin\/collection-reviews\/?$/.test(request.path);
+      const resolvePath = /^\/api\/v1\/admin\/collection-reviews\/([^/]+)\/resolve\/?$/.exec(request.path);
+      if (reviewsPath || resolvePath) {
+        const expected = reviewsPath ? "GET" : "POST";
+        if (request.method !== expected) { response.status(405).set("Allow", expected).json({ error: "METHOD_NOT_ALLOWED" }); return; }
+        try {
+          if (Object.keys(request.query).length) throw new OrderHttpError("INVALID_REQUEST", 400);
+          const app = dependencies.app(runtime), auth = getAuth(app), db = getFirestore(app);
+          const actor = await verifyCommercialIdentity(auth, request.get("authorization"));
+          const service = new CollectionReconciliationService(db);
+          if (resolvePath) {
+            // Authorization before parsing: a non-admin learns nothing about the expected body.
+            requireFoodAdmin(actor);
+            response.status(200).json(await service.apply(actor, decodeURIComponent(resolvePath[1]), parseReconciliationCommand(request.body)));
+          } else response.status(200).json(await service.list(actor));
+        } catch (error) {
+          if (error instanceof AuthenticationRequired) response.status(401).json({ error: "AUTHENTICATION_REQUIRED" });
+          else if (error instanceof OrderHttpError) response.status(error.status).json({ error: error.code });
+          else if (error instanceof CommercialAccessError) response.status(error.status === 403 ? 403 : 503)
+            .json({ error: error.status === 403 ? "ACCESS_DENIED" : "AUTHORIZATION_UNAVAILABLE" });
+          else if (error instanceof URIError) response.status(404).json({ error: "ORDER_NOT_FOUND" });
+          else response.status(503).json({ error: "COLLECTION_RECONCILIATION_UNAVAILABLE" });
+        }
+        return;
+      }
       if (storeSimulationPath) {
         if (request.method !== "POST") { response.status(405).set("Allow", "POST").json({error:"METHOD_NOT_ALLOWED"}); return; }
         try {
@@ -96,7 +160,7 @@ export function createFoodApiHandler(dependencies: FoodApiDependencies): FoodHtt
             throw new OrderHttpError("INVALID_REQUEST",400);
           const app=dependencies.app(runtime),auth=getAuth(app);
           const actor=await verifyCommercialIdentity(auth,request.get("authorization"));
-          response.status(200).json(await new FoodDeliverySimulationService(getFirestore(app),auth).storeAction(actor,
+          response.status(200).json(await new FoodDeliverySimulationService(getFirestore(app),auth,Date.now,dependencies.riderActivation?.()??{mode:"DISABLED"}).storeAction(actor,
             decodeURIComponent(storeSimulationPath[1]),decodeURIComponent(storeSimulationPath[2]),
             storeSimulationPath[3] as "pickup"|"arrival"));
         } catch(error) {
@@ -128,22 +192,22 @@ export function createFoodApiHandler(dependencies: FoodApiDependencies): FoodHtt
         }
         return;
       }
-      if (estimatePath) {
-        if (request.method !== "PUT") { response.status(405).set("Allow", "PUT").json({ error: "METHOD_NOT_ALLOWED" }); return; }
+      if (extensionPath) {
+        if (request.method !== "POST") { response.status(405).set("Allow", "POST").json({ error: "METHOD_NOT_ALLOWED" }); return; }
         try {
           if (Object.keys(request.query).length) throw new OrderHttpError("INVALID_REQUEST", 400);
           const app = dependencies.app(runtime), auth = getAuth(app);
           const actor = await verifyCommercialIdentity(auth, request.get("authorization"));
-          const input = parsePreparationEstimate(request.body);
-          response.status(200).json(await new PreparationEstimateService(getFirestore(app), auth).update(actor,
-            decodeURIComponent(estimatePath[1]), decodeURIComponent(estimatePath[2]), input.estimatedPreparationMinutes));
+          const input = parsePreparationExtension(request.body);
+          response.status(200).json(await new PreparationEstimateService(getFirestore(app), auth).extend(actor,
+            decodeURIComponent(extensionPath[1]), decodeURIComponent(extensionPath[2]), input));
         } catch (error) {
           if (error instanceof AuthenticationRequired) response.status(401).json({ error: "AUTHENTICATION_REQUIRED" });
           else if (error instanceof OrderHttpError) response.status(error.status).json({ error: error.code });
           else if (error instanceof CommercialAccessError) response.status(error.status === 403 ? 403 : 503)
             .json({ error: error.status === 403 ? "ACCESS_DENIED" : "AUTHORIZATION_UNAVAILABLE" });
           else if (error instanceof URIError) response.status(404).json({ error: "ORDER_NOT_FOUND" });
-          else response.status(503).json({ error: "ESTIMATE_UPDATE_UNAVAILABLE" });
+          else response.status(503).json({ error: "PREPARATION_EXTENSION_UNAVAILABLE" });
         }
         return;
       }
@@ -200,7 +264,7 @@ export function createFoodApiHandler(dependencies: FoodApiDependencies): FoodHtt
           if (Object.keys(request.query).length || request.body && Object.keys(request.body).length)
             throw new OrderHttpError("INVALID_REQUEST",400);
           const app=dependencies.app(runtime),auth=getAuth(app),uid=await verifyBuyerToken(auth,request.get("authorization"));
-          response.status(200).json(await new FoodDeliverySimulationService(getFirestore(app),auth)
+          response.status(200).json(await new FoodDeliverySimulationService(getFirestore(app),auth,Date.now,dependencies.riderActivation?.()??{mode:"DISABLED"})
             .buyerConfirm(uid,decodeURIComponent(confirmReceivedPath[1])));
         } catch(error) {
           if(error instanceof AuthenticationRequired)response.status(401).json({error:"AUTHENTICATION_REQUIRED"});

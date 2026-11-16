@@ -7,11 +7,14 @@ import { createBuyerNoticeEvent } from "../notifications/buyerNoticeEvent";
 import { buyerOrderId } from "./buyerOrdersPolicy";
 import { OrderHttpError } from "./orderRequest";
 import { validatedOrderCore } from "./storeOrdersPolicy";
+import { orderRiderManaged, RiderActivation, storeInRiderScope } from "../integration/riderActivation";
 
 /** Temporary Food-only delivery actions. No Rider assignment or event is fabricated. */
 export class FoodDeliverySimulationService {
   private readonly access: CommercialAccessService;
-  constructor(private readonly db: Firestore, auth: Auth, private readonly now: () => number = Date.now) {
+  /** E5.1: [activation] also blocks starting a simulation on stores where Rider may discover the order. */
+  constructor(private readonly db: Firestore, auth: Auth, private readonly now: () => number = Date.now,
+    private readonly activation: RiderActivation = { mode: "DISABLED" }) {
     this.access = new CommercialAccessService(db, auth);
   }
 
@@ -31,6 +34,9 @@ export class FoodDeliverySimulationService {
       if (action === "pickup") {
         if (order.status === "IN_DELIVERY" && ["ON_THE_WAY","AT_CUSTOMER"].includes(simulation?.stage))
           return {contractVersion: 1, outcome: "UNCHANGED", status: "IN_DELIVERY"};
+        // Read inside the transaction: a concurrent Rider event makes it retry and then refuse.
+        if (orderRiderManaged(order) || storeInRiderScope(this.activation, order.storeId))
+          throw new OrderHttpError("RIDER_MANAGED", 409);
         if (order.status !== "READY_FOR_PICKUP" || order.paymentMethod !== "CASH_ON_DELIVERY" ||
             !(order.readyAt instanceof Timestamp) || !/^[0-9]{4}$/.test(order.pickupCode ?? "") ||
             order.riderIntegration?.assignment || simulation)
@@ -44,6 +50,7 @@ export class FoodDeliverySimulationService {
       }
       if (order.status === "IN_DELIVERY" && simulation?.stage === "AT_CUSTOMER")
         return {contractVersion: 1, outcome: "UNCHANGED", status: "IN_DELIVERY"};
+      if (orderRiderManaged(order)) throw new OrderHttpError("RIDER_MANAGED", 409);
       if (order.status !== "IN_DELIVERY" || simulation?.stage !== "ON_THE_WAY" ||
           !(simulation.pickedUpAt instanceof Timestamp) || order.riderIntegration?.assignment)
         throw new OrderHttpError("ORDER_STATE_CHANGED", 409);
@@ -66,6 +73,7 @@ export class FoodDeliverySimulationService {
       if (order.status === "COMPLETED" && order.fulfillmentSimulation?.outcome === "SUCCESS" &&
           order.paymentStatus === "PAID")
         return {contractVersion: 1, outcome: "UNCHANGED", status: "COMPLETED", paymentStatus: "PAID"};
+      if (orderRiderManaged(order)) throw new OrderHttpError("RIDER_MANAGED", 409);
       if (order.status !== "IN_DELIVERY" || order.fulfillmentSimulation?.stage !== "AT_CUSTOMER" ||
           !(order.fulfillmentSimulation.arrivedAt instanceof Timestamp) ||
           order.riderIntegration?.assignment || order.paymentMethod !== "CASH_ON_DELIVERY" ||

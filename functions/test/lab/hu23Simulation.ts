@@ -2,12 +2,12 @@ import { createHash } from "node:crypto";
 import { Timestamp } from "firebase-admin/firestore";
 import { closeLab, openLab } from "./labEnvironment";
 import { LAB } from "./labData";
-import { hu23Event, hu23Order, hu23Sample } from "./hu23Fixture";
+import { hu23Event, hu23Order, hu23Sample, hu23Verification } from "./hu23Fixture";
 
 /** Never accepts a project, host, UID or order ID from the CLI. LOCAL only. */
 async function main() {
   const action = process.argv[2] ?? "help";
-  const actions = ["prepare", "assign", "merchant", "release", "pickup", "move", "stale", "no-eta", "arrive", "finish", "fail"];
+  const actions = ["prepare", "assign", "merchant", "verify", "release", "pickup", "move", "stale", "no-eta", "arrive", "finish", "fail"];
   if (!actions.includes(action)) {
     console.log("HU23 LOCAL: " + actions.join(" | ")); return;
   }
@@ -33,6 +33,13 @@ async function main() {
     const order = (await ref.get()).data();
     if (!order || order.labScenario !== true || order.buyerUid !== LAB.buyer.uid) throw new Error("RUN_PREPARE_FIRST");
     const integration = order.riderIntegration, version = integration?.assignment?.version ?? 1;
+    if (action === "verify") {
+      // E2 shortcut for the LOCAL lab only: records the store verification of the current assignment
+      // (the real flow is POST /api/v1/stores/{storeId}/orders/{orderId}/pickup-verifications).
+      if (!integration?.assignment) throw new Error("RUN_ASSIGN_FIRST");
+      await ref.update(hu23Verification(version));
+      console.log("HU23_LOCAL verify OK assignmentVersion=" + version); return;
+    }
     let path: string, method: string, body: unknown;
     if (["move", "stale", "no-eta"].includes(action)) {
       path = "/orders/" + id + "/tracking"; method = "PUT";

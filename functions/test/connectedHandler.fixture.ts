@@ -3,8 +3,9 @@ import assert from "node:assert/strict";
 import { App } from "firebase-admin/app";
 import { createFoodApiHandler } from "../src/foodApiHandler";
 import { resolveRuntimeEnvironment } from "../src/runtimeEnvironment";
+import { RiderActivation } from "../src/integration/riderActivation";
 
-export function connectedHttp(app: App) {
+export function connectedHttp(app: App, riderActivation?: RiderActivation) {
   assert.equal(app.options.projectId, "demo-chaski-hu15");
   assert.equal(process.env.FIRESTORE_EMULATOR_HOST, "127.0.0.1:8089");
   assert.equal(process.env.FIREBASE_AUTH_EMULATOR_HOST, "127.0.0.1:9099");
@@ -12,6 +13,7 @@ export function connectedHttp(app: App) {
     runtime: () => resolveRuntimeEnvironment({ K_SERVICE: "foodapi", FUNCTION_TARGET: "foodApi", GCLOUD_PROJECT: "chaski-food-9adba" }, "foodApi"),
     app: () => app,
     routeReader: () => { throw new Error("REAL_ROUTE_FORBIDDEN_IN_CONNECTED_TEST"); },
+    ...(riderActivation ? { riderActivation: () => riderActivation } : {}),
   });
   return async (token: string | undefined, route: string, body?: unknown, method?: string) => {
     const url = new URL(`http://localhost/api/v1${route}`);

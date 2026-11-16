@@ -4,7 +4,7 @@ import { createHash } from "node:crypto";
 import { initializeApp, deleteApp } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
 import { getFirestore, Timestamp } from "firebase-admin/firestore";
-import { hu23Event, hu23Order, hu23Sample } from "./lab/hu23Fixture";
+import { hu23Event, hu23Order, hu23Sample, hu23Verification } from "./lab/hu23Fixture";
 import { seedBase } from "./lab/labData";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
@@ -51,6 +51,7 @@ async function seed() {
 }
 async function move(id: string) {
   assert.equal((await event(hu23Event(id, "ASSIGNMENT_ACCEPTED", 1))).status, 200);
+  await db.doc("food_orders/" + id).update(hu23Verification());
   assert.equal((await event(hu23Event(id, "PICKED_UP", 2))).status, 200);
 }
 
@@ -73,6 +74,8 @@ test("acceptance, pickup, GPS/ETA, temporary loss and valid delivery through rea
   assert.equal((await read(id)).body.stage, "ACCEPTED");
   assert.equal((await gps(id, hu23Sample(1))).status, 409);
   assert.equal((await event(hu23Event(id, "COMPLETED_SUCCESSFULLY", 2))).status, 409);
+  assert.equal((await event(hu23Event(id, "PICKED_UP", 2))).status, 409); // E2: no store verification yet
+  await db.doc("food_orders/" + id).update(hu23Verification());
   assert.equal((await event(hu23Event(id, "PICKED_UP", 2))).status, 200);
   assert.equal((await db.doc("order_events/" + buyerNoticeEventId(id,"ORDER_PICKED_UP",2)).get()).get("buyerUid"),uid);
   assert.equal((await read(id)).body.position, null);
@@ -118,6 +121,7 @@ test("assignment replacement requires release and failed delivery is never label
   assert.equal((await event(hu23Event(id, "ASSIGNMENT_RELEASED", 2))).status, 200);
   assert.equal((await read(id)).body.assigned, false);
   assert.equal((await event(hu23Event(id, "ASSIGNMENT_ACCEPTED", 3, 2))).status, 200);
+  await db.doc("food_orders/" + id).update(hu23Verification(2));
   assert.equal((await event(hu23Event(id, "PICKED_UP", 4, 2))).status, 200);
   assert.equal((await gps(id, hu23Sample(1))).status, 409);
   assert.equal((await gps(id, hu23Sample(1, Date.now(), 2))).status, 200);
@@ -136,7 +140,7 @@ test("LOCAL simulator drives the same API and refuses a non-demo environment", a
   await seedBase(db, auth);
   const run = promisify(execFile), script = join(__dirname, "lab/hu23Simulation.js");
   const env = { ...process.env, GCLOUD_PROJECT: project };
-  for (const action of ["prepare", "assign", "pickup", "move", "no-eta", "finish"]) {
+  for (const action of ["prepare", "assign", "verify", "pickup", "move", "no-eta", "finish"]) {
     const result = await run(process.execPath, [script, action], { env, timeout: 30_000 });
     assert.match(result.stdout, /HU23_LOCAL/);
   }

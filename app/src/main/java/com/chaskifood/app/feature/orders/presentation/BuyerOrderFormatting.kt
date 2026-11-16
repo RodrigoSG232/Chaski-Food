@@ -12,6 +12,9 @@ import androidx.compose.material.icons.filled.SoupKitchen
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import com.chaskifood.app.feature.orders.domain.BuyerOrderSummary
+import com.chaskifood.app.feature.orders.domain.BuyerPaymentSource
+import com.chaskifood.app.feature.orders.domain.OrderPaymentStatus
+import com.chaskifood.app.feature.orders.domain.StoreOrderRejectionReason
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -27,6 +30,39 @@ private val DoneBg = Color(0xFFE8F5E9)
 private val DoneText = Color(0xFF1B5E20)
 private val StoppedBg = Color(0xFFFDECEC)
 private val StoppedText = Color(0xFFB71C1C)
+
+/**
+ * Texto del pago en efectivo (HU18). Un pago registrado se muestra tal cual; un pedido cancelado o rechazado
+ * sin pago registrado no tiene cobro pendiente. No se infiere ningún reembolso.
+ */
+internal fun buyerPaymentText(status: String, paymentStatus: OrderPaymentStatus, source: BuyerPaymentSource? = null,
+    inReview: Boolean = false, deliveryOutcome: String? = null, incomplete: Boolean = false): String = when {
+    paymentStatus == OrderPaymentStatus.PAID && source == BuyerPaymentSource.RIDER -> "Pago registrado contra entrega"
+    paymentStatus == OrderPaymentStatus.PAID -> "Efectivo registrado · simulación"
+    status == "COMPLETED" && inReview -> "Pago en revisión"
+    status == "COMPLETED" && incomplete -> "Pago incompleto · saldo pendiente"
+    status == "COMPLETED" && deliveryOutcome == "UNSUCCESSFUL" -> "Sin cobro: la entrega no se completó"
+    status == "CANCELLED" || status == "REJECTED" -> "Sin cobro: el pedido no se entregó"
+    else -> "Efectivo pendiente hasta la entrega"
+}
+
+/** E5.4b (Conc 14): estado del excedente del propio comprador; uno devuelto nunca aparece como pendiente. */
+internal fun buyerExcessText(excess: com.chaskifood.app.feature.orders.domain.BuyerPaymentExcess?): String? = excess?.let {
+    val amount = "S/ ${it.amountMinor / 100}.${(it.amountMinor % 100).toString().padStart(2, '0')}"
+    when (it.status) {
+        com.chaskifood.app.feature.orders.domain.BuyerExcessStatus.PENDING_REFUND -> "Excedente de $amount pendiente de devolución"
+        com.chaskifood.app.feature.orders.domain.BuyerExcessStatus.REFUNDED -> "Excedente de $amount devuelto"
+    }
+}
+
+/** HU19: motivo del rechazo en palabras del comprador; un motivo ausente o desconocido nunca se inventa. */
+internal fun buyerRejectionReasonText(reason: StoreOrderRejectionReason?): String = when (reason) {
+    StoreOrderRejectionReason.STORE_BUSY -> "El local tiene alta demanda en este momento."
+    StoreOrderRejectionReason.PRODUCT_UNAVAILABLE -> "Uno o más productos no están disponibles."
+    StoreOrderRejectionReason.CLOSING_SOON -> "El local está próximo a cerrar."
+    StoreOrderRejectionReason.OTHER -> "Otro motivo"
+    null -> "Motivo del rechazo no disponible."
+}
 
 /** Un estado desconocido nunca rompe la pantalla: se muestra como «Estado en actualización» (N1). */
 internal fun buyerOrderStatusUi(status: String, known: Boolean, outcome: String? = null): BuyerOrderStatusUi = when (if (known) status else "") {
@@ -56,6 +92,38 @@ internal fun formatOrderDateTime(epochMillis: Long, zone: ZoneId = ZoneId.system
 
 internal fun formatOrderShortDateTime(epochMillis: Long, zone: ZoneId = ZoneId.systemDefault()): String =
     shortDateTime.format(Instant.ofEpochMilli(epochMillis).atZone(zone)).replace(".", "")
+
+private val clockTime = DateTimeFormatter.ofPattern("HH:mm", peru)
+
+/** Hora de reloj de una estimación («12:50»); siempre aproximada, nunca una promesa. */
+internal fun formatOrderClockTime(epochMillis: Long, zone: ZoneId = ZoneId.systemDefault()): String =
+    clockTime.format(Instant.ofEpochMilli(epochMillis).atZone(zone))
+
+/** HU20: misma regla que foodApi, solo como vista previa: max(hora vigente, ahora) + minutos. */
+internal fun extendedPreviewEpochMillis(currentReadyAtEpochMillis: Long, nowEpochMillis: Long, additionalMinutes: Int): Long =
+    maxOf(currentReadyAtEpochMillis, nowEpochMillis) + additionalMinutes * 60_000L
+
+/** HU20: tarjeta del responsable; una hora vencida no significa que el pedido esté listo. */
+internal fun storePreparationEstimateText(estimatedReadyAtEpochMillis: Long, nowEpochMillis: Long,
+    zone: ZoneId = ZoneId.systemDefault()): String {
+    val time = formatOrderClockTime(estimatedReadyAtEpochMillis, zone)
+    return if (nowEpochMillis > estimatedReadyAtEpochMillis) "Hora estimada vencida ($time) · sigue en preparación"
+    else "Listo aprox. a las $time"
+}
+
+/** HU20: textos del comprador mientras el pedido sigue en preparación. */
+internal data class BuyerPreparationEstimateText(val headline: String, val detail: String?)
+
+internal fun buyerPreparationEstimateText(estimatedReadyAtEpochMillis: Long, preparationExtendedMinutes: Int, nowEpochMillis: Long,
+    zone: ZoneId = ZoneId.systemDefault()): BuyerPreparationEstimateText {
+    val time = formatOrderClockTime(estimatedReadyAtEpochMillis, zone)
+    // Una hora vencida no significa que el pedido esté listo: solo el estado READY_FOR_PICKUP lo indica.
+    val headline = if (nowEpochMillis > estimatedReadyAtEpochMillis)
+        "La hora estimada ($time) ya pasó. El local sigue preparando tu pedido."
+    else "Hora estimada de preparación: $time (aprox.)"
+    val detail = if (preparationExtendedMinutes > 0) "El local amplió el tiempo en $preparationExtendedMinutes min." else null
+    return BuyerPreparationEstimateText(headline, detail)
+}
 
 /** «2× Lomo saltado · 1× Chicha morada · +1 más» con los datos históricos del resumen. */
 internal fun itemPreviewText(summary: BuyerOrderSummary): String {

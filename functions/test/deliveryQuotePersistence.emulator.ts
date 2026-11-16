@@ -28,7 +28,7 @@ after(async () => { await db.terminate(); await deleteApp(app); });
 test("first calculation persists one immutable quote and subsequent requests never call route provider", async () => {
   const first = await create(); assert.equal(calls, 1); assert.equal(first.reused, false);
   const doc = await db.doc(`delivery_quotes/${first.quote.quoteId}`).get();
-  assert.equal(doc.data()?.customerUid, uid); assert.equal(doc.data()?.deliveryFeeMinor, 300);
+  assert.equal(doc.data()?.customerUid, uid); assert.equal(doc.data()?.deliveryFeeMinor, 113); // 1 250 m × 90 céntimos/km = 112,5 → 113
   assert.ok(doc.data()?.expiresAt instanceof Timestamp);
   const again = await create(unavailable); assert.equal(again.reused, true); assert.equal(calls, 1);
   assert.deepEqual(again.quote, first.quote); assert.equal(again.routeMs, 0);
@@ -81,7 +81,7 @@ test("invalid tariff version cannot be reused even if provider is down", async (
 test("tampered fee and coordinates are not accepted or silently repaired", async () => {
   const first = await create(); const ref = db.doc(`delivery_quotes/${first.quote.quoteId}`);
   await ref.update({ deliveryFeeMinor: 0 }); await assert.rejects(create(), code("QUOTE_INVALID"));
-  await ref.update({ deliveryFeeMinor: 300, storeLocation: { latitude: 0, longitude: 0 } });
+  await ref.update({ deliveryFeeMinor: first.quote.deliveryFeeMinor, storeLocation: { latitude: 0, longitude: 0 } });
   await assert.rejects(create(reader, first.quote.quoteId), code("QUOTE_INVALID"));
   assert.equal(calls, 1);
 });

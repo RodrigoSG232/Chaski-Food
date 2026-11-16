@@ -56,7 +56,7 @@ async function fixture(options:{pending?:boolean;unverified?:boolean;noManager?:
   const accepted=parseAcceptedPurchase({ownerUid:buyer.uid,businessId:owner.uid,storeId:store,businessName:"Negocio ficticio",storeName:"Local ficticio",storePhone:"987654321",
     buyerName:"Cliente ficticio",buyerPhone:null,pickup:{addressText:"Plaza pública Lima",location:quote.storeLocation,reference:null,instructions:null},
     delivery:{addressId:address,label:"Casa",destination:{addressText:"Parque público Lima",location:quote.deliveryLocation,reference:"Puerta pública",instructions:"Llamar al llegar"}},
-    items:[{productId:product,categoryId:category,name:"Plato ficticio",quantity:2,unitPriceMinor:1000}],amounts:{subtotalMinor:2000,deliveryFeeMinor:300,totalMinor:2300},
+    items:[{productId:product,categoryId:category,name:"Plato ficticio",quantity:3,unitPriceMinor:1000}],amounts:{subtotalMinor:3000,deliveryFeeMinor:quote.deliveryFeeMinor,totalMinor:3000+quote.deliveryFeeMinor},
     currency:"PEN",paymentMethod:"CASH_ON_DELIVERY",deliveryQuote:{quoteId:quote.quoteId,distanceMeters:1250,tariffVersion:quote.tariffVersion,
       quotedAtEpochMillis:Date.parse(quote.quotedAt),expiresAtEpochMillis:Date.parse(quote.expiresAt)}});
   const intent:OrderIntent={intentId:randomUUID(),accepted};
@@ -88,8 +88,8 @@ test("HTTP normal creates exactly four coherent records with effective store pri
   const f=await fixture(),r=await http(f.buyer.token,"/orders",bodyFor(f.intent));
   assert.equal(r.status,201,JSON.stringify(r.body));assert.equal(r.body.outcome,"SUCCEEDED");
   const id=r.body.receipt.orderId,order=(await db.doc(`food_orders/${id}`).get()).data()!;
-  assert.equal(order.buyerUid,f.buyer.uid);assert.equal(order.items[0].unitPriceMinor,1000);assert.equal(order.items[0].lineTotalMinor,2000);
-  assert.equal(order.totalMinor,2300);assert.equal(order.paymentStatus,"PENDING");assert.equal(order.paymentMethod,"CASH_ON_DELIVERY");
+  assert.equal(order.buyerUid,f.buyer.uid);assert.equal(order.items[0].unitPriceMinor,1000);assert.equal(order.items[0].lineTotalMinor,3000);
+  assert.equal(order.deliveryFeeMinor,f.quote.deliveryFeeMinor);assert.equal(order.totalMinor,3000+f.quote.deliveryFeeMinor);assert.equal(order.paymentStatus,"PENDING");assert.equal(order.paymentMethod,"CASH_ON_DELIVERY");
   assert.equal(order.status,"PENDING_CONFIRMATION");assert.equal(order.buyerSnapshot.phone,null);assert.equal(order.storeSnapshot.phone,"987654321");
   assert.equal(order.pickupSnapshot.addressText,"Plaza pública Lima");assert.equal(order.dropoffSnapshot.instructions,"Llamar al llegar");
   assert.equal((await db.doc(`order_attempts/${f.buyer.uid}/intents/${f.intent.intentId}`).get()).get("orderId"),id);
@@ -129,8 +129,8 @@ test("parallel identical HTTP submissions return one order and one event",async(
   assert.equal((await db.doc(`food_orders/${id}/status_history/initial`).get()).exists,true);
 });
 test("parallel incompatible payloads cannot replace an intention or create another order",async()=>{
-  const f=await fixture(),changed=bodyFor(f.intent);changed.expected.items[0].quantity=3;
-  changed.expected.amounts={subtotalMinor:3000,deliveryFeeMinor:300,totalMinor:3300};
+  const f=await fixture(),changed=bodyFor(f.intent);changed.expected.items[0].quantity=4;
+  changed.expected.amounts={subtotalMinor:4000,deliveryFeeMinor:f.quote.deliveryFeeMinor,totalMinor:4000+f.quote.deliveryFeeMinor};
   const results=await Promise.all([http(f.buyer.token,"/orders",bodyFor(f.intent)),http(f.buyer.token,"/orders",changed)]);
   assert.equal(results.filter(r=>r.status===201).length,1);assert.equal(results.filter(r=>r.body.error?.code==="INTENT_PAYLOAD_MISMATCH").length,1);
 });
@@ -156,8 +156,16 @@ for(const [name,mutate] of [
 test("altered client totals rejected structurally; coherent fraudulent price still cannot override authoritative price",async()=>{
   const f=await fixture(),b=bodyFor(f.intent);b.expected.amounts.totalMinor=1;
   assert.equal((await http(f.buyer.token,"/orders",b)).status,400);
-  const forged=bodyFor(f.intent);forged.expected.items[0].unitPriceMinor=1;forged.expected.amounts={subtotalMinor:2,deliveryFeeMinor:300,totalMinor:302};
+  const forged=bodyFor(f.intent);forged.expected.items[0].unitPriceMinor=1;forged.expected.amounts={subtotalMinor:3,deliveryFeeMinor:f.quote.deliveryFeeMinor,totalMinor:3+f.quote.deliveryFeeMinor};
   const r=await http(f.buyer.token,"/orders",forged);assert.equal(r.body.outcome,"REJECTED_FINAL");await absentRecords(f);
+});
+test("a subtotal below the S/25 minimum is a final MINIMUM_NOT_MET without partial records",async()=>{
+  const f=await fixture(),below=structuredClone(f.intent.accepted) as any;
+  below.items[0].quantity=2;below.amounts={subtotalMinor:2000,deliveryFeeMinor:f.quote.deliveryFeeMinor,totalMinor:2000+f.quote.deliveryFeeMinor};
+  const intent:OrderIntent={intentId:randomUUID(),accepted:parseAcceptedPurchase(below)};
+  const r=await http(f.buyer.token,"/orders",bodyFor(intent));
+  assert.equal(r.status,409,JSON.stringify(r.body));assert.equal(r.body.outcome,"REJECTED_FINAL");assert.equal(r.body.reason,"MINIMUM_NOT_MET");
+  await absentRecords({...f,intent});
 });
 test("quote exact expiry, wrong owner and changed geometry cannot authorize an order",async()=>{
   for(const change of ["expiry","owner","destination","version"]) {

@@ -23,7 +23,8 @@ class StoreOrdersViewModelTest {
         val auth=MutableStateFlow(initial);var current=true;var calls=0;val cursors=mutableListOf<String?>()
         var next:StoreOrdersResult=StoreOrdersResult.Loaded(StoreOrdersPage("store","Local",emptyList(),null))
         var decision:StoreOrderDecisionResult=StoreOrderDecisionResult.Unavailable
-        var estimate:PreparationEstimateResult=PreparationEstimateResult.Unavailable
+        var extension:PreparationExtensionResult=PreparationExtensionResult.Unavailable
+        val extensions=mutableListOf<Pair<String,PreparationExtension>>()
         var ready:MarkOrderReadyResult=MarkOrderReadyResult.Unavailable
         val decisions=mutableListOf<Pair<String,StoreOrderDecision>>()
         var block:suspend()->StoreOrdersResult={next}
@@ -33,8 +34,16 @@ class StoreOrdersViewModelTest {
         override suspend fun respond(context:StoreOrdersContext,orderId:String,decision:StoreOrderDecision):StoreOrderDecisionResult {
             decisions+=orderId to decision;return this.decision
         }
-        override suspend fun updateEstimate(context:StoreOrdersContext,orderId:String,minutes:Int)=estimate
+        var extensionGate:CompletableDeferred<Unit>?=null
+        override suspend fun extendPreparation(context:StoreOrdersContext,orderId:String,extension:PreparationExtension):PreparationExtensionResult {
+            extensions+=orderId to extension;extensionGate?.await();return this.extension
+        }
         override suspend fun markReady(context:StoreOrdersContext,orderId:String)=ready
+        val pickups=mutableListOf<PickupVerificationAttempt>()
+        var pickup:PickupVerificationResult=PickupVerificationResult.Unavailable
+        override suspend fun verifyPickup(context:StoreOrdersContext,orderId:String,attempt:PickupVerificationAttempt):PickupVerificationResult {
+            pickups+=attempt;return pickup
+        }
     }
     private fun vm(repo:Repo,store:String="store")=StoreOrdersViewModel(repo,SavedStateHandle(mapOf("businessId" to "business","storeId" to store)))
     @Test fun firstLoadRefreshAndPagingUseExistingContextWithoutDuplicateCalls()=runTest {
@@ -60,20 +69,86 @@ class StoreOrdersViewModelTest {
         assertEquals(listOf("order"),vm.state.value.orders.map{it.orderId});assertTrue(vm.state.value.message!!.contains("suspendido"))
         assertNull(vm.state.value.respondingOrderId)
     }
-    @Test fun estimateUpdateChangesVisiblePreparingOrder()=runTest {
-        val repo=Repo(StoreOrdersAuthorization.Allowed(context()));repo.next=loaded();val vm=vm(repo);runCurrent()
-        repo.estimate=PreparationEstimateResult.Updated(1800002400000);vm.updateEstimate("order",40);runCurrent()
-        assertEquals(40,vm.state.value.orders.single().estimatedPreparationMinutes)
-        assertEquals(1800002400000,vm.state.value.orders.single().estimatedReadyAtEpochMillis)
+    private fun preparing(revision:Long=1,extended:Int=0)=StoreOrdersResult.Loaded(StoreOrdersPage("store","Local",listOf(
+        StoreOrderSummary("order",1800000000000,listOf(StoreOrderLine("p","Plato",1,1000,1000)),OrderAmounts(1000,300,1300),
+            OrderStatus.PREPARING,estimatedPreparationMinutes=40,estimatedReadyAtEpochMillis=1800002400000,
+            estimateRevision=revision,preparationExtendedMinutes=extended)),null))
+    @Test fun extensionSendsCurrentRevisionAndUpdatesTheVisibleOrderWithoutTouchingTheInitialEstimate()=runTest {
+        val repo=Repo(StoreOrdersAuthorization.Allowed(context()));repo.next=preparing(revision=1);val vm=vm(repo);runCurrent()
+        repo.extension=PreparationExtensionResult.Extended(1800003000000,2,10);vm.extendPreparation("order",10);runCurrent()
+        val sent=repo.extensions.single().second
+        assertEquals(10,sent.additionalMinutes);assertEquals(1L,sent.expectedEstimateRevision)
+        val order=vm.state.value.orders.single()
+        assertEquals(40,order.estimatedPreparationMinutes);assertEquals(1800003000000,order.estimatedReadyAtEpochMillis)
+        assertEquals(2L,order.estimateRevision);assertEquals(10,order.preparationExtendedMinutes)
+        assertNull(vm.state.value.pendingExtension);assertTrue(vm.state.value.message!!.contains("ampliado"))
     }
-    @Test fun readyTransitionRemovesPreparingOrderAndShowsPickupCode()=runTest {
+    @Test fun twoIntentionalExtensionsUseDifferentOperationsAndInvalidMinutesAreNeverSent()=runTest {
+        val repo=Repo(StoreOrdersAuthorization.Allowed(context()));repo.next=preparing(revision=0);val vm=vm(repo);runCurrent()
+        repo.extension=PreparationExtensionResult.Extended(1800003000000,1,10);vm.extendPreparation("order",10);runCurrent()
+        repo.extension=PreparationExtensionResult.Extended(1800003600000,2,20);vm.extendPreparation("order",10);runCurrent()
+        assertEquals(2,repo.extensions.size)
+        assertNotEquals(repo.extensions[0].second.operationId,repo.extensions[1].second.operationId)
+        assertEquals(listOf(0L,1L),repo.extensions.map{it.second.expectedEstimateRevision})
+        vm.extendPreparation("order",4);vm.extendPreparation("order",61);vm.extendPreparation("missing",10);runCurrent()
+        assertEquals(2,repo.extensions.size)
+    }
+    @Test fun uncertainExtensionKeepsItsOperationAcrossReloadsAndRetriesWithTheSameId()=runTest {
+        val repo=Repo(StoreOrdersAuthorization.Allowed(context()));repo.next=preparing();val vm=vm(repo);runCurrent()
+        repo.extension=PreparationExtensionResult.Unavailable;vm.extendPreparation("order",15);runCurrent()
+        val pending=vm.state.value.pendingExtension!!;assertEquals(15,pending.extension.additionalMinutes)
+        assertTrue(vm.state.value.message!!.contains("no se confirmó",ignoreCase=true))
+        vm.refresh();runCurrent();assertEquals(pending,vm.state.value.pendingExtension)
+        repo.extension=PreparationExtensionResult.Extended(1800003300000,2,15);vm.retryPendingExtension();runCurrent()
+        assertEquals(listOf(pending.extension,pending.extension),repo.extensions.map{it.second})
+        assertNull(vm.state.value.pendingExtension)
+    }
+    @Test fun discardingAnUncertainExtensionReloadsInsteadOfSendingANewOne()=runTest {
+        val repo=Repo(StoreOrdersAuthorization.Allowed(context()));repo.next=preparing();val vm=vm(repo);runCurrent()
+        vm.extendPreparation("order",15);runCurrent();val calls=repo.calls
+        repo.next=preparing(revision=2,extended=15);vm.discardPendingExtension();runCurrent()
+        assertNull(vm.state.value.pendingExtension);assertEquals(calls+1,repo.calls);assertEquals(1,repo.extensions.size)
+        assertEquals(2L,vm.state.value.orders.single().estimateRevision)
+    }
+    @Test fun revisionConflictOrStateChangeReloadsAndExplainsWithoutRetrying()=runTest {
+        for((result,text) in listOf(PreparationExtensionResult.RevisionChanged to "Otro cambio",
+            PreparationExtensionResult.OperationConflict to "No pudimos confirmar",
+            PreparationExtensionResult.StateChanged to "ya no está en preparación")) {
+            val repo=Repo(StoreOrdersAuthorization.Allowed(context()));repo.next=preparing();val vm=vm(repo);runCurrent()
+            repo.extension=result;repo.next=preparing(revision=3);vm.extendPreparation("order",10);runCurrent()
+            assertNull(vm.state.value.pendingExtension);assertEquals(1,repo.extensions.size)
+            assertTrue(vm.state.value.message!!.contains(text));assertEquals(3L,vm.state.value.orders.single().estimateRevision)
+        }
+    }
+    @Test fun inFlightExtensionShowsProgressBlocksDuplicatesAndNeverClaimsSuccessEarly()=runTest {
+        val repo=Repo(StoreOrdersAuthorization.Allowed(context()));repo.next=preparing();val vm=vm(repo);runCurrent()
+        val gate=CompletableDeferred<Unit>();repo.extensionGate=gate
+        repo.extension=PreparationExtensionResult.Extended(1800003000000,2,10)
+        vm.extendPreparation("order",10);runCurrent()
+        assertEquals("order",vm.state.value.extendingOrderId);assertEquals("order",vm.state.value.respondingOrderId)
+        assertNull(vm.state.value.message);assertEquals(1800002400000,vm.state.value.orders.single().estimatedReadyAtEpochMillis)
+        vm.extendPreparation("order",10);vm.retryPendingExtension();vm.discardPendingExtension();runCurrent()
+        assertEquals(1,repo.extensions.size)
+        gate.complete(Unit);runCurrent()
+        assertNull(vm.state.value.extendingOrderId);assertNull(vm.state.value.respondingOrderId)
+        assertTrue(vm.state.value.message!!.contains("ampliado"))
+        repo.extensionGate=null;repo.extension=PreparationExtensionResult.Unavailable;vm.extendPreparation("order",5);runCurrent()
+        assertNull(vm.state.value.extendingOrderId);assertNotNull(vm.state.value.pendingExtension)
+    }
+    @Test fun lostAuthorizationDuringExtensionClosesTheInbox()=runTest {
+        val repo=Repo(StoreOrdersAuthorization.Allowed(context()));repo.next=preparing();val vm=vm(repo);runCurrent()
+        repo.extension=PreparationExtensionResult.AccessDenied;vm.extendPreparation("order",10);runCurrent()
+        assertTrue(vm.state.value.accessDenied);assertTrue(vm.state.value.orders.isEmpty())
+    }
+    @Test fun readyTransitionRemovesPreparingOrderWithoutShowingAnyPickupCode()=runTest {
         val repo=Repo(StoreOrdersAuthorization.Allowed(context()))
         repo.next=StoreOrdersResult.Loaded(StoreOrdersPage("store","Local",listOf(StoreOrderSummary("order",1800000000000,
             listOf(StoreOrderLine("p","Plato",1,1000,1000)),OrderAmounts(1000,300,1300),OrderStatus.PREPARING,
             estimatedPreparationMinutes=30,estimatedReadyAtEpochMillis=1800001800000)),null))
-        val vm=vm(repo);runCurrent();repo.ready=MarkOrderReadyResult.Ready("0042",1800001700000)
+        val vm=vm(repo);runCurrent();repo.ready=MarkOrderReadyResult.Ready(1800001700000)
         vm.markReady("order");runCurrent()
-        assertTrue(vm.state.value.orders.isEmpty());assertTrue(vm.state.value.message!!.contains("0042"))
+        assertTrue(vm.state.value.orders.isEmpty());assertTrue(vm.state.value.message!!.contains("Chaski Rider"))
+        assertFalse(vm.state.value.message!!.contains(Regex("[0-9]{4}")))
     }
     @Test fun uidGenerationAndRevocationClearDataAndIgnoreUncooperativeLateResponses()=runTest {
         for(next in listOf(StoreOrdersAuthorization.Denied,StoreOrdersAuthorization.SignedOut,
@@ -134,5 +209,91 @@ class StoreOrdersViewModelTest {
         gate.complete(Unit);runCurrent();assertEquals("fresh",vm.state.value.orders.single().orderId)
         repo.current=false;vm.refreshFromNotification();runCurrent()
         assertTrue(vm.state.value.orders.isEmpty());assertEquals(2,repo.calls)
+    }
+
+    // ---- E3.2: pickup verification (HU21-B)
+    private val orderId="a".repeat(64)
+    private fun ready(pickup:StorePickup?)=StoreOrdersResult.Loaded(StoreOrdersPage("store","Local",listOf(StoreOrderSummary(orderId,
+        1800000000000,listOf(StoreOrderLine("p","Plato",1,1000,1000)),OrderAmounts(1000,300,1300),OrderStatus.READY_FOR_PICKUP,
+        estimatedPreparationMinutes=30,estimatedReadyAtEpochMillis=1800001800000,readyAtEpochMillis=1800001700000,pickup=pickup)),null))
+    private val rider=StoreRiderAssignment("asg-1",1,"Carlos M.","MOTORCYCLE","ABC-123")
+    private fun readyVm(repo:Repo,pickup:StorePickup?=StorePickup(rider,false,false,5)):StoreOrdersViewModel {
+        repo.next=ready(pickup);val vm=vm(repo);vm.selectStatus(OrderStatus.READY_FOR_PICKUP);return vm
+    }
+    @Test fun dialogOpensOnlyForAVerifiableAssignment()=runTest {
+        for(p in listOf(null,StorePickup(null,false,false,5),StorePickup(rider,true,false,5),StorePickup(rider,false,true,0))){
+            val repo=Repo(StoreOrdersAuthorization.Allowed(context()));val vm=readyVm(repo,p);runCurrent()
+            vm.openPickupVerification(orderId);assertNull(vm.state.value.pickupDialog)
+        }
+        val repo=Repo(StoreOrdersAuthorization.Allowed(context()));val vm=readyVm(repo);runCurrent()
+        vm.openPickupVerification(orderId);assertEquals(PickupVerificationPhase.EDITING,vm.state.value.pickupDialog!!.phase)
+        assertEquals(5,vm.state.value.pickupDialog!!.attemptsRemaining)
+    }
+    @Test fun wrongCodeClearsTheFieldAndEachNewCodeIsANewOperation()=runTest {
+        val repo=Repo(StoreOrdersAuthorization.Allowed(context()));val vm=readyVm(repo);runCurrent();vm.openPickupVerification(orderId)
+        repo.pickup=PickupVerificationResult.InvalidCode(4);vm.submitPickupCode("1111");runCurrent()
+        val dialog=vm.state.value.pickupDialog!!
+        assertEquals(PickupVerificationPhase.INVALID_CODE,dialog.phase);assertEquals(4,dialog.attemptsRemaining);assertEquals(1,dialog.inputGeneration)
+        repo.pickup=PickupVerificationResult.InvalidCode(3);vm.submitPickupCode("2222");runCurrent()
+        assertEquals(2,repo.pickups.map{it.operationId}.distinct().size)
+        assertEquals("asg-1",repo.pickups.last().assignmentId);assertEquals(1,repo.pickups.last().assignmentVersion)
+        vm.submitPickupCode("12");runCurrent();assertEquals(2,repo.pickups.size)
+    }
+    @Test fun connectionErrorRetriesTheSameOperationAndBlocksNewCodes()=runTest {
+        val repo=Repo(StoreOrdersAuthorization.Allowed(context()));val vm=readyVm(repo);runCurrent();vm.openPickupVerification(orderId)
+        repo.pickup=PickupVerificationResult.Unavailable;vm.submitPickupCode("4321");runCurrent()
+        assertEquals(PickupVerificationPhase.CONNECTION_ERROR,vm.state.value.pickupDialog!!.phase)
+        vm.submitPickupCode("9999");runCurrent();assertEquals(1,repo.pickups.size)
+        repo.pickup=PickupVerificationResult.Verified;vm.retryPickupVerification();runCurrent()
+        assertEquals(2,repo.pickups.size);assertEquals(repo.pickups[0].operationId,repo.pickups[1].operationId)
+        assertEquals(repo.pickups[0].code,repo.pickups[1].code)
+        assertNull(vm.state.value.pickupDialog);assertEquals("Código verificado correctamente",vm.state.value.snackbar)
+        vm.snackbarShown();assertNull(vm.state.value.snackbar)
+    }
+    @Test fun dismissingAfterAnUnknownOutcomeReloadsTheServerStateAndSendingCannotBeClosed()=runTest {
+        val repo=Repo(StoreOrdersAuthorization.Allowed(context()));val vm=readyVm(repo);runCurrent();vm.openPickupVerification(orderId)
+        val gate=CompletableDeferred<Unit>();var answer:PickupVerificationResult=PickupVerificationResult.Unavailable
+        val delayed=object:StoreOrdersRepository by repo {
+            override suspend fun verifyPickup(context:StoreOrdersContext,orderId:String,attempt:PickupVerificationAttempt):PickupVerificationResult{gate.await();return answer}}
+        val vm2=StoreOrdersViewModel(delayed,SavedStateHandle(mapOf("businessId" to "business","storeId" to "store")))
+        vm2.selectStatus(OrderStatus.READY_FOR_PICKUP);runCurrent();vm2.openPickupVerification(orderId)
+        vm2.submitPickupCode("4321");runCurrent()
+        assertEquals(PickupVerificationPhase.SENDING,vm2.state.value.pickupDialog!!.phase)
+        vm2.dismissPickupVerification();assertNotNull(vm2.state.value.pickupDialog)
+        gate.complete(Unit);runCurrent()
+        assertEquals(PickupVerificationPhase.CONNECTION_ERROR,vm2.state.value.pickupDialog!!.phase)
+        val before=repo.calls;vm2.dismissPickupVerification();runCurrent()
+        assertNull(vm2.state.value.pickupDialog);assertTrue(repo.calls>before)
+    }
+    @Test fun lockAssignmentChangeAndStateChangeCloseTheDialogAndReload()=runTest {
+        for((result,text) in listOf(PickupVerificationResult.Locked to "bloqueado",PickupVerificationResult.AssignmentChanged to "repartidor cambió",
+            PickupVerificationResult.StateChanged to "pedido cambió")){
+            val repo=Repo(StoreOrdersAuthorization.Allowed(context()));val vm=readyVm(repo);runCurrent();vm.openPickupVerification(orderId)
+            repo.pickup=result;val before=repo.calls;vm.submitPickupCode("1111");runCurrent()
+            assertNull(vm.state.value.pickupDialog);assertTrue(repo.calls>before);assertTrue(vm.state.value.message!!.contains(text))
+        }
+        val repo=Repo(StoreOrdersAuthorization.Allowed(context()));val vm=readyVm(repo);runCurrent();vm.openPickupVerification(orderId)
+        repo.pickup=PickupVerificationResult.AccessDenied;vm.submitPickupCode("1111");runCurrent()
+        assertTrue(vm.state.value.accessDenied);assertNull(vm.state.value.pickupDialog)
+    }
+    @Test fun aChangedOrReleasedRiderIsFlaggedUntilVerified()=runTest {
+        val repo=Repo(StoreOrdersAuthorization.Allowed(context()));val vm=readyVm(repo);runCurrent()
+        assertTrue(vm.state.value.riderChangedOrderIds.isEmpty())
+        repo.next=ready(StorePickup(StoreRiderAssignment("asg-2",2,"Luis R.","MOTORCYCLE","XYZ-456"),false,false,3));vm.refresh();runCurrent()
+        assertEquals(setOf(orderId),vm.state.value.riderChangedOrderIds)
+        repo.next=ready(StorePickup(StoreRiderAssignment("asg-2",2,"Luis R.","MOTORCYCLE","XYZ-456"),true,false,3));vm.refresh();runCurrent()
+        assertTrue(vm.state.value.riderChangedOrderIds.isEmpty())
+        repo.next=ready(StorePickup(null,false,false,3));vm.refresh();runCurrent()
+        assertEquals(setOf(orderId),vm.state.value.riderChangedOrderIds)
+        vm.dismissRiderChange(orderId);assertTrue(vm.state.value.riderChangedOrderIds.isEmpty())
+    }
+    @Test fun e4StorePaymentTextNeverShowsAPaidOrderAsPendingCollection() {
+        fun order(status:OrderPaymentStatus?,amount:Long?)=StoreOrderSummary("o",1800000000000,listOf(StoreOrderLine("p","Plato",1,1000,1000)),
+            OrderAmounts(1000,300,1300),paymentStatus=status,amountToCollectMinor=amount)
+        assertTrue(storePaymentText(order(OrderPaymentStatus.PENDING,1300)).startsWith("Por cobrar contra entrega:"))
+        assertEquals("Pago registrado",storePaymentText(order(OrderPaymentStatus.PAID,0)))
+        assertEquals("Efectivo al recibir · PEN",storePaymentText(order(null,null)))
+        assertThrows(IllegalArgumentException::class.java){order(OrderPaymentStatus.PAID,1300)}
+        assertThrows(IllegalArgumentException::class.java){order(OrderPaymentStatus.PENDING,500)}
     }
 }

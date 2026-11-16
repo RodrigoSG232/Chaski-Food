@@ -19,7 +19,9 @@ export function hu23Order(orderId: string, buyerUid: string, now = Date.now()) {
     estimatedPreparationMinutes: 20, estimatedReadyAt: Timestamp.fromMillis(now + 1_200_000) };
 }
 
-export function hu23Event(orderId: string, type: string, sequence: number, version = 1) {
+/** E4: COMPLETED_* must carry `collection` (null for legacy prepaid and failed deliveries). */
+export function hu23Event(orderId: string, type: string, sequence: number, version = 1,
+  collection: null | { method: string; amountMinor: number; currency: string } = null) {
   const status: Record<string, string> = { ASSIGNMENT_ACCEPTED: "ACCEPTED", ASSIGNMENT_RELEASED: "SEARCHING_RIDER",
     ARRIVED_AT_MERCHANT: "AT_MERCHANT", PICKED_UP: "ON_THE_WAY", ARRIVED_AT_CUSTOMER: "AT_CUSTOMER",
     COMPLETED_SUCCESSFULLY: "COMPLETED", COMPLETED_UNSUCCESSFULLY: "COMPLETED" };
@@ -28,11 +30,18 @@ export function hu23Event(orderId: string, type: string, sequence: number, versi
     status: status[type], reason: type === "COMPLETED_UNSUCCESSFULLY" ? "LOCAL_TEST" : null,
     rider: type === "ASSIGNMENT_ACCEPTED" ? { id: "hu23-rider", displayName: "Ana (simulación LOCAL)",
       phone: null, vehicleType: "BICYCLE", vehiclePlate: null } : null,
-    deliveryOutcome: type === "COMPLETED_SUCCESSFULLY" ? "SUCCESS" : type === "COMPLETED_UNSUCCESSFULLY" ? "UNSUCCESSFUL" : null };
+    deliveryOutcome: type === "COMPLETED_SUCCESSFULLY" ? "SUCCESS" : type === "COMPLETED_UNSUCCESSFULLY" ? "UNSUCCESSFUL" : null,
+    ...(type.startsWith("COMPLETED_") ? { collection } : {}) };
 }
 
 export function hu23Sample(sequence: number, now = Date.now(), version = 1) {
   return { assignmentId: "hu23-assignment-" + version, assignmentVersion: version, sequence, riderId: "hu23-rider",
     latitude: -12.105, longitude: -77.105, accuracyMeters: 12, recordedAt: new Date(now).toISOString(),
     estimatedArrivalAt: new Date(now + 600_000).toISOString() };
+}
+
+/** E2: store-side pickup verification for LOCAL fixtures (the real flow goes through POST .../pickup-verifications). */
+export function hu23Verification(version = 1) {
+  return { pickupSecurity: { cycle: 1, failures: 0, lockedAt: null, verification: { assignmentId: "hu23-assignment-" + version,
+    assignmentVersion: version, verifiedAt: Timestamp.now(), verifiedByUid: "hu23-lab-manager" } } };
 }

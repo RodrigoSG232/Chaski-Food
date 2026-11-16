@@ -20,13 +20,157 @@ Decisiones **aprobadas** por el equipo que siguen aplicando y condicionan las pr
 - **Estado inicial `PENDING_CONFIRMATION`.** HU19 acepta pasando **directo a `PREPARING`**, sin estado `CONFIRMED` (aunque el PDF del curso lo mencione).
 - **Cancelación HU18:** el comprador cancela directamente solo mientras el estado siga en `PENDING_CONFIRMATION`. Desde `PREPARING` no se permite cancelar; la transición compite atómicamente con la futura aceptación de HU19. Repetir una cancelación propia ya completada es idempotente. Un pedido con `deliveryId` requiere coordinación logística de HU22 y no se cancela silenciosamente.
 - **Respuesta HU19:** solo un responsable VERIFIED asignado al local responde pedidos `PENDING_CONFIRMATION`. Aceptar pasa directamente a `PREPARING` e incluye una estimación de 5–180 minutos; rechazar exige un motivo y «Otro» exige explicación. Durante la suspensión se conserva consulta y rechazo, pero se bloquea la aceptación.
-- **Estimación HU20:** solo se modifica mientras el pedido permanezca `PREPARING`, dentro de 5–180 minutos y mediante una transacción de foodApi. Cada cambio crea historial versionado; repetir el mismo valor es idempotente. El cliente recibe el valor vigente al refrescar su detalle. Si ya existe `deliveryId`, se genera un evento durable `PREPARATION_ESTIMATE_UPDATED`; su consumo por Rider pertenece a HU22.
+  - **Quién decide:** el propietario no acepta ni rechaza pedidos (403), aunque sea dueño del negocio; tampoco un responsable de otro local. La decisión es una transacción de foodApi que compite con la cancelación HU18: solo una de las dos gana.
+  - **Repetición:** reenviar la misma decisión del mismo responsable devuelve el resultado original sin escribir de nuevo; cualquier otra decisión sobre un pedido ya respondido o cancelado → `409 ORDER_STATE_CHANGED`.
+  - **Suspensión:** la aceptación se bloquea (`423`) si el negocio no está `APPROVED` o el local no está `ACTIVE`.
+  - **Motivos:** `STORE_BUSY` («Alta demanda», preseleccionado en el diálogo), `PRODUCT_UNAVAILABLE`, `CLOSING_SOON` y `OTHER`, este último con explicación de 3 a 300 caracteres. El diálogo del responsable se conserva sin cambios (14-11-2026).
+  - **Motivo visible para el comprador (14-11-2026):** el detalle del pedido rechazado muestra el motivo y, en `OTHER`, la explicación registrada. Aplica también a pedidos antiguos que ya tengan esos datos, sin migrar ni modificar documentos; si el motivo falta o no se reconoce, se muestra «Motivo del rechazo no disponible.». Nunca se exponen `rejectedByUid` ni otros identificadores internos. **Los responsables deben redactar la explicación de «Otro» pensando que la leerá el comprador.**
+- **Ampliación HU20 (rediseño aprobado 14-11-2026; sustituye al reemplazo de estimación anterior):** HU19 sigue fijando la estimación inicial de 5–180 minutos. HU20 solo **amplía** el plazo mientras el pedido esté `PREPARING`: cada ampliación suma de 5 a 60 minutos, sin tope acumulado por ahora, y la nueva hora es `max(hora estimada vigente, hora del servidor) + minutos` (una hora vencida se recalcula desde ahora).
+  - Dos ampliaciones intencionales iguales son operaciones distintas y se suman; reintentar la misma operación (mismo `operationId`) nunca vuelve a sumar. Una pantalla con una revisión desactualizada no amplía: recarga y pide confirmar de nuevo.
+  - Cada ampliación queda en el historial; los registros del comportamiento anterior se conservan sin migrar.
+  - El comprador ve la hora vigente al abrir, volver o refrescar su pedido; una hora vencida no se presenta como pedido listo. No hay push nuevo ni actualización permanente en tiempo real (el seguimiento avanzado es HU23).
+  - **Suspensión:** se permite ampliar pedidos ya aceptados aunque el negocio o local esté suspendido, coherente con «la suspensión solo bloquea aceptar»; está cubierto por pruebas.
+  - El contrato de Chaski Rider no cambia. El evento antiguo `PREPARATION_ESTIMATE_UPDATED` (solo si existe `deliveryId`) se conserva, pero hoy ningún flujo escribe `deliveryId` ni lo consume; su destino se decidirá en HU21/HU22, donde existe la preferencia preliminar de coordinar el recojo al pasar a `READY_FOR_PICKUP`.
 - **Efectivo contra entrega simulado:** aceptar conserva `PREPARING` y el pago pendiente. El responsable puede marcar `READY_FOR_PICKUP` sin pago previo; foodApi genera allí un código de cuatro dígitos. El endpoint antiguo de pago anticipado rechaza nuevos intentos, aunque los pedidos ya pagados siguen siendo compatibles.
 - **Flujo temporal Food:** el responsable registra «Pedido recogido» (`IN_DELIVERY`) y simula la llegada (`AT_CUSTOMER`) sin crear asignación ni evento de Rider. Solo el comprador dueño del pedido confirma recepción y efectivo en una transacción que registra `PAID`, `COMPLETED` y resultado `SUCCESS`; no se efectúa un cobro real. Las acciones son idempotentes y requieren permisos vigentes.
 - **Dependencia Rider:** `riderApi` conserva por ahora su contrato anterior de pago anticipado, por lo que no ofrece los nuevos pedidos con pago pendiente. Antes de usar Rider real deberá acordarse el contrato de efectivo contra entrega y su confirmación de pago.
 - **Límite entre apps:** Food no crea usuarios repartidores. `riderApi` es una función separada, privada mediante IAM y destinada exclusivamente al backend Rider. Expone el pedido y código; recibe asignación, liberación, fases y tracking. Rider sigue siendo la única autoridad que selecciona al repartidor.
 - **Reasignación HU22:** `ASSIGNMENT_RELEASED` solo libera antes del recojo; no cancela la compra ni modifica el código. Una nueva asignación incrementa su versión. Después de `PICKED_UP` no se reasigna automáticamente y Food pasa a `IN_DELIVERY` únicamente por un evento Rider válido.
 - **Para recibir pedidos** basta al menos un responsable asignado válido; no se exige que esté conectado. Sin responsables se bloquean confirmaciones nuevas (HU16-05, HU16-12).
+
+> **Actualización 15-11-2026:** los puntos «Dependencia Rider», el destino de `PREPARATION_ESTIMATE_UPDATED` en HU20 y el «Flujo temporal Food» quedan condicionados por la sección siguiente. Su texto se conserva como historial.
+
+## Integración con Chaski Rider (HU21-B/HU22, 15-11-2026)
+
+**Origen:** conformidad técnica de Food (Dante, responsable) y de Chaski Rider (Ángel, responsable del proyecto Rider), tras dos rondas de coordinación (14 y 15-11-2026). El contrato técnico está en [API_CHASKI_RIDER](API_CHASKI_RIDER.md). **No modifica por sí solo la planificación académica:** los criterios revisados de HU21/HU22 requieren aprobación formal (ver `PLAN_HU15_HU22_RIDER.md`, local). Nada de esta sección está implementado salvo que se indique.
+
+### Integración logística
+- **Modelo pull desde `READY_FOR_PICKUP`.** Rider descubre los pedidos consultando `riderApi` y administra las ofertas, asignaciones y liberaciones. *Motivo:* reutiliza la API existente y respeta que la asignación es responsabilidad de Rider.
+- **Identificadores:** `orderId` para el pedido comercial y `assignment.id/version` para la asignación. Sin `deliveryRequestId` ni `deliveryId` en el contrato inicial. *Motivo:* el modelo pull no necesita una solicitud previa, y ambos proyectos ya identifican cada recorrido sin ellos.
+- **Proyectos independientes:** Firebase y Firestore de Food y Rider separados; comunicación solo de backend a backend por REST con OIDC; versión `/integration/v1` con activación coordinada para pedidos de prueba.
+- **Descubrimiento:**
+  - el backend Rider consulta cada 15 s (valor inicial ajustable);
+  - paginación por `readyAt` y `orderId` con `nextCursor`;
+  - cada pasada recorre todas las páginas desde el inicio;
+  - deduplicación por `orderId`.
+- **Pedido sin repartidor:** sigue `READY_FOR_PICKUP`. Sin cancelación automática mientras no se acuerde quién cancela, con qué plazo y cómo lo detecta Rider.
+
+### Validación del recojo (HU21-B)
+- **Ciclo del código:**
+  - Food genera `pickupCode` al marcar `READY_FOR_PICKUP`;
+  - Rider lo muestra **solo** al repartidor de la asignación vigente;
+  - el responsable autorizado lo introduce en Food;
+  - Food valida permisos, pedido, código y asignación vigente, y guarda `pickupVerification` ligada a `assignmentId/version`.
+- **Recojo físico:** validar el código **no** equivale a recoger. Rider confirma el recojo físico con `PICKED_UP`, que Food acepta solo con una verificación y una asignación vigentes.
+- **Reasignación normal:** conserva el código e invalida la verificación anterior.
+- **Intentos y bloqueo:** 5 fallos acumulados por pedido y ciclo de verificación. Una reasignación no reinicia el contador ni quita un bloqueo.
+- **Desbloqueo:**
+  - solo un **administrador autorizado de Food**;
+  - genera un código nuevo, invalida el anterior e inicia un ciclo nuevo de 5 intentos.
+  - **Excepción acotada a HU34-28 (aprobada como interpretación de diseño, 15-11-2026):** el administrador sigue **sin acceso general a pedidos**. La excepción permite **solo** la recuperación de un recojo bloqueado:
+    1. identificar la incidencia con datos mínimos;
+    2. comprobar que es recuperable;
+    3. ejecutar el desbloqueo;
+    4. registrar el motivo, el actor y la operación;
+    5. regenerar el PIN.
+
+    **No** habilita aceptar o rechazar pedidos, cambiar estimaciones, administrar locales, gestionar entregas ni consultar la bandeja general.
+  - Es compatible con el resto de HU34: el administrador sigue siendo un claim y no una experiencia (HU34-28), la autorización la decide el servidor (HU34-06/14/21) y el claim tampoco concede el dashboard (HU28).
+  - **Pendiente para E2:** el canal (Android o herramienta administrativa segura). No hay endpoint, permiso ni pantalla aprobados.
+- **Auditoría y exposición:**
+  - intentos y desbloqueos idempotentes y auditables;
+  - nunca se guardan los códigos introducidos;
+  - Rider ve `pickupLock`, pero no la auditoría administrativa;
+  - Food muestra al responsable la identidad del repartidor vigente.
+
+- **Implementación E2 aprobada (15-11-2026, LOCAL):**
+  - rutas y códigos de `API_CHASKI_RIDER` §8;
+  - la verificación también se exige al prepago antiguo;
+  - desbloqueo por un endpoint de foodApi con el claim `admin` (pantalla en E3);
+  - pedidos bloqueados fuera del listado, con `ASSIGNMENT_ACCEPTED` → `409 PICKUP_LOCKED`;
+  - `pickupCode` es `null` en el detalle una vez verificado.
+
+  El PIN sigue visible para el responsable de forma **transitoria** hasta E3/E5.
+
+### Pago contra entrega (HU22)
+- **Medio y saldo:**
+  - `CASH_ON_DELIVERY` con pago inicial `PENDING`;
+  - `amountToCollectMinor` es el saldo exacto, en céntimos de PEN;
+  - Rider declara el medio con el que se cobró: `CASH`, `YAPE` o `PLIN`;
+  - sin pagos parciales.
+- **`collection`:** objeto en `COMPLETED_SUCCESSFULLY` contra entrega; `null` en `COMPLETED_UNSUCCESSFULLY` sin dinero recibido; ausente en los demás eventos.
+- **Cobro correcto:** pago confirmado y pedido completado en la misma transacción.
+- **Cobro discrepante:** pedido `COMPLETED` con `deliveryOutcome=SUCCESS`, pago `PENDING` e incidencia `OPEN`. Nunca se registra como `PAID` un importe incorrecto. *Motivo:* refleja la entrega física sin dar por bueno un cobro erróneo.
+- **Reintentos y consulta:** Rider no vuelve a cobrar tras una respuesta perdida; repetir el evento recupera el resultado original. El detalle permite consultar `collectionStatus` y `collectionReview`.
+- **Pendiente de diseño:**
+  - la conciliación posterior, que debe conservar trazabilidad como ajuste;
+  - una entrega fallida con movimiento de dinero, que es una incidencia y no `collection:null`.
+
+- **E4 implementado en LOCAL (15-11-2026):**
+  - `paymentStatus` sigue siendo `PENDING` o `PAID`, sin estados nuevos;
+  - el cobro exacto se registra con `paymentCollection` (fuente `RIDER`) y la discrepancia con `collectionReview` `OPEN`;
+  - una entrega fallida que declare dinero se **rechaza** (422) y se trata como incidencia con Rider;
+  - el panel HU28 excluye de las ventas un pedido entregado con la revisión abierta, sin fallar;
+  - la declaración de Rider es evidencia logística, no una confirmación bancaria de Yape o Plin.
+- **Conciliación (E5.4a, 15-11-2026, aprobada; [REPO] sin desplegar; pantalla Android pendiente para E5.4b).** **No se permite corregir Firestore a mano.**
+  - **Quién:** solo un administrador de Food, con el claim `admin` y el correo verificado. Es una excepción acotada que comparte el helper `requireFoodAdmin` con las incidencias de recojo y **no** da acceso general a pedidos. Propietarios y responsables no la tienen.
+  - **Evidencia:** texto obligatorio de 5 a 300 caracteres, recortado y sin caracteres de control.
+    - Es una **declaración administrativa**, no una comprobación bancaria automática.
+    - No debe incluir contraseñas, credenciales bancarias, números de tarjeta ni datos personales innecesarios.
+    - No se almacenan archivos ni imágenes.
+  - **Cobro completo** (`FULLY_COLLECTED`, confirmado ≥ total de Food): `PAID`, `paidAt` y `paymentCollection {source:"RECONCILED", amountMinor: total, confirmedMinor}`.
+  - **Cobro incompleto** (`NOT_FULLY_COLLECTED`, confirmado < total): sigue `PENDING`, sin `PAID` parcial.
+    - Se registran `confirmedMinor` y `shortfallMinor`; la revisión queda `RESOLVED`.
+    - El saldo no se recupera en esta entrega, pero el modelo permite añadirlo después.
+  - **Excedente:**
+    - se registran `excessMinor` y `excessStatus: PENDING_REFUND`;
+    - la revisión `RESOLVED` **no** implica que se haya devuelto;
+    - el excedente nunca suma ventas.
+  - **`RECORD_EXCESS_REFUND`:** registra una devolución hecha **fuera de la app**.
+    - No hace transferencias ni llama a Yape o Plin.
+    - Exige evidencia y el excedente completo (sin devoluciones parciales).
+    - Pasa `PENDING_REFUND` a `REFUNDED`.
+  - **Auditoría:**
+    - `food_orders/{id}/collection_reconciliations/{operationId}`: actor, evidencia, estado anterior y posterior, hash y resultado;
+    - `payment_history/reconciliation_{operationId}` con `nature: ADJUSTMENT` o `REFUND_DECLARATION`: **no** es un movimiento de efectivo y no se suma al cobro original.
+  - **Panel HU28:** un pedido `PAID` cuenta una vez por su `subtotalMinor` (regla HU28 vigente). Ni `PENDING` + `OPEN` ni `PENDING` + `RESOLVED`/`NOT_FULLY_COLLECTED` son venta, y no dan error; cualquier otro `PENDING` entregado sigue dando 503.
+  - **E5.4b [REPO, sin desplegar]:** pantallas de Android implementadas según los diseños HU22 / Conc aprobados.
+    - El formulario no preselecciona el resultado ni da por válido el importe.
+    - El comprador ve el importe del excedente de su propio pedido, y uno devuelto nunca aparece como pendiente.
+    - **Necesidad registrada (sin decidir):** el listado tiene un máximo de 50 por tipo, sin paginación; ampliarlo exige cambiar el backend.
+  - **Pendiente:** la coordinación con Rider (§5b del contrato) y las pruebas en dispositivo (E6).
+- **E5.5–E5.6 (15-11-2026), preparación de E6:** ver [PREPARACION_E6](PREPARACION_E6.md), [PRUEBAS_E6](PRUEBAS_E6.md) y [CAMBIOS_CONTRATO_RIDER_E6](CAMBIOS_CONTRATO_RIDER_E6.md).
+  - **[APROBADO]**
+    - procedimiento **manual** para entregas fallidas con dinero: se mantiene el 422 y no hay registro integrado;
+    - orden de despliegue: índice → APK → foodApi/riderApi con la integración desactivada → Rider → piloto de un local;
+    - `newOrderNotifier` no se redespliega.
+  - **[PENDIENTE de decisión]** la suspensión de emergencia:
+    - B1, retirar el invocador de IAM, como procedimiento;
+    - B2, una bandera de código.
+
+    Reducir el piloto (DISABLED) es solo una pausa operativa.
+
+- **E5 (15-11-2026), decisiones del responsable de Food:**
+  - **sin compatibilidad con APKs anteriores a E3:** el backend deja de enviar el PIN al responsable en **todos** los locales; actualizar el APK de todos los participantes es requisito previo a E6;
+  - **se confía en el cobro declarado por Rider**, sin verificación bancaria, pero Food conserva su total y solo marca `PAID` con el importe exacto; una diferencia queda `PENDING` más la revisión `OPEN`, y se conserva la declaración original;
+  - **piloto por locales** con el parámetro `CHASKI_RIDER_ACTIVATION` (desactivado por defecto);
+  - **simulaciones bloqueadas en el backend** para los pedidos de Rider y para los locales del ámbito;
+  - **LOCAL frente a CLOUD:** en LOCAL la simulación del laboratorio sigue disponible para los pedidos que Rider no tocó y fuera del ámbito; las reglas por pedido valen igual en LOCAL y en CLOUD.
+  - **Reducción del piloto ≠ apagado de emergencia:** reducir normalmente el ámbito permite finalizar las entregas legítimas ya iniciadas. Esto **no** equivale a un apagado de emergencia: todavía **no existe** un mecanismo independiente de detención de emergencia (pendiente de decisión).
+
+### Secuencias y resiliencia
+- **Secuencia:** `eventSequence` es por pedido, no por repartidor; continúa tras liberaciones y reasignaciones; un evento rechazado sin aplicarse no consume su secuencia.
+- **Responsabilidades de Rider:**
+  - el backend coordina los eventos con una cola de salida **duradera**;
+  - ante un resultado desconocido conserva `eventId`, contenido y secuencia;
+  - Android usa identificadores estables hacia su backend;
+  - impide asignaciones simultáneas incompatibles.
+- **Responsabilidad de Food:** el tracking y los eventos se aceptan solo para la asignación vigente.
+- **Pruebas obligatorias:** desconexiones, pérdida del ACK, reintentos y duplicados.
+
+### Simulación y pago anticipado
+- **Sustitución de la simulación:** la simulación temporal de reparto se sustituirá por el flujo real con Rider. Una vez activada la integración, el **backend** impedirá las transiciones simuladas de los pedidos gestionados por Rider. Durante el desarrollo se conservan mecanismos de prueba aislados en LOCAL. La retirada del código de simulación se evaluará después de aprobar las pruebas reales, sin afectar otros componentes.
+- **Pago anticipado:** gestionado por Food, queda como **fase futura opcional**, condicionada al tiempo disponible. El `deliveryCode` del comprador es distinto del `pickupCode` del establecimiento.
 
 ## Consultas propias (HU17)
 ### Seguimiento HU23 (08-11-2026)
@@ -41,7 +185,7 @@ Decisiones **aprobadas** por el equipo que siguen aplicando y condicionan las pr
 - **Estados:** una sola tabla en foodApi. Activos: `PENDING_CONFIRMATION`, `PREPARING`, `READY_FOR_PICKUP`, `IN_DELIVERY`; históricos: `COMPLETED`, `CANCELLED`, `REJECTED`. Un estado válido desconocido se muestra como activo («Estado en actualización») y se registra; `status` ausente/nulo o documento corrupto → `503 DATA_INCONSISTENT` (D2, N1).
 - **Refresco:** HTTP al abrir, al volver a la app y al deslizar; sin tiempo real ni caché local (D3).
 - **Paginación:** un flujo cronológico por `buyerUid` (`createdAt desc, __name__ desc`), sin filtrar por estado en Firestore; lotes de 50 hasta 200 documentos por petición; el cursor apunta al **último documento examinado**, va ligado al UID y a la fase (SHA-256 sin clave: vincula, no autentica) y el servidor revalida el ancla. Una página vacía con cursor nunca se presenta como «sin pedidos».
-- **Privacidad:** pedido ajeno o inexistente → mismo 404; el detalle usa los snapshots de HU16 sin coordenadas, datos del comprador, hashes, cotización ni `actorUid`; el historial solo muestra eventos reales de `status_history`.
+- **Privacidad:** pedido ajeno o inexistente → mismo 404; el detalle usa los snapshots de HU16 sin coordenadas, datos del comprador, hashes, cotización ni `actorUid`; el historial solo muestra eventos reales de `status_history`. En pedidos `REJECTED` el detalle añade solo el motivo y la explicación de HU19.
 - **Lista:** ID visible de 8 caracteres (consultas y navegación usan los 64); hasta dos productos con cantidad y «+N más» desde el snapshot; pago descrito de forma neutral («Efectivo contra entrega»).
 - **Checkout:** el carrito muestra «Continuar»; la pantalla siguiente se titula «Confirmar pedido» y, tras el éxito (directo o recuperado), «Pedido enviado» con «Recibimos tu pedido» y «Ver mi pedido» (D4). Tras la compra, Atrás lleva a Pedidos y no vuelve a la revisión. Desde Cuenta → «Recuperar compra pendiente» el título es «Recuperar compra».
 

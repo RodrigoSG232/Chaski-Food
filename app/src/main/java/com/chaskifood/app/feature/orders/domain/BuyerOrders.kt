@@ -45,12 +45,39 @@ data class BuyerOrderStatusEntry(val status: String, val statusKnown: Boolean, v
     init { orderText(status); require(occurredAtEpochMillis in 1..MAX_ORDER_EPOCH_MILLIS) }
 }
 
+/**
+ * HU19: motivo del rechazo registrado por el local. [reason] es null si el pedido es antiguo o el valor no se reconoce;
+ * [explanation] solo existe para OTHER.
+ */
+data class BuyerOrderRejection(val reason: StoreOrderRejectionReason?, val explanation: String?) {
+    init {
+        if (explanation != null) {
+            require(reason == StoreOrderRejectionReason.OTHER && explanation.trim().length in 3..300)
+            orderText(explanation)
+        }
+    }
+}
+
+enum class BuyerPaymentSource { RIDER, SIMULATED }
+enum class BuyerExcessStatus { PENDING_REFUND, REFUNDED }
+/** E5.4a: the buyer's own overpayment, in céntimos, and whether it was refunded. Never actors or evidence. */
+data class BuyerPaymentExcess(val amountMinor: Long, val status: BuyerExcessStatus) { init { require(amountMinor > 0) } }
+
 /** Copia histórica del pedido (snapshots de HU16): no cambia aunque se editen la dirección o el catálogo actuales. */
 class BuyerOrderDetail(
     val summary: BuyerOrderSummary, val storePhone: String?, val pickupAddressText: String, val delivery: BuyerOrderDelivery,
     items: List<StoreOrderLine>, val amounts: OrderAmounts, val paymentMethod: OrderPaymentMethod, statusHistory: List<BuyerOrderStatusEntry>,
     val estimatedPreparationMinutes:Int?=null,val estimatedReadyAtEpochMillis:Long?=null,
     val paymentStatus: OrderPaymentStatus = OrderPaymentStatus.PENDING,
+    val rejection: BuyerOrderRejection? = null,
+    /** HU20: minutos sumados mediante ampliaciones; 0 si no hubo o si el pedido es anterior a esta regla. */
+    val preparationExtendedMinutes: Int = 0,
+    /** E4: quién registró el pago (Rider o la simulación histórica) y si el cobro está en revisión. */
+    val paymentSource: BuyerPaymentSource? = null,
+    val paymentInReview: Boolean = false,
+    /** E5.4a: review resolved as NOT_FULLY_COLLECTED (payment still PENDING). */
+    val paymentIncomplete: Boolean = false,
+    val paymentExcess: BuyerPaymentExcess? = null,
 ) {
     val items: List<StoreOrderLine> = frozenOrderList(items)
     val statusHistory: List<BuyerOrderStatusEntry> = frozenOrderList(statusHistory)
@@ -62,6 +89,8 @@ class BuyerOrderDetail(
         require(summary.itemLineCount == this.items.size && summary.itemPreview ==
             this.items.take(BuyerOrderSummary.MAX_ITEM_PREVIEW).map { BuyerOrderItemPreview(it.name, it.quantity) })
         require(this.statusHistory.isNotEmpty() && this.statusHistory.zipWithNext().all { (a, b) -> a.occurredAtEpochMillis <= b.occurredAtEpochMillis })
+        require(rejection == null || summary.status == "REJECTED")
+        require(preparationExtendedMinutes >= 0 && (preparationExtendedMinutes == 0 || estimatedReadyAtEpochMillis != null))
         if(estimatedPreparationMinutes!=null||estimatedReadyAtEpochMillis!=null)require(summary.status in setOf("PREPARING", "READY_FOR_PICKUP")&&
             estimatedPreparationMinutes!=null&&estimatedPreparationMinutes in 5..180&&estimatedReadyAtEpochMillis!=null&&
             estimatedReadyAtEpochMillis in 1..MAX_ORDER_EPOCH_MILLIS)

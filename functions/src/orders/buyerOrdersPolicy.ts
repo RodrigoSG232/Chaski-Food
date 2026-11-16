@@ -1,8 +1,9 @@
 import { Timestamp } from "firebase-admin/firestore";
 import { digest, validId } from "../access/commercialAccessPolicy";
 import { MAX_ORDER_EPOCH_MILLIS, orderText } from "./orderModels";
+import { REJECTION_REASONS, RejectionReason } from "./orderDecisionPolicy";
 import { OrderHttpError } from "./orderRequest";
-import { validatedOrderCore } from "./storeOrdersPolicy";
+import { optionalCounter, validatedOrderCore } from "./storeOrdersPolicy";
 
 /** HU17 read vocabulary. HU17 never writes statuses; HU18–HU23 add transitions (HU19: PENDING_CONFIRMATION → PREPARING). */
 export const ACTIVE_ORDER_STATUSES = ["PENDING_CONFIRMATION", "PREPARING", "READY_FOR_PICKUP", "IN_DELIVERY"] as const;
@@ -65,6 +66,24 @@ function optionalText(value: unknown): string | null {
   return orderText(value);
 }
 
+/**
+ * HU19: reason stored by the manager decision, visible only to the order's buyer. Historical or malformed values
+ * degrade to null instead of making the whole detail inconsistent; the deciding actor is never exposed.
+ */
+function buyerRejection(data: Record<string, any>): { rejectionReason: RejectionReason | null; rejectionExplanation: string | null } {
+  const reason = REJECTION_REASONS.includes(data.rejectionReason) ? data.rejectionReason as RejectionReason : null;
+  let explanation: string | null = null;
+  if (reason === "OTHER" && typeof data.rejectionExplanation === "string") {
+    try {
+      const text = orderText(data.rejectionExplanation).trim();
+      if (text.length >= 3 && text.length <= 300) explanation = text;
+    } catch {
+      explanation = null;
+    }
+  }
+  return { rejectionReason: reason, rejectionExplanation: explanation };
+}
+
 /** Detail keeps the HU16 historical snapshots by value; coordinates, buyer data and actors are excluded. */
 export function projectBuyerOrderDetail(id: string, data: Record<string, any>, uid: string, history: Array<Record<string, any>>) {
   const summary = projectBuyerOrderSummary(id, data, uid);
@@ -86,11 +105,18 @@ export function projectBuyerOrderDetail(id: string, data: Record<string, any>, u
     const estimatedPreparationMinutes = hasEstimate && Number.isInteger(data.estimatedPreparationMinutes) &&
       data.estimatedPreparationMinutes >= 5 && data.estimatedPreparationMinutes <= 180 ? data.estimatedPreparationMinutes : null;
     if(hasEstimate && estimatedPreparationMinutes === null)throw new Error();
+    // HU20: minutes added through extensions; legacy replacements are not counted and never shown as extensions.
+    const extension = hasEstimate ? { preparationExtendedMinutes: optionalCounter(data.preparationExtendedMinutes) } : {};
     return { ...summary, storePhone: optionalText(store.phone), pickupAddressText: orderText(pickup.addressText),
       delivery: { label: optionalText(dropoff.label), addressText: orderText(dropoff.addressText),
         reference: optionalText(dropoff.reference), instructions: optionalText(dropoff.instructions) },
       items: core.items, subtotalMinor: core.subtotalMinor, deliveryFeeMinor: core.deliveryFeeMinor,tipMinor:core.tipMinor,
-      paymentMethod: core.paymentMethod,paymentStatus:data.paymentStatus, statusHistory, estimatedPreparationMinutes, estimatedReadyAtEpochMillis };
+      paymentMethod: core.paymentMethod,paymentStatus:data.paymentStatus,
+      // E4 (additive): who registered the payment and whether a collection is under review; never amounts or actors.
+      // E5.4a: a reconciled full collection is still "registered on delivery" for the buyer (RIDER keeps current APKs working).
+      paymentSource: ["RIDER", "RECONCILED"].includes(data.paymentCollection?.source) ? "RIDER" : data.paymentStatus === "PAID" && data.paymentSimulation === true ? "SIMULATED" : null,
+      paymentReview: buyerPaymentReview(data), paymentExcess: buyerPaymentExcess(data), statusHistory, estimatedPreparationMinutes, estimatedReadyAtEpochMillis,
+      ...extension, ...(summary.status === "REJECTED" ? buyerRejection(data) : {}) };
   } catch (error) {
     if (error instanceof OrderHttpError) throw error;
     return inconsistent();
@@ -128,4 +154,18 @@ export function parseBuyerOrdersQuery(query: Record<string, unknown>, uid: strin
 /** Order IDs are SHA-256 hex (HU16); anything else is reported as not found, never as a distinct validation error. */
 export function buyerOrderId(value: string): string | null {
   return validId(value) && /^[0-9a-f]{64}$/.test(value) ? value : null;
+}
+
+/** E5.4a: OPEN while under review; INCOMPLETE once resolved as not fully collected (no partial amounts shown). */
+function buyerPaymentReview(data: Record<string, any>): "OPEN" | "INCOMPLETE" | null {
+  const review = data.collectionReview;
+  if (review?.status === "OPEN") return "OPEN";
+  if (review?.status === "RESOLVED" && review.resolution?.outcome === "NOT_FULLY_COLLECTED" && data.paymentStatus === "PENDING") return "INCOMPLETE";
+  return null;
+}
+/** E5.4a: the buyer's own overpayment and whether it is still owed; never actors or evidence. */
+function buyerPaymentExcess(data: Record<string, any>): { amountMinor: number; status: "PENDING_REFUND" | "REFUNDED" } | null {
+  const r = data.collectionReview?.status === "RESOLVED" ? data.collectionReview.resolution : null;
+  if (!r || !Number.isSafeInteger(r.excessMinor) || r.excessMinor < 1 || !["PENDING_REFUND", "REFUNDED"].includes(r.excessStatus)) return null;
+  return { amountMinor: r.excessMinor, status: r.excessStatus };
 }

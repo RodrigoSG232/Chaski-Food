@@ -33,6 +33,11 @@
     <string name="admin_hu07_subtitle">Monitorea, suspende o reactiva la operación de negocios</string>
     <string name="admin_audit_title">Panel Admin Chaski: Historial de Auditoría</string>
     <string name="admin_audit_subtitle">Registro cronológico inmutable de todas las acciones</string>
+    <string name="admin_pickup_incidents_title">Incidencias de recojo</string>
+    <string name="admin_collection_reviews_title">Revisiones de cobro</string>
+    <string name="admin_collection_reviews_subtitle">Diferencias de cobro y excedentes · solo con permiso de administración</string>
+    <string name="admin_pickup_incidents_subtitle">Pedidos con código bloqueado · solo con permiso de administración</string>
+    <string name="admin_section_permission_note">Estas opciones dependen del permiso de administración, no de la experiencia de propietario.</string>
     <string name="security_title">Seguridad</string>
     <string name="security_subtitle">Cambia los detalles de tu contraseña</string>
     <string name="payment_methods_title">Métodos de pago</string>

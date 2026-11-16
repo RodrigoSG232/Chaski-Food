@@ -19,8 +19,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.delay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -34,7 +36,6 @@ import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.chaskifood.app.feature.cart.presentation.formatCartPrice
 import com.chaskifood.app.feature.orders.domain.BuyerOrderDetail
-import com.chaskifood.app.feature.orders.domain.OrderPaymentStatus
 import com.chaskifood.app.ui.components.ChaskiAppBar
 import com.chaskifood.app.ui.components.ChaskiButtonVariant
 import com.chaskifood.app.ui.components.ChaskiButton
@@ -125,7 +126,14 @@ private fun DetailBody(detail: BuyerOrderDetail, message: String?, notice: Strin
                     color = ChaskiTextSecondary)
                 Text("Se actualiza al abrir esta pantalla, al volver a la app o al deslizar hacia abajo.",
                     style = MaterialTheme.typography.bodySmall, color = ChaskiTextTertiary)
-                detail.estimatedPreparationMinutes?.let { Text("Tiempo estimado: $it minutos",fontWeight=FontWeight.Bold) }
+                // HU20: solo mientras se prepara; en READY_FOR_PICKUP manda el estado, no la estimación.
+                if (summary.status == "PREPARING") detail.estimatedReadyAtEpochMillis?.let { readyAt ->
+                    val now by produceState(System.currentTimeMillis(), readyAt) {
+                        while (true) { delay(60_000); value = System.currentTimeMillis() } } // reloj local, sin red
+                    val estimate = buyerPreparationEstimateText(readyAt, detail.preparationExtendedMinutes, now)
+                    Text(estimate.headline, fontWeight = FontWeight.Bold, color = ChaskiTextPrimary)
+                    estimate.detail?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = ChaskiTextSecondary) }
+                }
             }
         }
         if (trackingState != null) item("tracking") { BuyerTrackingCard(trackingState, onTrackingRefresh) }
@@ -134,6 +142,22 @@ private fun DetailBody(detail: BuyerOrderDetail, message: String?, notice: Strin
             item("cancel-action") {
                 ChaskiButton(if (cancelling) "Cancelando…" else "Cancelar pedido", onClick = onCancel, enabled = !cancelling,
                     variant = ChaskiButtonVariant.Outlined)
+            }
+        if (summary.status == "REJECTED")
+            item("rejection") {
+                Section("MOTIVO DEL RECHAZO")
+                DetailCard {
+                    Text("Pedido rechazado", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold,
+                        color = ChaskiTextPrimary)
+                    Text(buyerRejectionReasonText(detail.rejection?.reason), style = MaterialTheme.typography.bodyMedium,
+                        color = ChaskiTextSecondary)
+                    // Texto libre del local: Text lo muestra literal (sin marcado) y respeta sus saltos de línea.
+                    detail.rejection?.explanation?.let {
+                        Text("Comentario del local:", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold,
+                            color = ChaskiTextTertiary)
+                        Text(it, style = MaterialTheme.typography.bodyMedium, color = ChaskiTextPrimary)
+                    }
+                }
             }
         item("history") {
             Section("HISTORIAL DE ESTADOS")
@@ -210,8 +234,12 @@ private fun DetailBody(detail: BuyerOrderDetail, message: String?, notice: Strin
             DetailCard {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(ChaskiDimens.SpacingSm)) {
                     Icon(Icons.Filled.Payments, contentDescription = null, tint = ChaskiTextPrimary, modifier = Modifier.size(20.dp))
-                    Text(if (detail.paymentStatus == OrderPaymentStatus.PAID) "Efectivo registrado · simulación" else "Efectivo pendiente hasta la entrega",
+                    Text(buyerPaymentText(summary.status, detail.paymentStatus, detail.paymentSource, detail.paymentInReview,
+                        summary.deliveryOutcome, detail.paymentIncomplete),
                         style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold, color = ChaskiTextPrimary)
+                }
+                buyerExcessText(detail.paymentExcess)?.let {
+                    Text(it, style = MaterialTheme.typography.bodyMedium, color = ChaskiTextPrimary)
                 }
                 Text("No se realiza ningún cobro real.", style = MaterialTheme.typography.bodySmall, color = ChaskiTextTertiary)
                 if (summary.status == "IN_DELIVERY" && trackingState?.tracking?.stage == "AT_CUSTOMER")
@@ -256,6 +284,18 @@ private fun AmountRow(label: String, minor: Long, bold: Boolean = false) {
 @Composable
 private fun BuyerOrderDetailPreview() = ChaskiTheme {
     BuyerOrderDetailContent(BuyerOrderDetailUiState(loading = false, detail = BuyerOrderPreviewData.detail), {}, {})
+}
+
+@Preview(name = "Detalle · en preparación (ampliado)", showBackground = true, widthDp = 360, heightDp = 1500)
+@Composable
+private fun BuyerOrderPreparingDetailPreview() = ChaskiTheme {
+    BuyerOrderDetailContent(BuyerOrderDetailUiState(loading = false, detail = BuyerOrderPreviewData.preparingDetail), {}, {})
+}
+
+@Preview(name = "Detalle · rechazado (Otro)", showBackground = true, widthDp = 360, heightDp = 1500)
+@Composable
+private fun BuyerOrderRejectedDetailPreview() = ChaskiTheme {
+    BuyerOrderDetailContent(BuyerOrderDetailUiState(loading = false, detail = BuyerOrderPreviewData.rejectedDetail), {}, {})
 }
 
 @Preview(name = "Detalle · no encontrado", showBackground = true, widthDp = 360, heightDp = 640)

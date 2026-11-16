@@ -31,7 +31,8 @@ async function seed(key: string, buyerUid: string, status: string) {
     businessSnapshot: { id: "business", name: "Negocio ficticio" },
     pickupSnapshot: { addressText: "Local 1" }, dropoffSnapshot: { addressText: "Cliente 2", label: "Casa" },
     items: [{ productId: "p", name: "Plato", quantity: 1, unitPriceMinor: 1000, lineTotalMinor: 1000 }],
-    subtotalMinor: 1000, deliveryFeeMinor: 300, totalMinor: 1300, currency: "PEN", paymentMethod: "CASH_ON_DELIVERY" });
+    subtotalMinor: 1000, deliveryFeeMinor: 300, totalMinor: 1300, currency: "PEN", paymentMethod: "CASH_ON_DELIVERY",
+    paymentStatus: "PENDING" });
   await ref.collection("status_history").doc("initial").set({ schemaVersion: 1, fromStatus: null,
     toStatus: "PENDING_CONFIRMATION", actorUid: buyerUid, occurredAt: at });
   const eventRef = db.doc(`order_events/new_order_${orderId}`);
@@ -44,6 +45,9 @@ after(async () => { await db.terminate(); await deleteApp(app); });
 test("only the buyer cancels PENDING_CONFIRMATION; repeated calls keep one historical event", async () => {
   const buyer = await actor(), other = await actor(), { orderId, ref, eventRef } = await seed("direct", buyer.uid, "PENDING_CONFIRMATION");
   const path = `/me/orders/${orderId}/cancel`;
+  const anonymous = await http(undefined, path, {}, "POST");
+  assert.equal(anonymous.status, 401); assert.equal(anonymous.body.error, "AUTHENTICATION_REQUIRED");
+  assert.equal((await ref.get()).get("status"), "PENDING_CONFIRMATION");
   assert.equal((await http(other.token, path, {}, "POST")).status, 404);
   const first = await http(buyer.token, path, {}, "POST");
   const repeated = await http(buyer.token, path, {}, "POST");
@@ -53,12 +57,19 @@ test("only the buyer cancels PENDING_CONFIRMATION; repeated calls keep one histo
   assert.equal(history.size, 2); assert.equal(history.docs.find(d => d.id === "buyer_cancelled")?.get("toStatus"), "CANCELLED");
   assert.equal((await eventRef.get()).get("status"), "FAILED_PERMANENT");
   assert.equal((await eventRef.get()).get("lastError"), "ORDER_CANCELLED_BY_BUYER");
-  assert.equal((await http(buyer.token, `/me/orders/${orderId}`, undefined, "GET")).body.order.status, "CANCELLED");
+  const detail = await http(buyer.token, `/me/orders/${orderId}`, undefined, "GET");
+  assert.equal(detail.status, 200); assert.ok(detail.body.order, "el detalle sigue disponible tras cancelar");
+  const order = detail.body.order;
+  assert.equal(order.status, "CANCELLED"); assert.equal(order.phase, "HISTORICAL"); assert.equal(order.paymentStatus, "PENDING");
+  assert.deepEqual(order.statusHistory.map((entry: { status: string }) => entry.status), ["PENDING_CONFIRMATION", "CANCELLED"]);
+  const exposed = JSON.stringify(detail.body);
+  for (const key of ["buyerUid", "actorUid", "cancelledByUid"]) assert.equal(exposed.includes(key), false, key);
+  assert.equal(exposed.includes(buyer.uid), false);
 });
 
 test("PREPARING and every later stage reject cancellation without creating requests or history", async () => {
   const buyer = await actor();
-  for (const status of ["PREPARING", "READY_FOR_PICKUP", "PICKED_UP", "IN_DELIVERY", "COMPLETED"]) {
+  for (const status of ["PREPARING", "READY_FOR_PICKUP", "PICKED_UP", "IN_DELIVERY", "COMPLETED", "REJECTED"]) {
     const { orderId, ref, eventRef } = await seed(status, buyer.uid, status);
     const response = await http(buyer.token, `/me/orders/${orderId}/cancel`, {}, "POST");
     assert.equal(response.status, 409); assert.equal(response.body.error, "CANCELLATION_NOT_ALLOWED");

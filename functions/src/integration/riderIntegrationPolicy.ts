@@ -1,7 +1,9 @@
+import { publicResolution } from "../orders/collectionReconciliationPolicy";
 import { createHash } from "node:crypto";
 import { Timestamp } from "firebase-admin/firestore";
 import { validCoordinates } from "../delivery/routeReader";
 import { OrderHttpError } from "../orders/orderRequest";
+import { readPickupSecurity, verificationIsCurrent } from "../orders/pickupSecurityPolicy";
 
 const idPattern=/^[A-Za-z0-9_-]{1,100}$/;
 const eventTypes=["ASSIGNMENT_ACCEPTED","ARRIVED_AT_MERCHANT","PICKED_UP","ARRIVED_AT_CUSTOMER",
@@ -34,13 +36,31 @@ function optionalText(value:unknown,max:number):string|null{
 
 export type RiderEvent={eventId:string;eventType:RiderEventType;eventSequence:number;occurredAt:Timestamp;orderId:string;
   assignmentId:string;assignmentVersion:number;status:string;reason:string|null;rider:null|{id:string;displayName:string;phone:string|null;
-  vehicleType:"MOTORCYCLE"|"BICYCLE";vehiclePlate:string|null};deliveryOutcome:null|"SUCCESS"|"UNSUCCESSFUL"};
+  vehicleType:"MOTORCYCLE"|"BICYCLE";vehiclePlate:string|null};deliveryOutcome:null|"SUCCESS"|"UNSUCCESSFUL";
+  /** E4: present (object or null) only in COMPLETED_* events; undefined for every other event. */
+  collection?:RiderCollection|null};
+
+/** E4: what the rider declares to have collected. It is logistics evidence, not a bank confirmation. */
+export type RiderCollectionMethod="CASH"|"YAPE"|"PLIN";
+export type RiderCollection={method:RiderCollectionMethod;amountMinor:number;currency:"PEN"};
+const collectionMethods:readonly string[]=["CASH","YAPE","PLIN"];
+const MAX_COLLECTION_MINOR=10_000_000;
+function parseCollection(value:unknown):RiderCollection|null{
+  if(value===null)return null;
+  const c=object(value);exact(c,["method","amountMinor","currency"]);
+  if(typeof c.method!=="string"||!collectionMethods.includes(c.method)||c.currency!=="PEN"||!Number.isSafeInteger(c.amountMinor)||
+    (c.amountMinor as number)<1||(c.amountMinor as number)>MAX_COLLECTION_MINOR)throw new OrderHttpError("INVALID_REQUEST",422);
+  return {method:c.method as RiderCollectionMethod,amountMinor:c.amountMinor as number,currency:"PEN"};
+}
 
 export function parseRiderEvent(value:unknown):RiderEvent{
-  const body=object(value);exact(body,["schemaVersion","eventId","eventType","eventSequence","occurredAt","orderId","assignment",
-    "status","reason","rider","deliveryOutcome"]);
+  const body=object(value);
   if(body.schemaVersion!==1||typeof body.eventType!=="string"||!eventTypes.includes(body.eventType as RiderEventType))
     throw new OrderHttpError("INVALID_REQUEST",422);
+  // E4: `collection` is mandatory in COMPLETED_* and forbidden in every other event (strict keys as before).
+  const terminal=(body.eventType as string).startsWith("COMPLETED_");
+  exact(body,["schemaVersion","eventId","eventType","eventSequence","occurredAt","orderId","assignment",
+    "status","reason","rider","deliveryOutcome",...(terminal?["collection"]:[])]);
   const assignment=object(body.assignment);exact(assignment,["id","version"]);
   let rider:RiderEvent["rider"]=null;
   if(body.rider!==null){const r=object(body.rider);exact(r,["id","displayName","phone","vehicleType","vehiclePlate"]);
@@ -59,9 +79,13 @@ export function parseRiderEvent(value:unknown):RiderEvent{
   if((eventType==="COMPLETED_SUCCESSFULLY"&&outcome!=="SUCCESS")||
     (eventType==="COMPLETED_UNSUCCESSFULLY"&&outcome!=="UNSUCCESSFUL")||
     (!eventType.startsWith("COMPLETED_")&&outcome!==null))throw new OrderHttpError("INVALID_REQUEST",422);
+  const collection=terminal?parseCollection(body.collection):undefined;
+  // A failed delivery never declares money: rejected, not silently turned into "no collection" (incident handled with Rider).
+  if(eventType==="COMPLETED_UNSUCCESSFULLY"&&collection!==null)throw new OrderHttpError("INVALID_REQUEST",422);
   return {eventId:id(body.eventId),eventType,eventSequence:integer(body.eventSequence),occurredAt:instant(body.occurredAt),
     orderId:id(body.orderId),assignmentId:id(assignment.id),assignmentVersion:integer(assignment.version),status:body.status as string,
-    reason:body.reason===null?null:optionalText(body.reason,120),rider,deliveryOutcome:outcome as RiderEvent["deliveryOutcome"]};
+    reason:body.reason===null?null:optionalText(body.reason,120),rider,deliveryOutcome:outcome as RiderEvent["deliveryOutcome"],
+    ...(terminal?{collection}:{})};
 }
 
 export type RiderTracking={assignmentId:string;assignmentVersion:number;sequence:number;riderId:string;latitude:number;longitude:number;
@@ -81,24 +105,148 @@ export function parseRiderTracking(value:unknown):RiderTracking{
     latitude:point.latitude,longitude:point.longitude,accuracyMeters:body.accuracyMeters,recordedAt,estimatedArrivalAt};
 }
 
+/** E1.3 listing limits: page size requested by Rider, Firestore batch size and documents examined per request. */
+export const RIDER_PAGE_MAX=50,RIDER_SCAN_BATCH=50,RIDER_SCAN_MAX=200;
+/** Exact Firestore ordering values of the LAST EXAMINED document (readyAt seconds + nanoseconds, then document id). */
+export type RiderOrdersCursor=Readonly<{seconds:number;nanoseconds:number;orderId:string}>;
+const maxTimestampSeconds=253_402_300_799;
+
+export function encodeRiderOrdersCursor(cursor:RiderOrdersCursor):string{
+  return Buffer.from(JSON.stringify({v:1,s:cursor.seconds,n:cursor.nanoseconds,id:cursor.orderId})).toString("base64url");
+}
+
+/** Strict parser: any malformed, tampered or unknown-version cursor is a client error, never a silent restart. */
+export function parseRiderOrdersQuery(query:Record<string,unknown>):{limit:number;cursor:RiderOrdersCursor|null}{
+  if(Object.keys(query).some(key=>key!=="limit"&&key!=="cursor"))throw new OrderHttpError("INVALID_REQUEST",400);
+  const single=(value:unknown)=>Array.isArray(value)?null:value;
+  const rawLimit=single(query.limit),rawCursor=single(query.cursor);
+  if(rawLimit===null||rawCursor===null)throw new OrderHttpError("INVALID_REQUEST",400);
+  let limit=20;
+  if(rawLimit!==undefined){
+    if(typeof rawLimit!=="string"||!/^[1-9][0-9]?$/.test(rawLimit)||Number(rawLimit)>RIDER_PAGE_MAX)throw new OrderHttpError("INVALID_REQUEST",400);
+    limit=Number(rawLimit);
+  }
+  if(rawCursor===undefined)return {limit,cursor:null};
+  try{
+    if(typeof rawCursor!=="string"||rawCursor.length>256||!/^[A-Za-z0-9_-]+$/.test(rawCursor))throw new Error();
+    const raw=JSON.parse(Buffer.from(rawCursor,"base64url").toString("utf8"));
+    if(!raw||typeof raw!=="object"||Array.isArray(raw)||Object.keys(raw).sort().join(",")!=="id,n,s,v"||raw.v!==1||
+      !Number.isSafeInteger(raw.s)||raw.s<0||raw.s>maxTimestampSeconds||!Number.isSafeInteger(raw.n)||raw.n<0||raw.n>999_999_999||
+      typeof raw.id!=="string"||!/^[0-9a-f]{64}$/.test(raw.id))throw new Error();
+    const cursor=Object.freeze({seconds:raw.s,nanoseconds:raw.n,orderId:raw.id});
+    if(encodeRiderOrdersCursor(cursor)!==rawCursor)throw new Error();
+    return {limit,cursor};
+  }catch{throw new OrderHttpError("INVALID_REQUEST",400);}
+}
+
 export function payloadHash(value:unknown):string{return createHash("sha256").update(JSON.stringify(value)).digest("hex");}
 export function riderOrderId(value:string):string|null{return /^[0-9a-f]{64}$/.test(value)?value:null;}
 
-export function projectRiderOrder(data:Record<string,any>){
-  if(data.schemaVersion!==1||!["READY_FOR_PICKUP","IN_DELIVERY","COMPLETED"].includes(data.status)||data.paymentStatus!=="PAID"||data.paymentSimulation!==true||
-    typeof data.pickupCode!=="string"||!/^[0-9]{4}$/.test(data.pickupCode)||!(data.updatedAt instanceof Timestamp))
+/** LIST = public availability (never carries the pickup code); DETAIL = reconciliation of one known order. */
+export type RiderOrderView="LIST"|"DETAIL";
+
+function isoOrNull(value:unknown):string|null{return value instanceof Timestamp?value.toDate().toISOString():null;}
+
+/** Payment as seen by the delivery partner: what the rider must collect, never internal simulation flags. */
+function riderPayment(data:Record<string,any>){
+  const pending=data.paymentStatus==="PENDING";
+  return {method:data.paymentMethod,status:data.paymentStatus,amountToCollectMinor:pending?data.totalMinor:0,currency:data.currency};
+}
+
+/** Explicit dispatch contract; the stored document may carry more internal fields. */
+function riderDispatch(stored:Record<string,any>|undefined){
+  const assignment=stored?.assignment;
+  return {status:stored?.status??"SEARCHING_RIDER",lastEventSequence:stored?.lastEventSequence??0,
+    lastAssignmentVersion:stored?.lastAssignmentVersion??0,
+    assignment:assignment?{id:assignment.id,version:assignment.version}:null,
+    rider:stored?.rider?{id:stored.rider.id,displayName:stored.rider.displayName,phone:stored.rider.phone??null,
+      vehicleType:stored.rider.vehicleType,vehiclePlate:stored.rider.vehiclePlate??null}:null,
+    deliveryOutcome:stored?.deliveryOutcome??null,reason:stored?.reason??null,updatedAt:isoOrNull(stored?.updatedAt)};
+}
+
+/** Last accepted sample without idempotency internals (payloadHash, receivedAt) or the rider identifier. */
+function riderTrackingView(stored:Record<string,any>|undefined){
+  if(!stored)return null;
+  return {assignmentId:stored.assignmentId,assignmentVersion:stored.assignmentVersion,sequence:stored.sequence,
+    latitude:stored.latitude,longitude:stored.longitude,accuracyMeters:stored.accuracyMeters,
+    recordedAt:isoOrNull(stored.recordedAt),estimatedArrivalAt:isoOrNull(stored.estimatedArrivalAt)};
+}
+
+/**
+ * Payment situations Rider may handle: legacy simulated prepayment (nothing to collect), cash still to be collected, or
+ * cash already collected by Rider (E4; kept visible in the detail for reconciliation).
+ */
+export type RiderPaymentEligibility="LEGACY_PREPAID"|"CASH_PENDING"|"CASH_COLLECTED";
+export function riderPaymentEligibility(data:Record<string,any>):RiderPaymentEligibility|null{
+  if(typeof data.pickupCode!=="string"||!/^[0-9]{4}$/.test(data.pickupCode))return null;
+  if(data.paymentStatus==="PAID"&&data.paymentSimulation===true)return "LEGACY_PREPAID";
+  // E5.4a: a discrepancy reconciled as fully collected (source RECONCILED) is still a Rider cash collection.
+  if(data.paymentMethod==="CASH_ON_DELIVERY"&&data.paymentStatus==="PAID"&&["RIDER","RECONCILED"].includes(data.paymentCollection?.source))
+    return "CASH_COLLECTED";
+  if(data.paymentMethod==="CASH_ON_DELIVERY"&&data.paymentStatus==="PENDING"&&data.paymentSimulation!==true)return "CASH_PENDING";
+  return null;
+}
+
+/** E4: every payment situation accepts the full event flow; state, assignment and collection rules decide the rest. */
+export function riderEventAllowedForPayment(eligibility:RiderPaymentEligibility,_eventType:RiderEventType):boolean{
+  return eligibility==="LEGACY_PREPAID"||eligibility==="CASH_PENDING"||eligibility==="CASH_COLLECTED";
+}
+
+export type CollectionDecision="RECORDED"|"DISCREPANCY"|"NONE";
+/**
+ * E4: the expected amount is Food's authoritative total, never a value declared by Rider. Cash success needs a
+ * collection; legacy prepaid and failed deliveries must declare none.
+ */
+export function decideCollection(eligibility:RiderPaymentEligibility,expectedMinor:number,event:RiderEvent):CollectionDecision{
+  if(!event.eventType.startsWith("COMPLETED_"))return "NONE";
+  if(event.eventType==="COMPLETED_UNSUCCESSFULLY")return "NONE";
+  if(eligibility!=="CASH_PENDING"){
+    if(event.collection!==null)throw new OrderHttpError("INVALID_REQUEST",422);
+    return "NONE";
+  }
+  if(!event.collection)throw new OrderHttpError("INVALID_REQUEST",422);
+  return event.collection.amountMinor===expectedMinor?"RECORDED":"DISCREPANCY";
+}
+
+/**
+ * Public view of a review: amounts and method only (no actors, evidence or internal ids). E5.4a (additive): a RESOLVED
+ * review also carries the admin outcome, confirmed/shortfall/excess amounts and the excess refund status.
+ */
+export function publicCollectionReview(review:Record<string,any>|undefined){
+  if(review?.status!=="OPEN"&&review?.status!=="RESOLVED")return null;
+  const base={status:review.status,expectedMinor:review.expectedMinor,declaredMinor:review.declaredMinor,method:review.method,currency:review.currency};
+  const resolution=publicResolution(review);
+  return resolution?{...base,...resolution}:base;
+}
+/** Historic E4 value: Rider's declaration was exact (RECORDED) or differed (DISCREPANCY), even after reconciliation. */
+export function collectionStatusOf(data:Record<string,any>):"RECORDED"|"DISCREPANCY"|null{
+  return data.paymentCollection?.source==="RIDER"?"RECORDED":["OPEN","RESOLVED"].includes(data.collectionReview?.status)?"DISCREPANCY":null;
+}
+
+export function projectRiderOrder(data:Record<string,any>,view:RiderOrderView){
+  if(data.schemaVersion!==1||!["READY_FOR_PICKUP","IN_DELIVERY","COMPLETED"].includes(data.status)||
+    riderPaymentEligibility(data)===null||!(data.updatedAt instanceof Timestamp))
     throw new OrderHttpError("ORDER_NOT_READY",409);
   const pickup=data.pickupSnapshot,dropoff=data.dropoffSnapshot,buyer=data.buyerSnapshot,store=data.storeSnapshot;
   if(!pickup||!dropoff||!buyer||!store||!validCoordinates(pickup.location)||!validCoordinates(dropoff.location)||!Array.isArray(data.items))
     throw new OrderHttpError("DATA_INCONSISTENT",503,true);
-  return {schemaVersion:1,orderId:data.orderId,updatedAt:data.updatedAt.toDate().toISOString(),status:data.status,
-    customer:{id:data.buyerUid,displayName:buyer.displayName,phone:buyer.phone??null,address:dropoff.addressText,
+  const dispatch=riderDispatch(data.riderIntegration);
+  const order={schemaVersion:1,orderId:data.orderId,updatedAt:data.updatedAt.toDate().toISOString(),status:data.status,
+    readyAt:isoOrNull(data.readyAt),
+    customer:{displayName:buyer.displayName,phone:buyer.phone??null,address:dropoff.addressText,
       reference:dropoff.reference??null,instructions:dropoff.instructions??null,latitude:dropoff.location.latitude,longitude:dropoff.location.longitude},
     merchant:{id:data.storeId,name:store.name,phone:store.phone??null,address:pickup.addressText,
       instructions:pickup.instructions??null,latitude:pickup.location.latitude,longitude:pickup.location.longitude},
     items:data.items.map((item:Record<string,unknown>)=>({id:item.productId,name:item.name,quantity:item.quantity})),
     amounts:{subtotalMinor:data.subtotalMinor,deliveryFeeMinor:data.deliveryFeeMinor,tipMinor:data.tipMinor??0,totalMinor:data.totalMinor,currency:data.currency},
-    payment:{flow:"PREPAID_SIMULATION",method:"SIMULATED",status:"PAID"},pickupCode:data.pickupCode,
-    dispatch:data.riderIntegration??{status:"SEARCHING_RIDER",lastEventSequence:0,assignment:null,rider:null},
-    tracking:data.riderTracking??null};
+    payment:riderPayment(data),dispatch,tracking:riderTrackingView(data.riderTracking)};
+  if(view==="LIST")return order;
+  const security=readPickupSecurity(data.pickupSecurity),current=verificationIsCurrent(security,dispatch.assignment);
+  // Only the backend of the current assignment receives the code, and only while it is still useful (not verified, not locked).
+  // Rider must still restrict it to that rider.
+  const pickupCode=data.status==="READY_FOR_PICKUP"&&dispatch.assignment!==null&&!security.lockedAt&&!current?data.pickupCode:null;
+  return {...order,pickupCode,collectionStatus:collectionStatusOf(data),collectionReview:publicCollectionReview(data.collectionReview),
+    pickupVerification:current?{assignmentId:security.verification!.assignmentId,assignmentVersion:security.verification!.assignmentVersion,
+      verifiedAt:security.verification!.verifiedAt.toDate().toISOString()}:null,
+    pickupLock:security.lockedAt?{lockedAt:security.lockedAt.toDate().toISOString(),reason:"MAX_ATTEMPTS"}:null};
 }

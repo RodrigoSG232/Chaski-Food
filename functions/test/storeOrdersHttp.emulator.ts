@@ -10,6 +10,7 @@ import { CommercialIdentity } from "../src/auth/verifyBuyerToken";
 import { encodeInboxCursor } from "../src/orders/storeOrdersPolicy";
 import { StoreOrdersReader } from "../src/orders/storeOrdersReader";
 import { buyerNoticeEventId } from "../src/notifications/buyerNoticeEvent";
+import { hu23Event } from "./lab/hu23Fixture";
 process.env.FIRESTORE_EMULATOR_HOST="127.0.0.1:8089";
 process.env.FIREBASE_AUTH_EMULATOR_HOST="127.0.0.1:9099";
 const project="demo-chaski-hu15",app=initializeApp({projectId:project},"hu16-inbox-tests"),db=getFirestore(app),auth=getAuth(app);
@@ -55,9 +56,15 @@ async function page(a:Actor|undefined,store:string,query="") {
 async function decide(a:Actor,store:string,orderId:string,body:Record<string,unknown>) {
   return connectedHttp(app)(a.token,`/stores/${store}/orders/${orderId}/decision`,body,"POST");
 }
-async function updateEstimate(a:Actor,store:string,orderId:string,minutes:unknown) {
-  return connectedHttp(app)(a.token,`/stores/${store}/orders/${orderId}/preparation-estimate`,
-    {estimatedPreparationMinutes:minutes},"PUT");
+async function extend(a:Actor,store:string,orderId:string,body:Record<string,unknown>) {
+  return connectedHttp(app)(a.token,`/stores/${store}/orders/${orderId}/preparation-extensions`,body,"POST");
+}
+const extension=(additionalMinutes:unknown,expectedEstimateRevision:unknown,operationId:string=randomUUID())=>
+  ({operationId,additionalMinutes,expectedEstimateRevision});
+async function acceptedOrder(f:Awaited<ReturnType<typeof fixture>>,id:string,minutes=40) {
+  await seedOrder(f.store,f.owner.uid,id);
+  const accepted=await decide(f.manager,f.store,id,{action:"ACCEPT",estimatedPreparationMinutes:minutes});
+  assert.equal(accepted.status,200);return accepted.body.estimatedReadyAtEpochMillis as number;
 }
 before(async()=>{admin=await actor(true,true);await prepare(admin);});
 after(async()=>{await db.terminate();await deleteApp(app);});
@@ -84,38 +91,119 @@ test("manager accepts a pending order with an estimate and the transition is ide
   assert.equal(notice.get("buyerUid"),"PRIVATE_BUYER");assert.equal(notice.get("type"),"ORDER_ACCEPTED");
   assert.equal((await db.collection("order_events").where("orderId","==",id).get()).size,1);
 });
-test("manager updates a preparing estimate and the preparing inbox exposes the latest value",async()=>{
-  const f=await fixture(),id="ae".repeat(32);await seedOrder(f.store,f.owner.uid,id);
-  await decide(f.manager,f.store,id,{action:"ACCEPT",estimatedPreparationMinutes:25});
-  const updated=await updateEstimate(f.manager,f.store,id,40);
-  assert.equal(updated.status,200);assert.equal(updated.body.outcome,"UPDATED");
+test("HU20: extensions add to the current estimate, keep the HU19 value and record v2 history",async()=>{
+  const f=await fixture(),id="ae".repeat(32),initial=await acceptedOrder(f,id,40);
+  const first=await extend(f.manager,f.store,id,extension(5,0));
+  assert.equal(first.status,200,JSON.stringify(first.body));
+  assert.deepEqual(Object.keys(first.body).sort(),["contractVersion","estimateRevision","estimatedReadyAtEpochMillis","outcome",
+    "preparationExtendedMinutes","status"]);
+  assert.equal(first.body.outcome,"EXTENDED");assert.equal(first.body.estimatedReadyAtEpochMillis,initial+5*60_000);
+  const second=await extend(f.manager,f.store,id,extension(60,1));
+  assert.equal(second.body.estimatedReadyAtEpochMillis,initial+65*60_000);
+  assert.equal(second.body.estimateRevision,2);assert.equal(second.body.preparationExtendedMinutes,65);
   const order=(await db.doc(`food_orders/${id}`).get()).data()!;
   assert.equal(order.status,"PREPARING");assert.equal(order.estimatedPreparationMinutes,40);
-  assert.equal(order.estimateRevision,1);assert.equal(order.estimateUpdatedByUid,f.manager.uid);
-  const history=await db.doc(`food_orders/${id}/estimate_history/0000000001`).get();
-  assert.equal(history.get("minutes"),40);assert.equal(history.get("actorUid"),f.manager.uid);
+  assert.equal(order.estimatedReadyAt.toMillis(),initial+65*60_000);assert.equal(order.estimateUpdatedByUid,f.manager.uid);
+  const history=(await db.collection(`food_orders/${id}/estimate_history`).orderBy("revision").get()).docs.map(d=>d.data());
+  assert.deepEqual(history.map(h=>[h.schemaVersion,h.kind,h.revision,h.additionalMinutes]),[[2,"EXTENSION",1,5],[2,"EXTENSION",2,60]]);
+  assert.equal(history[1].previousReadyAt.toMillis(),initial+5*60_000);assert.equal(history[1].actorUid,f.manager.uid);
   const preparing=await page(f.manager,f.store,"?status=PREPARING");
-  assert.equal(preparing.status,200);assert.equal(preparing.body.orders[0].orderId,id);
-  assert.equal(preparing.body.orders[0].estimatedPreparationMinutes,40);
+  const row=preparing.body.orders.find((o:any)=>o.orderId===id);
+  assert.equal(row.estimatedPreparationMinutes,40);assert.equal(row.estimatedReadyAtEpochMillis,initial+65*60_000);
+  assert.equal(row.estimateRevision,2);assert.equal(row.preparationExtendedMinutes,65);
+  // HU19 retry contract still holds after extending: same accept returns the original answer, not a new state.
+  const retried=await decide(f.manager,f.store,id,{action:"ACCEPT",estimatedPreparationMinutes:40});
+  assert.equal(retried.status,200);assert.equal(retried.body.status,"PREPARING");
 });
-test("equal estimates are idempotent and delivery synchronization is recorded once",async()=>{
-  const f=await fixture(),id="af".repeat(32);await seedOrder(f.store,f.owner.uid,id);
-  await decide(f.manager,f.store,id,{action:"ACCEPT",estimatedPreparationMinutes:20});
+test("HU20: two intentional equal extensions both apply, with no cumulative cap",async()=>{
+  const f=await fixture(),id="af".repeat(32),initial=await acceptedOrder(f,id,180);
+  for(let revision=0;revision<5;revision++)
+    assert.equal((await extend(f.manager,f.store,id,extension(60,revision))).status,200);
+  const twice=[await extend(f.manager,f.store,id,extension(10,5)),await extend(f.manager,f.store,id,extension(10,6))];
+  assert.deepEqual(twice.map(r=>r.body.estimateRevision),[6,7]);
+  assert.equal(twice[1].body.preparationExtendedMinutes,320);
+  assert.equal(twice[1].body.estimatedReadyAtEpochMillis,initial+320*60_000);
+  assert.equal((await db.collection(`food_orders/${id}/estimate_history`).get()).size,7);
+});
+test("HU20: a retried operation never adds twice; reusing its ID with other data conflicts",async()=>{
+  const f=await fixture(),id="a0".repeat(32),initial=await acceptedOrder(f,id,30);
   await db.doc(`food_orders/${id}`).update({deliveryId:"delivery-1"});
-  const first=await updateEstimate(f.manager,f.store,id,35),repeated=await updateEstimate(f.manager,f.store,id,35);
-  assert.equal(first.body.outcome,"UPDATED");assert.equal(repeated.body.outcome,"UNCHANGED");
-  assert.equal(first.body.estimatedReadyAtEpochMillis,repeated.body.estimatedReadyAtEpochMillis);
-  assert.equal((await db.doc(`food_orders/${id}`).get()).get("estimateRevision"),1);
+  const op=randomUUID(),first=await extend(f.manager,f.store,id,extension(15,0,op));
+  const retries=await Promise.all([1,2,3].map(()=>extend(f.manager,f.store,id,extension(15,0,op))));
+  for(const r of retries){assert.equal(r.status,200);assert.deepEqual(r.body,first.body);}
+  const order=(await db.doc(`food_orders/${id}`).get()).data()!;
+  assert.equal(order.estimateRevision,1);assert.equal(order.estimatedReadyAt.toMillis(),initial+15*60_000);
+  assert.equal((await db.collection(`food_orders/${id}/estimate_history`).get()).size,1);
+  assert.equal((await db.collection(`food_orders/${id}/estimate_operations`).get()).size,1);
   assert.equal((await db.doc(`rider_events/estimate_${id}_1`).get()).get("status"),"PENDING");
+  for(const body of [extension(20,0,op),extension(15,1,op)]) {
+    const conflict=await extend(f.manager,f.store,id,body);
+    assert.equal(conflict.status,409);assert.equal(conflict.body.error,"OPERATION_CONFLICT");
+  }
+  // After the order moves on, the original operation still replays its recorded result.
+  await db.doc(`food_orders/${id}`).update({status:"READY_FOR_PICKUP"});
+  assert.deepEqual((await extend(f.manager,f.store,id,extension(15,0,op))).body,first.body);
+  assert.equal((await db.doc(`food_orders/${id}`).get()).get("estimateRevision"),1);
+});
+test("HU20: a stale revision is rejected and concurrent managers cannot both extend from the same view",async()=>{
+  const f=await fixture(),id="a1".repeat(32),initial=await acceptedOrder(f,id,30);
+  const results=await Promise.all([extend(f.manager,f.store,id,extension(10,0)),extend(f.manager,f.store,id,extension(20,0))]);
+  assert.deepEqual(results.map(r=>r.status).sort(),[200,409]);
+  const loser=results.find(r=>r.status===409)!,winner=results.find(r=>r.status===200)!;
+  assert.equal(loser.body.error,"ESTIMATE_REVISION_CHANGED");
+  const order=(await db.doc(`food_orders/${id}`).get()).data()!;
+  assert.equal(order.estimateRevision,1);assert.equal(order.estimatedReadyAt.toMillis(),winner.body.estimatedReadyAtEpochMillis);
+  assert.ok([initial+10*60_000,initial+20*60_000].includes(order.estimatedReadyAt.toMillis()));
+  const stale=await extend(f.manager,f.store,id,extension(5,0));
+  assert.equal(stale.status,409);assert.equal(stale.body.error,"ESTIMATE_REVISION_CHANGED");
   assert.equal((await db.collection(`food_orders/${id}/estimate_history`).get()).size,1);
 });
-test("preparation estimate endpoint validates input, state and store authorization",async()=>{
-  const f=await fixture(),id="a0".repeat(32);await seedOrder(f.store,f.owner.uid,id);
-  assert.equal((await updateEstimate(f.manager,f.store,id,4)).status,400);
-  assert.equal((await updateEstimate(f.manager,f.store,id,20)).status,409);
+test("HU20: an expired estimate restarts from server time; legacy v1 history is preserved",async()=>{
+  const f=await fixture(),id="b1".repeat(32);await acceptedOrder(f,id,30);
+  const past=Timestamp.fromMillis(Date.now()-3_600_000);
+  // Legacy HU20 replacement: overwritten minutes, revision 1 and a schemaVersion 1 history entry, no extension fields.
+  await db.doc(`food_orders/${id}`).update({estimatedPreparationMinutes:25,estimatedReadyAt:past,estimateRevision:1,updatedAt:past});
+  await db.doc(`food_orders/${id}/estimate_history/0000000001`).set({schemaVersion:1,revision:1,minutes:25,estimatedReadyAt:past,
+    actorUid:f.manager.uid,occurredAt:past});
+  const before=Date.now(),r=await extend(f.manager,f.store,id,extension(10,1)),after=Date.now();
+  assert.equal(r.status,200,JSON.stringify(r.body));
+  assert.ok(r.body.estimatedReadyAtEpochMillis>=before+10*60_000&&r.body.estimatedReadyAtEpochMillis<=after+10*60_000);
+  assert.equal(r.body.estimateRevision,2);assert.equal(r.body.preparationExtendedMinutes,10);
+  const legacy=(await db.doc(`food_orders/${id}/estimate_history/0000000001`).get()).data()!;
+  assert.equal(legacy.schemaVersion,1);assert.equal(legacy.minutes,25);
+  assert.equal((await db.doc(`food_orders/${id}/estimate_history/0000000002`).get()).get("baseAt").toMillis()>=before,true);
+  assert.equal((await db.doc(`food_orders/${id}`).get()).get("estimatedPreparationMinutes"),25);
+});
+test("HU20: validation, state, authorization and the retired replacement endpoint",async()=>{
+  const f=await fixture(),id="b2".repeat(32);await seedOrder(f.store,f.owner.uid,id);
+  for(const body of [extension(4,0),extension(61,0),extension(10.5,0),extension("10",0),extension(10,-1),
+    {additionalMinutes:10,expectedEstimateRevision:0},{...extension(10,0),estimatedReadyAt:1},{estimatedPreparationMinutes:30}]) {
+    const r=await extend(f.manager,f.store,id,body as Record<string,unknown>);assert.equal(r.status,400,JSON.stringify(body));
+  }
+  assert.equal((await extend(f.manager,f.store,id,extension(10,0))).status,409);
   await decide(f.manager,f.store,id,{action:"ACCEPT",estimatedPreparationMinutes:20});
-  assert.equal((await updateEstimate(f.manager,f.other,id,30)).status,403);
-  assert.equal((await updateEstimate(f.buyer,f.store,id,30)).status,403);
+  for(const [a,store] of [[f.manager,f.other],[f.buyer,f.store],[f.owner,f.store]] as const)
+    assert.equal((await extend(a,store,id,extension(10,0))).status,403);
+  const http=connectedHttp(app);
+  const legacy=await http(f.manager.token,`/stores/${f.store}/orders/${id}/preparation-estimate`,{estimatedPreparationMinutes:45},"PUT");
+  assert.equal(legacy.status,404);assert.equal(legacy.body.error,"NOT_FOUND");
+  assert.equal((await http(f.manager.token,`/stores/${f.store}/orders/${id}/preparation-extensions`,undefined,"GET")).status,405);
+  const order=(await db.doc(`food_orders/${id}`).get()).data()!;
+  assert.equal(order.estimatedPreparationMinutes,20);assert.equal(order.estimateRevision,undefined);
+  assert.equal((await db.collection(`food_orders/${id}/estimate_history`).get()).size,0);
+  for(const status of ["READY_FOR_PICKUP","IN_DELIVERY","COMPLETED","CANCELLED","REJECTED"]) {
+    await db.doc(`food_orders/${id}`).update({status});
+    const r=await extend(f.manager,f.store,id,extension(10,0));
+    assert.equal(r.status,409,status);assert.equal(r.body.error,"ORDER_STATE_CHANGED");
+  }
+});
+test("HU20: suspension blocks new acceptance but accepted orders can still be extended",async()=>{
+  const f=await fixture(),id="b3".repeat(32),other="b4".repeat(32);await acceptedOrder(f,id,30);await acceptedOrder(f,other,30);
+  await db.doc(`business_requests/${f.owner.uid}`).update({status:"SUSPENDED"});
+  assert.equal((await extend(f.manager,f.store,id,extension(10,0))).status,200);
+  await db.doc(`business_requests/${f.owner.uid}`).update({status:"APPROVED"});
+  await db.doc(`stores/${f.store}`).update({status:"SUSPENDED"});
+  assert.equal((await extend(f.manager,f.store,other,extension(10,0))).status,200);
 });
 test("rejection records a required reason and removes the order from the pending inbox",async()=>{
   const f=await fixture(),id="bd".repeat(32);await seedOrder(f.store,f.owner.uid,id);
@@ -137,6 +225,101 @@ test("marking a paid order ready creates one buyer notice atomically",async()=>{
   const notice=await db.doc(`order_events/${buyerNoticeEventId(id,"ORDER_READY_FOR_PICKUP",2)}`).get();
   assert.equal(notice.get("buyerUid"),"PRIVATE_BUYER");
   assert.equal((await db.collection("order_events").where("orderId","==",id).get()).size,2);
+});
+const readyPath=(store:string,id:string)=>`/stores/${store}/orders/${id}/ready-for-pickup`;
+async function cashPreparing(f:Awaited<ReturnType<typeof fixture>>,id:string) {
+  await seedOrder(f.store,f.owner.uid,id);
+  await db.doc(`food_orders/${id}`).update({paymentStatus:"PENDING"});
+  assert.equal((await decide(f.manager,f.store,id,{action:"ACCEPT",estimatedPreparationMinutes:20})).status,200);
+}
+test("HU21-A: solo el responsable VERIFIED asignado marca listo; los demás no cambian nada",async()=>{
+  const f=await fixture(),id="71".repeat(32),send=connectedHttp(app);await cashPreparing(f,id);
+  const before=(await db.doc(`food_orders/${id}`).get()).data();
+  for(const [a,store] of [[f.owner,f.store],[f.buyer,f.store],[f.manager,f.other]] as const)
+    assert.equal((await send(a.token,readyPath(store,id),{},"POST")).status,403);
+  const unverified=await fixture(false),uid="72".repeat(32);await seedOrder(unverified.store,unverified.owner.uid,uid);
+  await db.doc(`food_orders/${uid}`).update({status:"PREPARING",paymentStatus:"PENDING"});
+  assert.equal((await send(unverified.manager.token,readyPath(unverified.store,uid),{},"POST")).status,403);
+  assert.equal((await db.doc(`food_orders/${uid}`).get()).get("status"),"PREPARING");
+  assert.deepEqual((await db.doc(`food_orders/${id}`).get()).data(),before);
+  assert.equal((await db.doc(`food_orders/${id}/status_history/ready_for_pickup`).get()).exists,false);
+});
+test("HU21-A: PREPARING en efectivo pasa a listo con historial, código y aviso; el reintento no cambia nada",async()=>{
+  const f=await fixture(),id="73".repeat(32),send=connectedHttp(app);await cashPreparing(f,id);
+  const first=await send(f.manager.token,readyPath(f.store,id),{},"POST");
+  assert.equal(first.status,200);assert.equal(first.body.outcome,"UPDATED");assert.equal("pickupCode" in first.body,false); // E5.2
+  const order=(await db.doc(`food_orders/${id}`).get()).data()!;
+  assert.equal(order.status,"READY_FOR_PICKUP");assert.match(order.pickupCode,/^[0-9]{4}$/);
+  assert.equal(order.readyByUid,f.manager.uid);assert.equal(order.readyAt.toMillis(),first.body.readyAtEpochMillis);
+  assert.equal(order.paymentStatus,"PENDING");assert.equal(order.estimatedPreparationMinutes,20);
+  const history=(await db.doc(`food_orders/${id}/status_history/ready_for_pickup`).get()).data()!;
+  assert.deepEqual({...history,occurredAt:history.occurredAt.toMillis()},{schemaVersion:1,fromStatus:"PREPARING",
+    toStatus:"READY_FOR_PICKUP",actorUid:f.manager.uid,occurredAt:first.body.readyAtEpochMillis});
+  const notice=await db.doc(`order_events/${buyerNoticeEventId(id,"ORDER_READY_FOR_PICKUP",2)}`).get();
+  assert.equal(notice.exists,true);assert.equal(notice.get("buyerUid"),"PRIVATE_BUYER");
+  const again=await send(f.manager.token,readyPath(f.store,id),{},"POST");
+  assert.equal(again.status,200);assert.equal(again.body.outcome,"UNCHANGED");
+  assert.equal("pickupCode" in again.body,false);assert.equal(again.body.readyAtEpochMillis,first.body.readyAtEpochMillis);
+  assert.deepEqual((await db.doc(`food_orders/${id}`).get()).data(),order);
+  assert.equal((await db.collection("order_events").where("orderId","==",id).get()).size,2);
+});
+test("HU21-A: solicitudes simultáneas producen una sola transición, un historial y un aviso",async()=>{
+  const f=await fixture(),id="74".repeat(32),send=connectedHttp(app);await cashPreparing(f,id);
+  const results=await Promise.all([0,1,2].map(()=>send(f.manager.token,readyPath(f.store,id),{},"POST")));
+  for(const r of results)assert.equal(r.status,200,JSON.stringify(r.body));
+  assert.deepEqual(results.map(r=>r.body.outcome).sort(),["UNCHANGED","UNCHANGED","UPDATED"]);
+  assert.ok(results.every(r=>!("pickupCode" in r.body)));
+  assert.match((await db.doc(`food_orders/${id}`).get()).get("pickupCode"),/^[0-9]{4}$/);
+  assert.equal((await db.collection(`food_orders/${id}/status_history`).where("toStatus","==","READY_FOR_PICKUP").get()).size,1);
+  assert.equal((await db.collection("order_events").where("orderId","==",id).get()).size,2);
+});
+test("HU21-A: estados de origen inválidos y pedidos inexistentes o ajenos se rechazan sin escribir",async()=>{
+  const f=await fixture(),id="75".repeat(32),send=connectedHttp(app);await seedOrder(f.store,f.owner.uid,id);
+  await db.doc(`food_orders/${id}`).update({paymentStatus:"PENDING"});
+  for(const status of ["PENDING_CONFIRMATION","IN_DELIVERY","COMPLETED","CANCELLED","REJECTED"]) {
+    await db.doc(`food_orders/${id}`).update({status});
+    const r=await send(f.manager.token,readyPath(f.store,id),{},"POST");
+    assert.equal(r.status,409,status);assert.equal(r.body.error,"ORDER_STATE_CHANGED");
+  }
+  await db.doc(`food_orders/${id}`).update({status:"READY_FOR_PICKUP",pickupCode:null});
+  assert.equal((await send(f.manager.token,readyPath(f.store,id),{},"POST")).status,409);
+  assert.equal((await db.doc(`food_orders/${id}`).get()).get("pickupCode"),null);
+  assert.equal((await db.collection(`food_orders/${id}/status_history`).get()).size,0);
+  assert.equal((await send(f.manager.token,readyPath(f.store,"76".repeat(32)),{},"POST")).status,404);
+  assert.equal((await send(f.manager.token,readyPath(f.store,"no-valido"),{},"POST")).status,404);
+  const foreign="77".repeat(32);await seedOrder(f.other,f.owner.uid,foreign);
+  await db.doc(`food_orders/${foreign}`).update({status:"PREPARING",paymentStatus:"PENDING"});
+  assert.equal((await send(f.manager.token,readyPath(f.store,foreign),{},"POST")).status,404);
+  assert.equal((await db.doc(`food_orders/${foreign}`).get()).get("status"),"PREPARING");
+});
+test("HU21-A: datos históricos o de pago incoherentes no se marcan listos",async()=>{
+  const f=await fixture(),send=connectedHttp(app);
+  const cases:[string,Record<string,unknown>,number][]=[
+    ["78".repeat(32),{paymentStatus:"PENDING",schemaVersion:2},404],
+    ["79".repeat(32),{paymentStatus:"PENDING",paymentMethod:"CARD"},409],
+    ["7a".repeat(32),{paymentStatus:"PAID"},409],
+    ["7b".repeat(32),{paymentStatus:"PENDING",pickupCode:"1234"},409],
+    ["7c".repeat(32),{paymentStatus:"PAID",paymentSimulation:true,pickupCode:"12a4"},409],
+    ["7d".repeat(32),{},409]];
+  for(const [id,patch,status] of cases) {
+    await seedOrder(f.store,f.owner.uid,id);await db.doc(`food_orders/${id}`).update({status:"PREPARING",...patch});
+    const r=await send(f.manager.token,readyPath(f.store,id),{},"POST");assert.equal(r.status,status,JSON.stringify(patch));
+    assert.equal((await db.doc(`food_orders/${id}`).get()).get("status"),"PREPARING");
+  }
+  const legacy="7e".repeat(32);await seedOrder(f.store,f.owner.uid,legacy);
+  await db.doc(`food_orders/${legacy}`).update({status:"PREPARING",paymentStatus:"PAID",paymentSimulation:true,pickupCode:"0042"});
+  const r=await send(f.manager.token,readyPath(f.store,legacy),{},"POST");
+  assert.equal(r.status,200);assert.equal("pickupCode" in r.body,false);
+  assert.equal((await db.doc(`food_orders/${legacy}`).get()).get("pickupCode"),"0042");
+});
+test("HU21-A: la suspensión del negocio o del local no impide terminar pedidos aceptados",async()=>{
+  const f=await fixture(),id="7f".repeat(32),other="70".repeat(32),send=connectedHttp(app);
+  await cashPreparing(f,id);await cashPreparing(f,other);
+  await db.doc(`business_requests/${f.owner.uid}`).update({status:"SUSPENDED"});
+  assert.equal((await send(f.manager.token,readyPath(f.store,id),{},"POST")).status,200);
+  await db.doc(`business_requests/${f.owner.uid}`).update({status:"APPROVED"});
+  await db.doc(`stores/${f.store}`).update({status:"SUSPENDED"});
+  assert.equal((await send(f.manager.token,readyPath(f.store,other),{},"POST")).status,200);
 });
 test("Food simula recojo, llegada y efectivo solo al confirmar el cliente",async()=>{
   const f=await fixture(),id="fd".repeat(32),send=connectedHttp(app);
@@ -175,6 +358,50 @@ test("cancelled or already answered orders cannot be decided again",async()=>{
   await db.doc(`food_orders/${id}`).update({status:"CANCELLED"});
   assert.equal((await decide(f.manager,f.store,id,{action:"ACCEPT",estimatedPreparationMinutes:20})).status,409);
   assert.equal((await decide(f.manager,f.store,id,{action:"REJECT",reason:"STORE_BUSY"})).status,409);
+});
+test("owner and a manager of another local cannot decide; nothing is written",async()=>{
+  const f=await fixture(),id="c1".repeat(32);await seedOrder(f.other,f.owner.uid,id);await seedOrder(f.store,f.owner.uid,"c2".repeat(32));
+  const before=(await db.doc(`food_orders/${id}`).get()).data();
+  for(const [a,store,orderId] of [[f.owner,f.other,id],[f.owner,f.store,"c2".repeat(32)],[f.manager,f.other,id]] as const)
+    for(const body of [{action:"ACCEPT",estimatedPreparationMinutes:20},{action:"REJECT",reason:"STORE_BUSY"}]) {
+      const r=await decide(a,store,orderId,body);assert.equal(r.status,403,`${a.uid} ${store}`);assert.equal(r.body.status,undefined);
+    }
+  assert.deepEqual((await db.doc(`food_orders/${id}`).get()).data(),before);
+  assert.equal((await db.doc(`food_orders/${"c2".repeat(32)}`).get()).get("status"),"PENDING_CONFIRMATION");
+  for(const orderId of [id,"c2".repeat(32)]) {
+    assert.equal((await db.doc(`food_orders/${orderId}/status_history/manager_decision`).get()).exists,false);
+    assert.equal((await db.collection("order_events").where("orderId","==",orderId).get()).size,0);
+  }
+});
+test("a repeated rejection is idempotent and a rejection after acceptance conflicts",async()=>{
+  const f=await fixture(),rejected="c3".repeat(32),accepted="c4".repeat(32);
+  await seedOrder(f.store,f.owner.uid,rejected);await seedOrder(f.store,f.owner.uid,accepted);
+  const body={action:"REJECT",reason:"OTHER",explanation:"Sin gas en cocina"};
+  const first=await decide(f.manager,f.store,rejected,body),repeated=await decide(f.manager,f.store,rejected,body);
+  assert.equal(first.status,200);assert.equal(repeated.status,200);assert.equal(repeated.body.status,"REJECTED");
+  const updatedAt=(await db.doc(`food_orders/${rejected}`).get()).get("updatedAt");
+  assert.equal((await db.collection(`food_orders/${rejected}/status_history`).get()).size,1);
+  assert.equal((await db.collection("order_events").where("orderId","==",rejected).get()).size,1);
+  const changed=await decide(f.manager,f.store,rejected,{action:"REJECT",reason:"STORE_BUSY"});
+  assert.equal(changed.status,409);assert.equal(changed.body.error,"ORDER_STATE_CHANGED");
+  assert.ok((await db.doc(`food_orders/${rejected}`).get()).get("updatedAt").isEqual(updatedAt));
+  assert.equal((await decide(f.manager,f.store,accepted,{action:"ACCEPT",estimatedPreparationMinutes:15})).status,200);
+  const late=await decide(f.manager,f.store,accepted,{action:"REJECT",reason:"STORE_BUSY"});
+  assert.equal(late.status,409);assert.equal(late.body.error,"ORDER_STATE_CHANGED");
+  const order=(await db.doc(`food_orders/${accepted}`).get()).data()!;
+  assert.equal(order.status,"PREPARING");assert.equal(order.rejectionReason,undefined);
+  assert.equal((await db.collection("order_events").where("orderId","==",accepted).get()).size,1);
+});
+test("a local that is not ACTIVE blocks acceptance but still allows rejection",async()=>{
+  const f=await fixture(),acceptId="c5".repeat(32),rejectId="c6".repeat(32);
+  await seedOrder(f.store,f.owner.uid,acceptId);await seedOrder(f.store,f.owner.uid,rejectId);
+  await db.doc(`stores/${f.store}`).update({status:"SUSPENDED"});
+  const accept=await decide(f.manager,f.store,acceptId,{action:"ACCEPT",estimatedPreparationMinutes:180});
+  assert.equal(accept.status,423);assert.equal(accept.body.error,"ACCEPTANCE_SUSPENDED");
+  assert.equal((await db.doc(`food_orders/${acceptId}`).get()).get("status"),"PENDING_CONFIRMATION");
+  assert.equal((await db.collection("order_events").where("orderId","==",acceptId).get()).size,0);
+  const reject=await decide(f.manager,f.store,rejectId,{action:"REJECT",reason:"CLOSING_SOON"});
+  assert.equal(reject.status,200);assert.equal(reject.body.status,"REJECTED");
 });
 test("foreign local, owner, buyer and administrator gain no automatic inbox permission",async()=>{
   const f=await fixture();await seedOrder(f.other,f.owner.uid,"b".repeat(64));
@@ -275,3 +502,168 @@ test("CLOUD inbox keeps scoped current bindings, privacy and read access during 
   await auth.updateUser(f.manager.uid,{disabled:true});
   assert.equal((await send(f.manager.token,`/stores/${f.store}/orders`)).status,401);
 });
+
+// ---- E2: pickup security (store verification, rider events, lock and admin unlock) over LOCAL emulators only.
+const riderBase=`http://127.0.0.1:5001/${project}/southamerica-west1/riderApi/integration/v1/`;
+async function rider(path:string,method="GET",body?:unknown) {
+  const r=await fetch(riderBase+path,{method,headers:{"Content-Type":"application/json"},
+    ...(body===undefined?{}:{body:JSON.stringify(body)}),signal:AbortSignal.timeout(30_000)});
+  return {status:r.status,body:await r.json() as any};
+}
+const verifyPath=(store:string,id:string)=>`/stores/${store}/orders/${id}/pickup-verifications`;
+const attempt=(code:string,version=1,operationId=randomUUID())=>({operationId,code,assignmentId:`hu23-assignment-${version}`,assignmentVersion:version});
+/** Cash order, marked ready by the manager, with Rider-ready snapshots and assignment v1 accepted. */
+async function readyAssigned(f:Awaited<ReturnType<typeof fixture>>,id:string) {
+  await cashPreparing(f,id);
+  const ready=await connectedHttp(app)(f.manager.token,readyPath(f.store,id),{},"POST");assert.equal(ready.status,200);
+  const location={latitude:-12.1,longitude:-77.1};
+  await db.doc(`food_orders/${id}`).update({storeSnapshot:{name:"Local ficticio",phone:null},
+    pickupSnapshot:{addressText:"Local",location},dropoffSnapshot:{addressText:"Destino",location}});
+  assert.equal((await rider("rider-events","POST",hu23Event(id,"ASSIGNMENT_ACCEPTED",1))).status,200);
+  assert.equal("pickupCode" in ready.body,false); // E5.2: the store never receives it
+  return (await db.doc(`food_orders/${id}`).get()).get("pickupCode") as string; // test stands in for the rider
+}
+const wrong=(code:string)=>code==="0000"?"1111":"0000";
+
+test("E2: the assigned manager verifies the code; replay is idempotent; pickup follows and the code is never stored in attempts",async()=>{
+  const f=await fixture(),id="e2".repeat(32),send=connectedHttp(app),code=await readyAssigned(f,id);
+  assert.equal((await rider("rider-events","POST",hu23Event(id,"PICKED_UP",2))).body.error.code,"PICKUP_NOT_VERIFIED");
+  const inbox=(await page(f.manager,f.store,"?status=READY_FOR_PICKUP")).body.orders.find((o:any)=>o.orderId===id);
+  assert.equal("pickupCode" in inbox,false); // E5.2
+  assert.deepEqual(inbox.pickup,{assignment:{assignmentId:"hu23-assignment-1",assignmentVersion:1,riderDisplayName:"Ana (simulación LOCAL)",
+    vehicleType:"BICYCLE",vehiclePlate:null},verified:false,locked:false,attemptsRemaining:5});
+  const body=attempt(code),first=await send(f.manager.token,verifyPath(f.store,id),body,"POST");
+  assert.equal(first.status,200);assert.equal(first.body.outcome,"VERIFIED");
+  const replay=await send(f.manager.token,verifyPath(f.store,id),body,"POST");
+  assert.equal(replay.status,200);assert.equal(replay.body.replayed,true);
+  assert.equal((await send(f.manager.token,verifyPath(f.store,id),{...body,assignmentVersion:2,assignmentId:"hu23-assignment-2"},"POST")).body.error,
+    "IDEMPOTENCY_CONFLICT");
+  assert.equal((await send(f.manager.token,verifyPath(f.store,id),attempt(wrong(code)),"POST")).body.outcome,"ALREADY_VERIFIED");
+  assert.equal((await db.doc(`food_orders/${id}`).get()).get("status"),"READY_FOR_PICKUP");
+  const detail=await rider(`orders/${id}`);
+  assert.equal(detail.body.order.pickupCode,null);assert.equal(detail.body.order.pickupVerification.assignmentVersion,1);
+  assert.equal((await rider("rider-events","POST",hu23Event(id,"PICKED_UP",2))).status,200);
+  assert.equal((await db.doc(`food_orders/${id}`).get()).get("status"),"IN_DELIVERY");
+  for(const doc of (await db.collection(`food_orders/${id}/pickup_attempts`).get()).docs){
+    assert.equal("code" in doc.data(),false);assert.equal(JSON.stringify(doc.data()).includes(`"${code}"`),false);
+  }
+});
+
+test("E2: only the assigned verified manager may verify; state and assignment are enforced",async()=>{
+  const f=await fixture(),id="e3".repeat(32),send=connectedHttp(app),code=await readyAssigned(f,id);
+  for(const [a,store] of [[f.owner,f.store],[f.buyer,f.store],[f.manager,f.other],[admin,f.store]] as const)
+    assert.equal((await send(a.token,verifyPath(store,id),attempt(code),"POST")).status,403);
+  assert.equal((await send(undefined,verifyPath(f.store,id),attempt(code),"POST")).status,401);
+  assert.equal((await send(f.manager.token,verifyPath(f.store,id),{code},"POST")).status,400);
+  const other=await send(f.manager.token,verifyPath(f.store,id),attempt(code,2),"POST");
+  assert.equal(other.status,409);assert.equal(other.body.error,"ASSIGNMENT_CHANGED");
+  assert.equal((await rider("rider-events","POST",hu23Event(id,"ASSIGNMENT_RELEASED",2))).status,200);
+  assert.equal((await send(f.manager.token,verifyPath(f.store,id),attempt(code),"POST")).body.error,"ASSIGNMENT_CHANGED");
+  assert.equal((await send(f.manager.token,verifyPath(f.store,id),attempt(code,2),"POST")).body.error,"ASSIGNMENT_CHANGED");
+  assert.equal((await db.doc(`food_orders/${id}`).get()).get("pickupSecurity.failures") ?? 0,0);
+});
+
+test("E2: a release invalidates the verification; the new assignment must be verified again",async()=>{
+  const f=await fixture(),id="e4".repeat(32),send=connectedHttp(app),code=await readyAssigned(f,id);
+  assert.equal((await send(f.manager.token,verifyPath(f.store,id),attempt(code),"POST")).body.outcome,"VERIFIED");
+  assert.equal((await rider("rider-events","POST",hu23Event(id,"ASSIGNMENT_RELEASED",2))).status,200);
+  assert.equal((await db.doc(`food_orders/${id}`).get()).get("pickupSecurity.verification"),null);
+  assert.equal((await rider("rider-events","POST",hu23Event(id,"ASSIGNMENT_ACCEPTED",3,2))).status,200);
+  assert.equal((await rider("rider-events","POST",hu23Event(id,"PICKED_UP",4,2))).body.error.code,"PICKUP_NOT_VERIFIED");
+  assert.equal((await rider(`orders/${id}`)).body.order.pickupCode,code);
+  assert.equal((await send(f.manager.token,verifyPath(f.store,id),attempt(code,2),"POST")).body.outcome,"VERIFIED");
+  assert.equal((await rider("rider-events","POST",hu23Event(id,"PICKED_UP",4,2))).status,200);
+});
+
+test("E2: five wrong codes lock the order (also concurrently); the lock survives a release; only an admin unlocks with a new code",async()=>{
+  const f=await fixture(),id="e5".repeat(32),send=connectedHttp(app),code=await readyAssigned(f,id),bad=wrong(code);
+  for(let i=4;i>=3;i--){
+    const r=await send(f.manager.token,verifyPath(f.store,id),attempt(bad),"POST");
+    assert.equal(r.status,409);assert.equal(r.body.error,"PICKUP_CODE_INVALID");assert.equal(r.body.attemptsRemaining,i);
+  }
+  const parallel=await Promise.all([0,1,2].map(()=>send(f.manager.token,verifyPath(f.store,id),attempt(bad),"POST")));
+  assert.deepEqual(parallel.map(r=>r.status).sort(),[409,409,423]);
+  const locked=(await db.doc(`food_orders/${id}`).get()).data()!;
+  assert.equal(locked.pickupSecurity.failures,5);assert.ok(locked.pickupSecurity.lockedAt instanceof Timestamp);
+  assert.equal((await send(f.manager.token,verifyPath(f.store,id),attempt(code),"POST")).status,423);
+  const detail=await rider(`orders/${id}`);
+  assert.equal(detail.body.order.pickupCode,null);assert.equal(detail.body.order.pickupLock.reason,"MAX_ATTEMPTS");
+  assert.equal((await rider("rider-events","POST",hu23Event(id,"ASSIGNMENT_RELEASED",2))).status,200);
+  assert.equal((await rider("rider-events","POST",hu23Event(id,"ASSIGNMENT_ACCEPTED",3,2))).body.error.code,"PICKUP_LOCKED");
+  assert.equal((await db.doc(`food_orders/${id}`).get()).get("pickupSecurity.failures"),5);
+
+  assert.equal((await send(f.manager.token,"/admin/pickup-incidents",undefined,"GET")).status,403);
+  const incidents=await send(admin.token,"/admin/pickup-incidents",undefined,"GET");
+  assert.equal(incidents.status,200);
+  const incident=incidents.body.incidents.find((row:any)=>row.orderId===id);
+  assert.deepEqual(Object.keys(incident).sort(),["cycle","failures","hasAssignment","lockedAt","orderId","shortId","status","storeId","storeName"]);
+  assert.equal(JSON.stringify(incidents.body).includes(code),false);
+  const unlockPath=`/admin/pickup-incidents/${id}/unlock`,unlock={operationId:randomUUID(),reason:"Repartidor confirmado por el local"};
+  assert.equal((await send(f.manager.token,unlockPath,unlock,"POST")).status,403);
+  assert.equal((await send(admin.token,unlockPath,{operationId:randomUUID(),reason:"no"},"POST")).status,400);
+  const done=await send(admin.token,unlockPath,unlock,"POST");
+  assert.equal(done.status,200);assert.equal(done.body.cycle,2);assert.equal(JSON.stringify(done.body).includes("pickupCode"),false);
+  assert.equal((await send(admin.token,unlockPath,unlock,"POST")).body.replayed,true);
+  assert.equal((await send(admin.token,unlockPath,{...unlock,reason:"Otro motivo distinto"},"POST")).body.error,"IDEMPOTENCY_CONFLICT");
+  assert.equal((await send(admin.token,unlockPath,{operationId:randomUUID(),reason:"Segundo intento"},"POST")).body.error,"PICKUP_NOT_LOCKED");
+  const after=(await db.doc(`food_orders/${id}`).get()).data()!;
+  assert.notEqual(after.pickupCode,code);assert.match(after.pickupCode,/^\d{4}$/);
+  assert.deepEqual({...after.pickupSecurity},{cycle:2,failures:0,lockedAt:null,verification:null});
+  assert.equal((await db.collection(`food_orders/${id}/pickup_attempts`).get()).size,6);
+  const audit=(await db.collection(`food_orders/${id}/pickup_unlocks`).get()).docs.map(doc=>doc.data());
+  assert.equal(audit.length,1);assert.equal(audit[0].actorUid,admin.uid);assert.equal(JSON.stringify(audit[0]).includes(after.pickupCode),false);
+  assert.equal((await rider("rider-events","POST",hu23Event(id,"ASSIGNMENT_ACCEPTED",3,2))).status,200);
+  assert.equal((await rider(`orders/${id}`)).body.order.pickupCode,after.pickupCode);
+  assert.equal((await send(f.manager.token,verifyPath(f.store,id),attempt(after.pickupCode,2),"POST")).body.outcome,"VERIFIED");
+});
+
+// ---- E5.1: Food simulations never move a Rider-managed order (server-side, inside the transaction)
+const simulate=(send:ReturnType<typeof connectedHttp>,f:Awaited<ReturnType<typeof fixture>>,id:string,step:"pickup"|"arrival")=>
+  send(f.manager.token,`/stores/${f.store}/orders/${id}/simulate-${step}`,{},"POST");
+test("E5.1: assigned, released, verified and locked orders cannot be simulated; untouched orders still can (LOCAL lab)",async()=>{
+  const f=await fixture(),send=connectedHttp(app);
+  const assigned="d1".repeat(32);await readyAssigned(f,assigned);
+  const r1=await simulate(send,f,assigned,"pickup");assert.equal(r1.status,409);assert.equal(r1.body.error,"RIDER_MANAGED");
+  const released="d2".repeat(32);await readyAssigned(f,released);
+  assert.equal((await rider("rider-events","POST",hu23Event(released,"ASSIGNMENT_RELEASED",2))).status,200);
+  assert.equal((await simulate(send,f,released,"pickup")).body.error,"RIDER_MANAGED");
+  const locked="d3".repeat(32);await cashPreparing(f,locked);
+  assert.equal((await send(f.manager.token,readyPath(f.store,locked),{},"POST")).status,200);
+  await db.doc(`food_orders/${locked}`).update({pickupSecurity:{cycle:1,failures:5,lockedAt:Timestamp.now(),verification:null}});
+  assert.equal((await simulate(send,f,locked,"pickup")).body.error,"RIDER_MANAGED");
+  const free="d4".repeat(32);await cashPreparing(f,free);
+  assert.equal((await send(f.manager.token,readyPath(f.store,free),{},"POST")).status,200);
+  assert.equal((await simulate(send,f,free,"pickup")).status,200);
+  for(const id of [assigned,released,locked])assert.equal((await db.doc(`food_orders/${id}`).get()).get("status"),"READY_FOR_PICKUP");
+});
+test("E5.1: a store inside the Rider scope cannot start a simulation even before any Rider event",async()=>{
+  const f=await fixture(),id="d5".repeat(32);await cashPreparing(f,id);
+  const pilot=connectedHttp(app,{mode:"PILOT",storeIds:new Set([f.store])});
+  assert.equal((await pilot(f.manager.token,readyPath(f.store,id),{},"POST")).status,200);
+  const blocked=await simulate(pilot,f,id,"pickup");assert.equal(blocked.status,409);assert.equal(blocked.body.error,"RIDER_MANAGED");
+  assert.equal((await simulate(connectedHttp(app,{mode:"GENERAL"}),f,id,"pickup")).body.error,"RIDER_MANAGED");
+  const other=connectedHttp(app,{mode:"PILOT",storeIds:new Set(["another-store"])});
+  assert.equal((await simulate(other,f,id,"pickup")).status,200);
+});
+test("E5.1: arrival and buyer confirmation refuse an order that Rider touched after a simulated pickup",async()=>{
+  const f=await fixture(),id="d6".repeat(32),send=connectedHttp(app);await cashPreparing(f,id);
+  await db.doc(`food_orders/${id}`).update({buyerUid:f.buyer.uid});
+  assert.equal((await send(f.manager.token,readyPath(f.store,id),{},"POST")).status,200);
+  assert.equal((await simulate(send,f,id,"pickup")).status,200);
+  await db.doc(`food_orders/${id}`).update({riderIntegration:{lastEventSequence:1,lastAssignmentVersion:1,status:"ACCEPTED",
+    assignment:{id:"x",version:1},rider:null,deliveryOutcome:null,reason:null,updatedAt:Timestamp.now()}});
+  assert.equal((await simulate(send,f,id,"arrival")).body.error,"RIDER_MANAGED");
+  await db.doc(`food_orders/${id}`).update({"fulfillmentSimulation.stage":"AT_CUSTOMER","fulfillmentSimulation.arrivedAt":Timestamp.now()});
+  assert.equal((await send(f.buyer.token,`/me/orders/${id}/confirm-received`,{},"POST")).status,409);
+  assert.equal((await db.doc(`food_orders/${id}`).get()).get("paymentStatus"),"PENDING");
+});
+test("E5.1: an invalid activation value makes simulations fail closed",async()=>{
+  const f=await fixture(),id="d7".repeat(32);await cashPreparing(f,id);
+  assert.equal((await connectedHttp(app)(f.manager.token,readyPath(f.store,id),{},"POST")).status,200);
+  const broken=createFoodApiHandlerWithBrokenActivation();
+  const r=await broken(f.manager.token,`/stores/${f.store}/orders/${id}/simulate-pickup`,{},"POST");
+  assert.equal(r.status,503);assert.equal((await db.doc(`food_orders/${id}`).get()).get("status"),"READY_FOR_PICKUP");
+});
+function createFoodApiHandlerWithBrokenActivation(){
+  return connectedHttp(app,new Proxy({} as any,{get(){throw new Error("RIDER_ACTIVATION_INVALID");}}));
+}
