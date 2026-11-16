@@ -25,6 +25,7 @@ import androidx.compose.material.icons.filled.Campaign
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.CreditCard
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.GppMaybe
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.People
@@ -85,6 +86,7 @@ fun AccountScreen(
     onOpenAdminReview: () -> Unit = {},
     onOpenAdminSupervision: () -> Unit = {},
     onOpenAdminAuditLog: () -> Unit = {},
+    onOpenAdminPickupIncidents: () -> Unit = {},
     onSignOut: () -> Unit,
     modifier: Modifier = Modifier,
     viewModel: ProfileViewModel = hiltViewModel(),
@@ -102,7 +104,7 @@ fun AccountScreen(
         onOpenBusiness, onOpenStoreOperations, onOpenManageCatalog, onOpenStoreProductConfiguration,
         onOpenAdminReview, onOpenAdminSupervision, onOpenAdminAuditLog,
         { authorize { viewModel.signOut { protected -> ProfileViewModel.warnIfUnprotected(context, protected); onSignOut() } } },
-        modifier, onRecoverPurchase, onOpenMyPurchases)
+        modifier, onRecoverPurchase, onOpenMyPurchases, onOpenAdminPickupIncidents)
 }
 
 @Composable
@@ -119,6 +121,7 @@ internal fun AccountContent(
     onSignOut: () -> Unit = {}, modifier: Modifier = Modifier,
     onRecoverPurchase: () -> Unit = {},
     onOpenMyPurchases: () -> Unit = {},
+    onOpenAdminPickupIncidents: () -> Unit = {},
 ) {
     Column(
         modifier = modifier
@@ -180,6 +183,11 @@ internal fun AccountContent(
         }
         if (verifiedAdmin) {
             SectionHeader("ADMINISTRACIÓN CHASKI")
+            Text(
+                stringResource(R.string.admin_section_permission_note),
+                style = MaterialTheme.typography.bodySmall,
+                color = ChaskiTextMuted,
+            )
             AccountMenuItem(
                 icon = Icons.Filled.AdminPanelSettings,
                 title = stringResource(R.string.admin_hu06_title),
@@ -202,6 +210,15 @@ internal fun AccountContent(
                 subtitle = stringResource(R.string.admin_audit_subtitle),
                 titleColor = ChaskiAdminAccent,
                 onClick = onOpenAdminAuditLog,
+            )
+
+            // HU21-B: available because of the admin permission, not because of the owner experience.
+            AccountMenuItem(
+                icon = Icons.Filled.GppMaybe,
+                title = stringResource(R.string.admin_pickup_incidents_title),
+                subtitle = stringResource(R.string.admin_pickup_incidents_subtitle),
+                titleColor = ChaskiAdminAccent,
+                onClick = onOpenAdminPickupIncidents,
             )
         }
 

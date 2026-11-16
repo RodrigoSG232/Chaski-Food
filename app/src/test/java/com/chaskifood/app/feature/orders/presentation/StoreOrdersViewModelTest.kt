@@ -39,6 +39,11 @@ class StoreOrdersViewModelTest {
             extensions+=orderId to extension;extensionGate?.await();return this.extension
         }
         override suspend fun markReady(context:StoreOrdersContext,orderId:String)=ready
+        val pickups=mutableListOf<PickupVerificationAttempt>()
+        var pickup:PickupVerificationResult=PickupVerificationResult.Unavailable
+        override suspend fun verifyPickup(context:StoreOrdersContext,orderId:String,attempt:PickupVerificationAttempt):PickupVerificationResult {
+            pickups+=attempt;return pickup
+        }
     }
     private fun vm(repo:Repo,store:String="store")=StoreOrdersViewModel(repo,SavedStateHandle(mapOf("businessId" to "business","storeId" to store)))
     @Test fun firstLoadRefreshAndPagingUseExistingContextWithoutDuplicateCalls()=runTest {
@@ -135,14 +140,15 @@ class StoreOrdersViewModelTest {
         repo.extension=PreparationExtensionResult.AccessDenied;vm.extendPreparation("order",10);runCurrent()
         assertTrue(vm.state.value.accessDenied);assertTrue(vm.state.value.orders.isEmpty())
     }
-    @Test fun readyTransitionRemovesPreparingOrderAndShowsPickupCode()=runTest {
+    @Test fun readyTransitionRemovesPreparingOrderWithoutShowingAnyPickupCode()=runTest {
         val repo=Repo(StoreOrdersAuthorization.Allowed(context()))
         repo.next=StoreOrdersResult.Loaded(StoreOrdersPage("store","Local",listOf(StoreOrderSummary("order",1800000000000,
             listOf(StoreOrderLine("p","Plato",1,1000,1000)),OrderAmounts(1000,300,1300),OrderStatus.PREPARING,
             estimatedPreparationMinutes=30,estimatedReadyAtEpochMillis=1800001800000)),null))
-        val vm=vm(repo);runCurrent();repo.ready=MarkOrderReadyResult.Ready("0042",1800001700000)
+        val vm=vm(repo);runCurrent();repo.ready=MarkOrderReadyResult.Ready(1800001700000)
         vm.markReady("order");runCurrent()
-        assertTrue(vm.state.value.orders.isEmpty());assertTrue(vm.state.value.message!!.contains("0042"))
+        assertTrue(vm.state.value.orders.isEmpty());assertTrue(vm.state.value.message!!.contains("Chaski Rider"))
+        assertFalse(vm.state.value.message!!.contains(Regex("[0-9]{4}")))
     }
     @Test fun uidGenerationAndRevocationClearDataAndIgnoreUncooperativeLateResponses()=runTest {
         for(next in listOf(StoreOrdersAuthorization.Denied,StoreOrdersAuthorization.SignedOut,
@@ -203,5 +209,82 @@ class StoreOrdersViewModelTest {
         gate.complete(Unit);runCurrent();assertEquals("fresh",vm.state.value.orders.single().orderId)
         repo.current=false;vm.refreshFromNotification();runCurrent()
         assertTrue(vm.state.value.orders.isEmpty());assertEquals(2,repo.calls)
+    }
+
+    // ---- E3.2: pickup verification (HU21-B)
+    private val orderId="a".repeat(64)
+    private fun ready(pickup:StorePickup?)=StoreOrdersResult.Loaded(StoreOrdersPage("store","Local",listOf(StoreOrderSummary(orderId,
+        1800000000000,listOf(StoreOrderLine("p","Plato",1,1000,1000)),OrderAmounts(1000,300,1300),OrderStatus.READY_FOR_PICKUP,
+        estimatedPreparationMinutes=30,estimatedReadyAtEpochMillis=1800001800000,readyAtEpochMillis=1800001700000,pickup=pickup)),null))
+    private val rider=StoreRiderAssignment("asg-1",1,"Carlos M.","MOTORCYCLE","ABC-123")
+    private fun readyVm(repo:Repo,pickup:StorePickup?=StorePickup(rider,false,false,5)):StoreOrdersViewModel {
+        repo.next=ready(pickup);val vm=vm(repo);vm.selectStatus(OrderStatus.READY_FOR_PICKUP);return vm
+    }
+    @Test fun dialogOpensOnlyForAVerifiableAssignment()=runTest {
+        for(p in listOf(null,StorePickup(null,false,false,5),StorePickup(rider,true,false,5),StorePickup(rider,false,true,0))){
+            val repo=Repo(StoreOrdersAuthorization.Allowed(context()));val vm=readyVm(repo,p);runCurrent()
+            vm.openPickupVerification(orderId);assertNull(vm.state.value.pickupDialog)
+        }
+        val repo=Repo(StoreOrdersAuthorization.Allowed(context()));val vm=readyVm(repo);runCurrent()
+        vm.openPickupVerification(orderId);assertEquals(PickupVerificationPhase.EDITING,vm.state.value.pickupDialog!!.phase)
+        assertEquals(5,vm.state.value.pickupDialog!!.attemptsRemaining)
+    }
+    @Test fun wrongCodeClearsTheFieldAndEachNewCodeIsANewOperation()=runTest {
+        val repo=Repo(StoreOrdersAuthorization.Allowed(context()));val vm=readyVm(repo);runCurrent();vm.openPickupVerification(orderId)
+        repo.pickup=PickupVerificationResult.InvalidCode(4);vm.submitPickupCode("1111");runCurrent()
+        val dialog=vm.state.value.pickupDialog!!
+        assertEquals(PickupVerificationPhase.INVALID_CODE,dialog.phase);assertEquals(4,dialog.attemptsRemaining);assertEquals(1,dialog.inputGeneration)
+        repo.pickup=PickupVerificationResult.InvalidCode(3);vm.submitPickupCode("2222");runCurrent()
+        assertEquals(2,repo.pickups.map{it.operationId}.distinct().size)
+        assertEquals("asg-1",repo.pickups.last().assignmentId);assertEquals(1,repo.pickups.last().assignmentVersion)
+        vm.submitPickupCode("12");runCurrent();assertEquals(2,repo.pickups.size)
+    }
+    @Test fun connectionErrorRetriesTheSameOperationAndBlocksNewCodes()=runTest {
+        val repo=Repo(StoreOrdersAuthorization.Allowed(context()));val vm=readyVm(repo);runCurrent();vm.openPickupVerification(orderId)
+        repo.pickup=PickupVerificationResult.Unavailable;vm.submitPickupCode("4321");runCurrent()
+        assertEquals(PickupVerificationPhase.CONNECTION_ERROR,vm.state.value.pickupDialog!!.phase)
+        vm.submitPickupCode("9999");runCurrent();assertEquals(1,repo.pickups.size)
+        repo.pickup=PickupVerificationResult.Verified;vm.retryPickupVerification();runCurrent()
+        assertEquals(2,repo.pickups.size);assertEquals(repo.pickups[0].operationId,repo.pickups[1].operationId)
+        assertEquals(repo.pickups[0].code,repo.pickups[1].code)
+        assertNull(vm.state.value.pickupDialog);assertEquals("Código verificado correctamente",vm.state.value.snackbar)
+        vm.snackbarShown();assertNull(vm.state.value.snackbar)
+    }
+    @Test fun dismissingAfterAnUnknownOutcomeReloadsTheServerStateAndSendingCannotBeClosed()=runTest {
+        val repo=Repo(StoreOrdersAuthorization.Allowed(context()));val vm=readyVm(repo);runCurrent();vm.openPickupVerification(orderId)
+        val gate=CompletableDeferred<Unit>();var answer:PickupVerificationResult=PickupVerificationResult.Unavailable
+        val delayed=object:StoreOrdersRepository by repo {
+            override suspend fun verifyPickup(context:StoreOrdersContext,orderId:String,attempt:PickupVerificationAttempt):PickupVerificationResult{gate.await();return answer}}
+        val vm2=StoreOrdersViewModel(delayed,SavedStateHandle(mapOf("businessId" to "business","storeId" to "store")))
+        vm2.selectStatus(OrderStatus.READY_FOR_PICKUP);runCurrent();vm2.openPickupVerification(orderId)
+        vm2.submitPickupCode("4321");runCurrent()
+        assertEquals(PickupVerificationPhase.SENDING,vm2.state.value.pickupDialog!!.phase)
+        vm2.dismissPickupVerification();assertNotNull(vm2.state.value.pickupDialog)
+        gate.complete(Unit);runCurrent()
+        assertEquals(PickupVerificationPhase.CONNECTION_ERROR,vm2.state.value.pickupDialog!!.phase)
+        val before=repo.calls;vm2.dismissPickupVerification();runCurrent()
+        assertNull(vm2.state.value.pickupDialog);assertTrue(repo.calls>before)
+    }
+    @Test fun lockAssignmentChangeAndStateChangeCloseTheDialogAndReload()=runTest {
+        for((result,text) in listOf(PickupVerificationResult.Locked to "bloqueado",PickupVerificationResult.AssignmentChanged to "repartidor cambió",
+            PickupVerificationResult.StateChanged to "pedido cambió")){
+            val repo=Repo(StoreOrdersAuthorization.Allowed(context()));val vm=readyVm(repo);runCurrent();vm.openPickupVerification(orderId)
+            repo.pickup=result;val before=repo.calls;vm.submitPickupCode("1111");runCurrent()
+            assertNull(vm.state.value.pickupDialog);assertTrue(repo.calls>before);assertTrue(vm.state.value.message!!.contains(text))
+        }
+        val repo=Repo(StoreOrdersAuthorization.Allowed(context()));val vm=readyVm(repo);runCurrent();vm.openPickupVerification(orderId)
+        repo.pickup=PickupVerificationResult.AccessDenied;vm.submitPickupCode("1111");runCurrent()
+        assertTrue(vm.state.value.accessDenied);assertNull(vm.state.value.pickupDialog)
+    }
+    @Test fun aChangedOrReleasedRiderIsFlaggedUntilVerified()=runTest {
+        val repo=Repo(StoreOrdersAuthorization.Allowed(context()));val vm=readyVm(repo);runCurrent()
+        assertTrue(vm.state.value.riderChangedOrderIds.isEmpty())
+        repo.next=ready(StorePickup(StoreRiderAssignment("asg-2",2,"Luis R.","MOTORCYCLE","XYZ-456"),false,false,3));vm.refresh();runCurrent()
+        assertEquals(setOf(orderId),vm.state.value.riderChangedOrderIds)
+        repo.next=ready(StorePickup(StoreRiderAssignment("asg-2",2,"Luis R.","MOTORCYCLE","XYZ-456"),true,false,3));vm.refresh();runCurrent()
+        assertTrue(vm.state.value.riderChangedOrderIds.isEmpty())
+        repo.next=ready(StorePickup(null,false,false,3));vm.refresh();runCurrent()
+        assertEquals(setOf(orderId),vm.state.value.riderChangedOrderIds)
+        vm.dismissRiderChange(orderId);assertTrue(vm.state.value.riderChangedOrderIds.isEmpty())
     }
 }

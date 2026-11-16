@@ -390,6 +390,9 @@ fun ChaskiNavHost(
                     onOpenAdminAuditLog = {
                         navController.navigate(ChaskiDestinations.ADMIN_AUDIT_LOG)
                     },
+                    onOpenAdminPickupIncidents = {
+                        navController.navigate(ChaskiDestinations.ADMIN_PICKUP_INCIDENTS)
+                    },
                     onSignOut = {
                         navController.navigate(ChaskiDestinations.SIGN_IN) {
                             popUpTo(0) { inclusive = true }
@@ -473,6 +476,11 @@ fun ChaskiNavHost(
             }
             protectedComposable(access, navController, ChaskiDestinations.ADMIN_AUDIT_LOG) {
                 AdminAuditLogScreen(
+                    onBack = { navController.popBackStack() },
+                )
+            }
+            protectedComposable(access, navController, ChaskiDestinations.ADMIN_PICKUP_INCIDENTS) {
+                com.chaskifood.app.feature.orders.presentation.PickupIncidentsScreen(
                     onBack = { navController.popBackStack() },
                 )
             }

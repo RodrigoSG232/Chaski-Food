@@ -28,7 +28,11 @@ class HttpStoreOrdersRepositoryTest {
     private fun api(decision:suspend (String,JsonObject)->Response<StoreOrderDecisionResponse> =
         { _, _ -> Response.error(503,"{}".toResponseBody())},
         extension:suspend (String,JsonObject)->Response<PreparationExtensionResponse> = { _, _ -> Response.error(503,"{}".toResponseBody())},
+        verify:suspend (String,JsonObject)->Response<PickupVerificationResponse> = { _, _ -> Response.error(503,"{}".toResponseBody())},
         block:suspend(String?)->Response<StoreOrdersResponse>)=object:StoreOrdersApi {
+        override suspend fun verifyPickup(storeId:String,orderId:String,authorization:String,body:JsonObject):Response<PickupVerificationResponse> {
+            assertEquals("store",storeId);assertEquals("Bearer fixture-token",authorization);return verify(orderId,body)
+        }
         override suspend fun page(storeId:String,authorization:String,cursor:String?,status:String,pageSize:Int):Response<StoreOrdersResponse> {
             assertEquals("store",storeId);assertEquals("Bearer fixture-token",authorization);assertEquals(20,pageSize);return block(cursor)
         }
@@ -142,5 +146,50 @@ class HttpStoreOrdersRepositoryTest {
         val old=(runBlocking{HttpStoreOrdersRepository(api{Response.success(legacy)},tokens,source).page(context,null,OrderStatus.PREPARING)}
             as StoreOrdersResult.Loaded).page.orders.single()
         assertEquals(0L,old.estimateRevision);assertEquals(0,old.preparationExtendedMinutes)
+    }
+
+    // ---- E3.1: pickup contract and verification
+    private val id="b".repeat(64)
+    private fun readyResponse(pickup:StorePickupResponse?)=StoreOrdersResponse(1,"store","Local",listOf(StoreOrderResponse(id,
+        1800000000000,"READY_FOR_PICKUP",listOf(StoreOrderLineResponse("p","Plato",2,1000,2000)),2000,300,2300,"PEN","CASH_ON_DELIVERY",
+        30,1_800_001_800_000,readyAtEpochMillis=1_800_001_700_000,pickup=pickup)),null)
+    @Test fun readyOrdersNeedNoPickupCodeAndMapOnlyTheAllowedRiderFields(){
+        val withRider=readyResponse(StorePickupResponse(StoreRiderAssignmentResponse("asg-1",1,"Carlos M.","MOTORCYCLE","ABC-123"),false,false,4))
+        val order=(runBlocking{HttpStoreOrdersRepository(api{Response.success(withRider)},tokens,source).page(context,null,OrderStatus.READY_FOR_PICKUP)}
+            as StoreOrdersResult.Loaded).page.orders.single()
+        assertEquals(StorePickup(StoreRiderAssignment("asg-1",1,"Carlos M.","MOTORCYCLE","ABC-123"),false,false,4),order.pickup)
+        assertTrue(order.riderManaged)
+        val legacy=(runBlocking{HttpStoreOrdersRepository(api{Response.success(readyResponse(null))},tokens,source).page(context,null,OrderStatus.READY_FOR_PICKUP)}
+            as StoreOrdersResult.Loaded).page.orders.single()
+        assertNull(legacy.pickup);assertFalse(legacy.riderManaged)
+        // foodApi still sends pickupCode to older APKs: the JSON key is ignored and never reaches the domain.
+        val json=kotlinx.serialization.json.Json{ignoreUnknownKeys=true}
+        val parsed=json.decodeFromString(StoreOrderResponse.serializer(),"""{"orderId":"$id","createdAtEpochMillis":1800000000000,
+            "status":"READY_FOR_PICKUP","items":[],"subtotalMinor":0,"deliveryFeeMinor":0,"totalMinor":0,"currency":"PEN",
+            "paymentMethod":"CASH_ON_DELIVERY","pickupCode":"0427"}""")
+        assertFalse(parsed.toString().contains("0427"))
+    }
+    @Test fun verificationSendsTheExactContractAndMapsEveryOutcome(){
+        var sent:JsonObject?=null
+        fun run(response:Response<PickupVerificationResponse>)=runBlocking{HttpStoreOrdersRepository(api(verify={_,body->sent=body;response}){
+            Response.error(503,"{}".toResponseBody())},tokens,source).verifyPickup(context,id,
+            PickupVerificationAttempt("0b8f1a52-3c4d-4e5f-8a6b-7c8d9e0f1a2b","0427","asg-1",2))}
+        assertEquals(PickupVerificationResult.Verified,run(Response.success(PickupVerificationResponse(1,"VERIFIED",5))))
+        assertEquals(setOf("operationId","code","assignmentId","assignmentVersion"),sent!!.keys)
+        assertEquals(PickupVerificationResult.AlreadyVerified,run(Response.success(PickupVerificationResponse(1,"ALREADY_VERIFIED",5,true))))
+        fun error(code:Int,body:String)=run(Response.error(code,body.toResponseBody()))
+        assertEquals(PickupVerificationResult.InvalidCode(3),error(409,"""{"error":"PICKUP_CODE_INVALID","attemptsRemaining":3}"""))
+        assertEquals(PickupVerificationResult.AssignmentChanged,error(409,"""{"error":"ASSIGNMENT_CHANGED","attemptsRemaining":5}"""))
+        assertEquals(PickupVerificationResult.OperationConflict,error(409,"""{"error":"IDEMPOTENCY_CONFLICT"}"""))
+        assertEquals(PickupVerificationResult.StateChanged,error(409,"""{"error":"ORDER_STATE_CHANGED","attemptsRemaining":5}"""))
+        assertEquals(PickupVerificationResult.Locked,error(423,"""{"error":"PICKUP_LOCKED","attemptsRemaining":0}"""))
+        assertEquals(PickupVerificationResult.AccessDenied,error(403,"{}"))
+        assertEquals(PickupVerificationResult.Unavailable,error(503,"{}"))
+        assertEquals(PickupVerificationResult.Unavailable,error(409,"""{"error":"PICKUP_CODE_INVALID"}"""))
+    }
+    @Test fun attemptsNeverPrintTheCode(){
+        val attempt=PickupVerificationAttempt("0b8f1a52-3c4d-4e5f-8a6b-7c8d9e0f1a2b","0427","asg-1",2)
+        assertFalse(attempt.toString().contains("0427"))
+        for(bad in listOf("427","04a7","")) assertThrows(IllegalArgumentException::class.java){PickupVerificationAttempt(attempt.operationId,bad,"asg-1",2)}
     }
 }

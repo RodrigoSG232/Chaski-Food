@@ -23,11 +23,49 @@ data class StoreOrderLine(val productId:String,val name:String,val quantity:Int,
         require(orderMinor(lineTotalMinor)==Math.multiplyExact(quantity.toLong(),unitPriceMinor))
     }
 }
+/** E3: logistics data the store may see. Never the rider id or phone, and never the pickup code. */
+data class StoreRiderAssignment(val assignmentId:String,val assignmentVersion:Int,val riderDisplayName:String?,
+    val vehicleType:String?,val vehiclePlate:String?) {
+    init { require(assignmentId.matches(Regex("[A-Za-z0-9_-]{1,100}")) && assignmentVersion>=1) }
+    val key get()=assignmentId+":"+assignmentVersion
+}
+/** E3: pickup security as projected by foodApi for READY_FOR_PICKUP orders. */
+data class StorePickup(val assignment:StoreRiderAssignment?,val verified:Boolean,val locked:Boolean,val attemptsRemaining:Int) {
+    init { require(attemptsRemaining in 0..5 && (!verified || assignment!=null) && (!locked || attemptsRemaining==0)) }
+    val canVerify get()=assignment!=null && !verified && !locked
+}
+/**
+ * HU21-B: the code typed by the store, as dictated by the rider. A new code is a new [operationId]; a network retry of
+ * the same attempt reuses it. [toString] never reveals the code.
+ */
+class PickupVerificationAttempt(val operationId:String,val code:String,val assignmentId:String,val assignmentVersion:Int) {
+    init {
+        require(operationId.matches(Regex("[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}")))
+        require(code.matches(Regex("[0-9]{4}")) && assignmentId.matches(Regex("[A-Za-z0-9_-]{1,100}")) && assignmentVersion>=1)
+    }
+    override fun toString()="PickupVerificationAttempt(operationId="+operationId+", assignment="+assignmentId+":"+assignmentVersion+")"
+}
+sealed interface PickupVerificationResult {
+    /** Code accepted for the current assignment. The order stays READY_FOR_PICKUP until Rider confirms PICKED_UP. */
+    data object Verified:PickupVerificationResult
+    data object AlreadyVerified:PickupVerificationResult
+    data class InvalidCode(val attemptsRemaining:Int):PickupVerificationResult
+    data object Locked:PickupVerificationResult
+    data object AssignmentChanged:PickupVerificationResult
+    data object StateChanged:PickupVerificationResult
+    data object OperationConflict:PickupVerificationResult
+    data object AccessDenied:PickupVerificationResult
+    data object AuthenticationRequired:PickupVerificationResult
+    data object NotFound:PickupVerificationResult
+    data object StaleContext:PickupVerificationResult
+    /** Timeout or network failure: the server may have processed it; only the same operation may be retried. */
+    data object Unavailable:PickupVerificationResult
+}
 class StoreOrderSummary(val orderId:String,val createdAtEpochMillis:Long,items:List<StoreOrderLine>,val amounts:OrderAmounts,
     val status:OrderStatus=OrderStatus.PENDING_CONFIRMATION,val paymentMethod:OrderPaymentMethod=OrderPaymentMethod.CASH_ON_DELIVERY,
     val estimatedPreparationMinutes:Int?=null,val estimatedReadyAtEpochMillis:Long?=null,
-    val pickupCode:String?=null,val readyAtEpochMillis:Long?=null,val simulationStage:String?=null,
-    val estimateRevision:Long=0,val preparationExtendedMinutes:Int=0) {
+    val readyAtEpochMillis:Long?=null,val simulationStage:String?=null,
+    val estimateRevision:Long=0,val preparationExtendedMinutes:Int=0,val pickup:StorePickup?=null) {
     val items:List<StoreOrderLine> = frozenOrderList(items)
     init {
         orderId(orderId);require(createdAtEpochMillis in 1..MAX_ORDER_EPOCH_MILLIS)
@@ -36,15 +74,17 @@ class StoreOrderSummary(val orderId:String,val createdAtEpochMillis:Long,items:L
         if(status==OrderStatus.PREPARING || status==OrderStatus.READY_FOR_PICKUP)require(estimatedPreparationMinutes!=null&&estimatedPreparationMinutes in 5..180 &&
             estimatedReadyAtEpochMillis!=null&&estimatedReadyAtEpochMillis in 1..MAX_ORDER_EPOCH_MILLIS)
         else require(estimatedPreparationMinutes==null&&estimatedReadyAtEpochMillis==null)
-        if(status==OrderStatus.READY_FOR_PICKUP)require(pickupCode?.matches(Regex("[0-9]{4}"))==true &&
-            readyAtEpochMillis!=null&&readyAtEpochMillis in 1..MAX_ORDER_EPOCH_MILLIS)
-        else require(pickupCode==null&&readyAtEpochMillis==null)
+        // E3: the pickup code is never required (nor kept) on the store side; the rider dictates it.
+        if(status==OrderStatus.READY_FOR_PICKUP)require(readyAtEpochMillis!=null&&readyAtEpochMillis in 1..MAX_ORDER_EPOCH_MILLIS)
+        else require(readyAtEpochMillis==null&&pickup==null)
         require(simulationStage==null || (status==OrderStatus.IN_DELIVERY && simulationStage in setOf("ON_THE_WAY","AT_CUSTOMER")))
         require(estimateRevision>=0 && preparationExtendedMinutes>=0)
     }
     fun withExtension(estimatedReadyAtEpochMillis:Long,estimateRevision:Long,preparationExtendedMinutes:Int)=StoreOrderSummary(orderId,
-        createdAtEpochMillis,items,amounts,status,paymentMethod,estimatedPreparationMinutes,estimatedReadyAtEpochMillis,pickupCode,
-        readyAtEpochMillis,simulationStage,estimateRevision,preparationExtendedMinutes)
+        createdAtEpochMillis,items,amounts,status,paymentMethod,estimatedPreparationMinutes,estimatedReadyAtEpochMillis,
+        readyAtEpochMillis,simulationStage,estimateRevision,preparationExtendedMinutes,pickup)
+    /** Rider manages the order once assigned, or once picked up without a Food simulation stage (UI hint only, not security). */
+    val riderManaged get()=pickup?.assignment!=null || (status==OrderStatus.IN_DELIVERY && simulationStage==null)
 }
 class StoreOrdersPage(val storeId:String,val storeName:String,orders:List<StoreOrderSummary>,val nextCursor:String?) {
     val orders:List<StoreOrderSummary> = frozenOrderList(orders)
@@ -112,7 +152,7 @@ sealed interface PreparationExtensionResult {
     data object Unavailable:PreparationExtensionResult
 }
 sealed interface MarkOrderReadyResult {
-    data class Ready(val pickupCode:String,val readyAtEpochMillis:Long):MarkOrderReadyResult
+    data class Ready(val readyAtEpochMillis:Long):MarkOrderReadyResult
     data object PaymentRequired:MarkOrderReadyResult
     data object StateChanged:MarkOrderReadyResult
     data object AccessDenied:MarkOrderReadyResult
@@ -139,4 +179,6 @@ interface StoreOrdersRepository {
     suspend fun markReady(context:StoreOrdersContext,orderId:String):MarkOrderReadyResult
     suspend fun simulatePickup(context:StoreOrdersContext,orderId:String):SimulatedStoreDeliveryResult = SimulatedStoreDeliveryResult.Unavailable
     suspend fun simulateArrival(context:StoreOrdersContext,orderId:String):SimulatedStoreDeliveryResult = SimulatedStoreDeliveryResult.Unavailable
+    suspend fun verifyPickup(context:StoreOrdersContext,orderId:String,attempt:PickupVerificationAttempt):PickupVerificationResult =
+        PickupVerificationResult.Unavailable
 }
