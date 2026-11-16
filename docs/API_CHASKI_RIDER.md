@@ -303,7 +303,7 @@ Las usa la app de Chaski Food, **no Rider**. Se documentan para que Rider entien
   - **Persistencia:** en el pedido, `pickupSecurity {cycle, failures, lockedAt, verification}` (aditivo; si no existe, ciclo 1). Cada intento queda en `pickup_attempts/{operationId}` (actor, asignación, ciclo, resultado; **sin el código**) y cada desbloqueo en `pickup_unlocks/{operationId}`.
   - **Atomicidad:** un intento fallido se confirma antes de responder 409/423. El quinto fallo bloquea en la misma escritura. Los intentos concurrentes se serializan.
   - **Desbloqueo:** PIN nuevo distinto del anterior, ciclo + 1, contadores a cero; se conservan los intentos anteriores. Rider obtiene el código nuevo por el detalle si la asignación sigue vigente.
-  - **Transitorio:** la bandeja y `markReady` todavía envían `pickupCode` al responsable por compatibilidad con el APK actual. **No es la seguridad final:** se retira en E3/E5 antes de activar el flujo real. La bandeja añade `pickup {assignment (sin id ni teléfono del repartidor), verified, locked, attemptsRemaining}` para E3.
+  - **[REPO, E5.2] El PIN ya no se envía al responsable** (bandeja ni `markReady`), en ningún local. Solo lo recibe el backend Rider en el detalle, con una asignación vigente. La bandeja incluye `pickup {assignment (sin id ni teléfono del repartidor), verified, locked, attemptsRemaining}`. Requisito: todos los participantes deben usar el APK actual (E3 o posterior); no hay compatibilidad con APKs anteriores.
 - **Pendiente:** la interfaz del responsable y del administrador (E3, Pencil primero).
 
 ## 9. Errores
@@ -333,9 +333,18 @@ Cuerpo de error de Food: `{"error":{"code":"…","retryable":<true solo en 5xx>}
   4. Se activa en general.
 - **Si apareciera un consumidor del formato anterior,** se mantendría la compatibilidad para él o se habilitaría v2.
 
+## 10b. Activación y piloto [REPO, E5.3, no desplegado]
+- **Parámetro de despliegue `CHASKI_RIDER_ACTIVATION`:**
+  - sin definir o vacío → **desactivada** (por defecto): el listado viene vacío y los pedidos que no iniciaron el flujo de Rider son invisibles;
+  - `pilot:<storeId>,<storeId>` → solo esos locales (ids de Firestore; nunca nombres ni ids fijados en el código);
+  - `general` → todos los locales.
+  - Cualquier otro valor → `503` (falla en modo cerrado).
+- **Fuera del ámbito:** el pedido no se ofrece; el detalle, los eventos y el tracking responden `404 ORDER_NOT_FOUND`, salvo que el pedido **ya haya iniciado** el flujo de Rider. Así, una entrega en curso puede terminarse y conciliarse aunque el piloto se reduzca. Una **asignación nueva** (`ASSIGNMENT_ACCEPTED`) fuera del ámbito → `409 ORDER_NOT_READY`.
+- **Simulaciones de Food** (E5.1): `409 RIDER_MANAGED` si el pedido tiene eventos de Rider, verificación o bloqueo de PIN, cobro o revisión, o si su local está dentro del ámbito, aunque Rider aún no haya enviado eventos. No afecta al contrato de Rider.
+
 ## 11. Estado de despliegue y diferencias publicadas
 
-| Elemento | [CLOUD] `riderapi-00001-xeg` | [REPO] `c98a32a` (E1–E3) + E4 local sin commit (15-11) | [ACORDADO] |
+| Elemento | [CLOUD] `riderapi-00001-xeg` | [REPO] `8faa72c` (E1–E4) + E5 local sin commit (15-11) | [ACORDADO] |
 |---|---|---|---|
 | Elegibilidad del efectivo | No | **Sí (E1.2):** `CASH_ON_DELIVERY` + `PENDING` con código, en listado, detalle y eventos `ASSIGNMENT_ACCEPTED`, `ARRIVED_AT_MERCHANT` y `ASSIGNMENT_RELEASED`. `PICKED_UP`, `ARRIVED_AT_CUSTOMER` y `COMPLETED_*` → `409 ORDER_NOT_READY` **temporal** hasta E2/E4 (no apto para la integración real). Prepago antiguo sin cambios | Sí |
 | `pickupCode` en el listado | Sí | **No** (E1.1) | No |

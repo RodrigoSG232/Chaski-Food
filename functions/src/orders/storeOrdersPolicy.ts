@@ -70,7 +70,7 @@ export function optionalCounter(value:unknown):number {
 }
 /**
  * E2 (additive, for E3): what the store needs to verify the rider — current assignment, rider name and plate, and the
- * pickup security state. Never the rider id or phone. NOTE: pickupCode is still sent for the current APK (transitional).
+ * pickup security state. Never the rider id or phone, and never the pickup code (E5.2).
  */
 function storePickupView(data:Record<string,any>){
   const security=readPickupSecurity(data.pickupSecurity),assignment=data.riderIntegration?.assignment,rider=data.riderIntegration?.rider;
@@ -108,6 +108,7 @@ export function projectStoreOrder(id:string,data:Record<string,any>,status:Store
       ...(status!=="IN_DELIVERY"?{estimatedPreparationMinutes:data.estimatedPreparationMinutes,
         estimatedReadyAtEpochMillis:data.estimatedReadyAt.toMillis(),estimateRevision,preparationExtendedMinutes}:{}),
       ...(status==="IN_DELIVERY"?{simulationStage}:{}),
-      ...(ready?{pickupCode:data.pickupCode,readyAtEpochMillis:data.readyAt.toMillis(),pickup:storePickupView(data)}:{})};
+      // E5.2: the pickup code is never sent to the store; the rider dictates it (verification endpoint).
+      ...(ready?{readyAtEpochMillis:data.readyAt.toMillis(),pickup:storePickupView(data)}:{})};
   }catch{throw new OrderHttpError("DATA_INCONSISTENT",503,true);}
 }

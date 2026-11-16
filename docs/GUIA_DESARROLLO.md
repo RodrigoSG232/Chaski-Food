@@ -41,7 +41,7 @@ El repositorio incluye un sembrador idempotente exclusivo de `demo-chaski-hu15`.
 1. Levanta los emuladores y deja la terminal abierta:
    ```bash
    cd functions
-   CHASKI_ROUTE_FIXTURE=enabled npm run emulators
+   CHASKI_ROUTE_FIXTURE=enabled CHASKI_RIDER_ACTIVATION=general npm run emulators   # sin CHASKI_RIDER_ACTIVATION, riderApi queda desactivada
    ```
 2. Desde otra terminal, compila y crea el escenario deseado:
    ```bash
@@ -94,7 +94,7 @@ La carga administrativa es idempotente, exige credenciales fuera del repositorio
 | Qué | Comando |
 |---|---|
 | Unitarias backend | `npm --prefix functions test` (tras `build`) |
-| Backend + reglas en emulador (laboratorio limpio, secuencial; requiere `$env:CHASKI_ROUTE_FIXTURE='enabled'` y `.secret.local` ficticio) | desde `functions/`: `npx firebase emulators:exec --only auth,firestore,functions --project demo-chaski-hu15 --config ../firebase.json "node --test --test-concurrency=1 lib/test/*.emulator.js"` |
+| Backend + reglas en emulador (laboratorio limpio, secuencial; requiere `$env:CHASKI_ROUTE_FIXTURE='enabled'`, `$env:CHASKI_RIDER_ACTIVATION='general'` para las pruebas HTTP de riderApi, y `.secret.local` ficticio) | desde `functions/`: `npx firebase emulators:exec --only auth,firestore,functions --project demo-chaski-hu15 --config ../firebase.json "node --test --test-concurrency=1 lib/test/*.emulator.js"` |
 | Paquete de Functions (antes de publicar) | `npm --prefix functions run verify:package` |
 | JVM Android | `.\gradlew.bat :app:testDebugUnitTest` + las propiedades del modo cuyo JSON esté activo |
 | Compilar pruebas instrumentadas | `.\gradlew.bat :app:compileDebugAndroidTestKotlin` + propiedades del modo |

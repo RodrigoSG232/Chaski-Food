@@ -11,6 +11,7 @@ import { PickupVerificationService } from "./orders/pickupVerificationService";
 import { PickupIncidentService } from "./orders/pickupIncidentService";
 import { parsePickupUnlockRequest, parsePickupVerificationRequest } from "./orders/pickupSecurityPolicy";
 import { FoodDeliverySimulationService } from "./orders/foodDeliverySimulationService";
+import { RiderActivation } from "./integration/riderActivation";
 import { BuyerOrdersReader } from "./orders/buyerOrdersReader";
 import { OrderCancellationService } from "./orders/orderCancellationService";
 import { SimulatedPaymentService } from "./orders/simulatedPaymentService";
@@ -37,6 +38,8 @@ export interface FoodApiDependencies {
   runtime(): RuntimeEnvironment;
   app(runtime: RuntimeEnvironment): App;
   routeFixture?: string;
+  /** E5: Rider scope (CHASKI_RIDER_ACTIVATION). Absent = DISABLED; an invalid value makes simulations fail closed. */
+  riderActivation?: () => RiderActivation;
   routeReader(runtime: RuntimeEnvironment): { reader: RouteReader };
 }
 /** Same authoritative services in LOCAL and CLOUD; tests inject only platform boundaries. */
@@ -128,7 +131,7 @@ export function createFoodApiHandler(dependencies: FoodApiDependencies): FoodHtt
             throw new OrderHttpError("INVALID_REQUEST",400);
           const app=dependencies.app(runtime),auth=getAuth(app);
           const actor=await verifyCommercialIdentity(auth,request.get("authorization"));
-          response.status(200).json(await new FoodDeliverySimulationService(getFirestore(app),auth).storeAction(actor,
+          response.status(200).json(await new FoodDeliverySimulationService(getFirestore(app),auth,Date.now,dependencies.riderActivation?.()??{mode:"DISABLED"}).storeAction(actor,
             decodeURIComponent(storeSimulationPath[1]),decodeURIComponent(storeSimulationPath[2]),
             storeSimulationPath[3] as "pickup"|"arrival"));
         } catch(error) {
@@ -232,7 +235,7 @@ export function createFoodApiHandler(dependencies: FoodApiDependencies): FoodHtt
           if (Object.keys(request.query).length || request.body && Object.keys(request.body).length)
             throw new OrderHttpError("INVALID_REQUEST",400);
           const app=dependencies.app(runtime),auth=getAuth(app),uid=await verifyBuyerToken(auth,request.get("authorization"));
-          response.status(200).json(await new FoodDeliverySimulationService(getFirestore(app),auth)
+          response.status(200).json(await new FoodDeliverySimulationService(getFirestore(app),auth,Date.now,dependencies.riderActivation?.()??{mode:"DISABLED"})
             .buyerConfirm(uid,decodeURIComponent(confirmReceivedPath[1])));
         } catch(error) {
           if(error instanceof AuthenticationRequired)response.status(401).json({error:"AUTHENTICATION_REQUIRED"});

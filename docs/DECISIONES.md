@@ -120,6 +120,13 @@ Decisiones **aprobadas** por el equipo que siguen aplicando y condicionan las pr
 
   Hasta entonces, el ciclo de conciliación **no está completo**.
 
+- **E5 (15-11-2026), decisiones del responsable de Food:**
+  - **sin compatibilidad con APKs anteriores a E3:** el backend deja de enviar el PIN al responsable en **todos** los locales; actualizar el APK de todos los participantes es requisito previo a E6;
+  - **se confía en el cobro declarado por Rider**, sin verificación bancaria, pero Food conserva su total y solo marca `PAID` con el importe exacto; una diferencia queda `PENDING` más la revisión `OPEN`, y se conserva la declaración original;
+  - **piloto por locales** con el parámetro `CHASKI_RIDER_ACTIVATION` (desactivado por defecto);
+  - **simulaciones bloqueadas en el backend** para los pedidos de Rider y para los locales del ámbito;
+  - **LOCAL frente a CLOUD:** en LOCAL la simulación del laboratorio sigue disponible para los pedidos que Rider no tocó y fuera del ámbito; las reglas por pedido valen igual en LOCAL y en CLOUD.
+
 ### Secuencias y resiliencia
 - **Secuencia:** `eventSequence` es por pedido, no por repartidor; continúa tras liberaciones y reasignaciones; un evento rechazado sin aplicarse no consume su secuencia.
 - **Responsabilidades de Rider:**

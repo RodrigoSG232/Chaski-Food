@@ -6,6 +6,7 @@ import { createRiderApiHandler } from "./riderApiHandler";
 import { QuoteError } from "./delivery/deliveryQuoteService";
 import { OpenRouteServiceReader } from "./delivery/openRouteServiceReader";
 import { RouteReader } from "./delivery/routeReader";
+import { parseRiderActivation } from "./integration/riderActivation";
 import { initializeRuntimeApp, resolveRuntimeEnvironment, routeSourceForRuntime, RuntimeConfigurationError } from "./runtimeEnvironment";
 
 const heigitKey = defineSecret("HEIGIT_API_KEY");
@@ -19,6 +20,7 @@ export const foodApi = onRequest({ region: "southamerica-west1", timeoutSeconds:
     },
     routeFixture: process.env.CHASKI_ROUTE_FIXTURE,
     routeReader,
+    riderActivation: () => parseRiderActivation(process.env.CHASKI_RIDER_ACTIVATION),
   }));
 
 /** Server-to-server HU22 API. Cloud Run IAM must grant invoker only to the Rider backend service account. */
@@ -30,6 +32,7 @@ export const riderApi = onRequest({region:"southamerica-west1",timeoutSeconds:15
       if(app.options.projectId!==runtime.projectId)throw new RuntimeConfigurationError();
       return app;
     },
+    activation:()=>parseRiderActivation(process.env.CHASKI_RIDER_ACTIVATION),
   }));
 
 function routeReader(runtime: ReturnType<typeof resolveRuntimeEnvironment>): { reader: RouteReader; source: "HEIGIT" | "SIMULATED" } {

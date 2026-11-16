@@ -29,7 +29,7 @@ export class OrderReadyService {
       if (order.status === "READY_FOR_PICKUP" && typeof order.pickupCode === "string" &&
           /^[0-9]{4}$/.test(order.pickupCode) && order.readyAt instanceof Timestamp) {
         return { contractVersion: 1, outcome: "UNCHANGED", status: "READY_FOR_PICKUP",
-          pickupCode: order.pickupCode, readyAtEpochMillis: order.readyAt.toMillis() };
+          readyAtEpochMillis: order.readyAt.toMillis() };
       }
       if (!orderCanBeMarkedReady(order.status)) throw new OrderHttpError("ORDER_STATE_CHANGED", 409);
       const legacyPaid=order.paymentStatus==="PAID"&&order.paymentSimulation===true&&
@@ -47,7 +47,7 @@ export class OrderReadyService {
         fromStatus: "PREPARING", toStatus: "READY_FOR_PICKUP", actorUid: actor.uid, occurredAt: at });
       createBuyerNoticeEvent(tx, this.db, {orderId, buyerUid: order.buyerUid, type:"ORDER_READY_FOR_PICKUP", sequence:2, at});
       return { contractVersion: 1, outcome: "UPDATED", status: "READY_FOR_PICKUP",
-        pickupCode: code, readyAtEpochMillis: at.toMillis() };
+        readyAtEpochMillis: at.toMillis() };
     });
   }
 }

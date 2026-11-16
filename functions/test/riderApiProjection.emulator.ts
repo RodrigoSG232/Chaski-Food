@@ -4,6 +4,9 @@ import { createHash } from "node:crypto";
 import { initializeApp, deleteApp } from "firebase-admin/app";
 import { getFirestore, Timestamp } from "firebase-admin/firestore";
 import { hu23Event, hu23Order, hu23Sample, hu23Verification } from "./lab/hu23Fixture";
+import { RiderIntegrationService } from "../src/integration/riderIntegrationService";
+import { parseRiderEvent, parseRiderTracking } from "../src/integration/riderIntegrationPolicy";
+import { RiderActivation } from "../src/integration/riderActivation";
 
 /** E1.1: what the Rider backend receives from riderApi (LOCAL emulator, synthetic data only). */
 process.env.FIRESTORE_EMULATOR_HOST = "127.0.0.1:8089";
@@ -295,4 +298,55 @@ test("E4: legacy prepaid orders finish with collection null and reject a declare
   assert.equal(done.status, 200); assert.equal(done.body.collectionStatus, null);
   const order = (await db.doc("food_orders/" + id).get()).data()!;
   assert.equal(order.paymentStatus, "PAID"); assert.equal(order.paymentSimulation, true); assert.equal(order.paymentCollection, undefined);
+});
+
+// ---- E5.3: pilot scope (service level, same Firestore emulator; the HTTP suite runs with CHASKI_RIDER_ACTIVATION=general)
+const svc = (activation: RiderActivation) => new RiderIntegrationService(db, Date.now, activation);
+const ev = (body: unknown) => [parseRiderEvent(body), body] as const;
+async function seedStore(n: number, storeId: string) {
+  const { id } = await seed(n, true);
+  await db.doc("food_orders/" + id).update({ storeId, readyAt: Timestamp.fromMillis(Date.UTC(1999, 0, 1) + n) });
+  return id;
+}
+async function listedIds(activation: RiderActivation) {
+  const ids: string[] = []; let cursor = null as any;
+  for (let i = 0; i < 100; i++) { const page: any = await svc(activation).available(50, cursor); ids.push(...page.orders.map((o: any) => o.orderId));
+    if (!page.nextCursor) return ids; cursor = JSON.parse(Buffer.from(page.nextCursor, "base64url").toString()); cursor = { seconds: cursor.s, nanoseconds: cursor.n, orderId: cursor.id }; }
+  return ids;
+}
+test("E5.3: DISABLED offers nothing; PILOT only its stores; GENERAL every store", async () => {
+  const inPilot = await seedStore(60, "pilot-store"), outside = await seedStore(61, "other-store");
+  const pilot: RiderActivation = { mode: "PILOT", storeIds: new Set(["pilot-store"]) };
+  assert.deepEqual((await svc({ mode: "DISABLED" }).available(50)).orders, []);
+  const pilotIds = await listedIds(pilot);
+  assert.ok(pilotIds.includes(inPilot)); assert.ok(!pilotIds.includes(outside));
+  const general = await listedIds({ mode: "GENERAL" });
+  assert.ok(general.includes(inPilot) && general.includes(outside));
+});
+test("E5.3: outside the scope an order is invisible and cannot be assigned; the PIN is never reachable", async () => {
+  const outside = await seedStore(62, "other-store");
+  const pilot: RiderActivation = { mode: "PILOT", storeIds: new Set(["pilot-store"]) };
+  await assert.rejects(svc(pilot).detail(outside), /ORDER_NOT_FOUND/);
+  await assert.rejects(svc({ mode: "DISABLED" }).detail(outside), /ORDER_NOT_FOUND/);
+  await assert.rejects(svc(pilot).event(...ev(hu23Event(outside, "ASSIGNMENT_ACCEPTED", 1))), /ORDER_NOT_FOUND/);
+  const inPilot = await seedStore(63, "pilot-store");
+  assert.equal((await svc(pilot).detail(inPilot) as any).order.pickupCode, null);
+  await svc(pilot).event(...ev(hu23Event(inPilot, "ASSIGNMENT_ACCEPTED", 1)));
+  assert.equal((await svc(pilot).detail(inPilot) as any).order.pickupCode, "0042");
+});
+test("E5.3: an in-flight delivery stays reachable after the scope shrinks, but gets no new assignment", async () => {
+  const id = await seedStore(64, "pilot-store");
+  const pilot: RiderActivation = { mode: "PILOT", storeIds: new Set(["pilot-store"]) }, off: RiderActivation = { mode: "DISABLED" };
+  await svc(pilot).event(...ev(hu23Event(id, "ASSIGNMENT_ACCEPTED", 1)));
+  await db.doc("food_orders/" + id).update(hu23Verification());
+  assert.equal((await svc(off).detail(id) as any).order.dispatch.assignment.version, 1);
+  await svc(off).event(...ev(hu23Event(id, "PICKED_UP", 2)));
+  await svc(off).tracking(id, parseRiderTracking(hu23Sample(1)), hu23Sample(1));
+  await svc(off).event(...ev(hu23Event(id, "COMPLETED_SUCCESSFULLY", 3, 1, { method: "CASH", amountMinor: 1300, currency: "PEN" })));
+  assert.equal((await db.doc("food_orders/" + id).get()).get("paymentStatus"), "PAID");
+  const released = await seedStore(65, "pilot-store");
+  await svc(pilot).event(...ev(hu23Event(released, "ASSIGNMENT_ACCEPTED", 1)));
+  await svc(off).event(...ev(hu23Event(released, "ASSIGNMENT_RELEASED", 2)));
+  await assert.rejects(svc(off).event(...ev(hu23Event(released, "ASSIGNMENT_ACCEPTED", 3, 2))), /ORDER_NOT_READY/);
+  assert.equal((await listedIds(off)).includes(released), false);
 });

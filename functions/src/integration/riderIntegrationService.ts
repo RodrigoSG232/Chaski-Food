@@ -2,15 +2,19 @@ import { FieldPath,Firestore,Timestamp } from "firebase-admin/firestore";
 import { OrderHttpError } from "../orders/orderRequest";
 import { decideCollection,publicCollectionReview,encodeRiderOrdersCursor,payloadHash,projectRiderOrder,RIDER_PAGE_MAX,RIDER_SCAN_BATCH,RIDER_SCAN_MAX,RiderOrdersCursor,RiderEvent,riderEventAllowedForPayment,riderOrderId,riderPaymentEligibility,RiderTracking } from "./riderIntegrationPolicy";
 import { BuyerNoticeType,createBuyerNoticeEvent } from "../notifications/buyerNoticeEvent";
+import { orderInRiderScope,RiderActivation,storeInRiderScope } from "./riderActivation";
 import { PickupSecurity,readPickupSecurity,storedPickupSecurity,verificationIsCurrent,withoutVerification } from "../orders/pickupSecurityPolicy";
 
 export class RiderIntegrationService{
-  constructor(private readonly db:Firestore,private readonly now:()=>number=Date.now){}
+  /** E5.3: [activation] limits Rider to the configured stores; DISABLED by default (fail-safe). */
+  constructor(private readonly db:Firestore,private readonly now:()=>number=Date.now,
+    private readonly activation:RiderActivation={mode:"DISABLED"}){}
 
   /** E1.3: READY_FOR_PICKUP ordered by readyAt then document id; eligibility is applied before filling the page.
    * Examines at most RIDER_SCAN_MAX documents; nextCursor always points to the LAST EXAMINED one (may follow an empty page). */
   async available(limit=20,cursor:RiderOrdersCursor|null=null){
     if(!Number.isInteger(limit)||limit<1||limit>RIDER_PAGE_MAX)throw new OrderHttpError("INVALID_REQUEST",400);
+    if(this.activation.mode==="DISABLED")return {contractVersion:1,orders:[],nextCursor:null};
     // The range bound keeps only real Timestamps: documents without readyAt (or with another type) are not listed.
     const base=this.db.collection("food_orders").where("status","==","READY_FOR_PICKUP")
       .where("readyAt",">=",Timestamp.fromMillis(0)).orderBy("readyAt").orderBy(FieldPath.documentId());
@@ -26,8 +30,10 @@ export class RiderIntegrationService{
         last={seconds:readyAt.seconds,nanoseconds:readyAt.nanoseconds,orderId:document.id};
         try{
           const data=document.data(),order=projectRiderOrder(data,"LIST");
-          // Offers only: assigned or pickup-locked orders are reconciled through the detail endpoint.
-          if(!order.dispatch.assignment&&!readPickupSecurity(data.pickupSecurity).lockedAt)orders.push(order);
+          // Offers only: assigned or pickup-locked orders are reconciled through the detail endpoint; stores outside
+          // the activation scope are never offered.
+          if(storeInRiderScope(this.activation,data.storeId)&&!order.dispatch.assignment&&!readPickupSecurity(data.pickupSecurity).lockedAt)
+            orders.push(order);
         }
         catch(error){if(!(error instanceof OrderHttpError)||error.code!=="ORDER_NOT_READY")throw error;}
         if(orders.length===limit)break;
@@ -41,7 +47,8 @@ export class RiderIntegrationService{
   async detail(rawOrderId:string){
     const orderId=riderOrderId(rawOrderId);if(!orderId)throw new OrderHttpError("ORDER_NOT_FOUND",404);
     const data=(await this.db.doc(`food_orders/${orderId}`).get()).data();
-    if(!data)throw new OrderHttpError("ORDER_NOT_FOUND",404);
+    // Out of scope and never started with Rider: invisible (same answer as a missing order).
+    if(!data||!orderInRiderScope(this.activation,data))throw new OrderHttpError("ORDER_NOT_FOUND",404);
     return {contractVersion:1,order:projectRiderOrder(data,"DETAIL")};
   }
 
@@ -55,7 +62,10 @@ export class RiderIntegrationService{
       if(known){if(known.payloadHash!==hash)throw new OrderHttpError("IDEMPOTENCY_CONFLICT",409);
         return {contractVersion:1,eventId:event.eventId,orderId:event.orderId,applied:true,lastEventSequence:known.eventSequence,
           ...(known.collectionStatus!==undefined?{collectionStatus:known.collectionStatus,collectionReview:known.collectionReview??null}:{})};}
-      if(!order||order.schemaVersion!==1)throw new OrderHttpError("ORDER_NOT_FOUND",404);
+      if(!order||order.schemaVersion!==1||!orderInRiderScope(this.activation,order))throw new OrderHttpError("ORDER_NOT_FOUND",404);
+      // A NEW assignment needs the store inside the current scope; in-flight deliveries keep their remaining events.
+      if(event.eventType==="ASSIGNMENT_ACCEPTED"&&!storeInRiderScope(this.activation,order.storeId))
+        throw new OrderHttpError("ORDER_NOT_READY",409);
       const eligibility=riderPaymentEligibility(order);
       if(eligibility===null||!riderEventAllowedForPayment(eligibility,event.eventType))
         throw new OrderHttpError("ORDER_NOT_READY",409);
@@ -143,7 +153,7 @@ export class RiderIntegrationService{
     const hash=payloadHash(rawPayload),receivedAt=Timestamp.fromMillis(this.now());
     return this.db.runTransaction(async tx=>{
       const ref=this.db.doc(`food_orders/${orderId}`),snapshot=await tx.get(ref),order=snapshot.data();
-      if(!order)throw new OrderHttpError("ORDER_NOT_FOUND",404);
+      if(!order||!orderInRiderScope(this.activation,order))throw new OrderHttpError("ORDER_NOT_FOUND",404);
       const integration=order.riderIntegration,assignment=integration?.assignment;
       if(order.status!=="IN_DELIVERY"||assignment?.id!==tracking.assignmentId||assignment.version!==tracking.assignmentVersion||
         integration.rider?.id!==tracking.riderId)throw new OrderHttpError("ASSIGNMENT_STALE",409);

@@ -247,9 +247,9 @@ test("HU21-A: solo el responsable VERIFIED asignado marca listo; los demás no c
 test("HU21-A: PREPARING en efectivo pasa a listo con historial, código y aviso; el reintento no cambia nada",async()=>{
   const f=await fixture(),id="73".repeat(32),send=connectedHttp(app);await cashPreparing(f,id);
   const first=await send(f.manager.token,readyPath(f.store,id),{},"POST");
-  assert.equal(first.status,200);assert.equal(first.body.outcome,"UPDATED");assert.match(first.body.pickupCode,/^[0-9]{4}$/);
+  assert.equal(first.status,200);assert.equal(first.body.outcome,"UPDATED");assert.equal("pickupCode" in first.body,false); // E5.2
   const order=(await db.doc(`food_orders/${id}`).get()).data()!;
-  assert.equal(order.status,"READY_FOR_PICKUP");assert.equal(order.pickupCode,first.body.pickupCode);
+  assert.equal(order.status,"READY_FOR_PICKUP");assert.match(order.pickupCode,/^[0-9]{4}$/);
   assert.equal(order.readyByUid,f.manager.uid);assert.equal(order.readyAt.toMillis(),first.body.readyAtEpochMillis);
   assert.equal(order.paymentStatus,"PENDING");assert.equal(order.estimatedPreparationMinutes,20);
   const history=(await db.doc(`food_orders/${id}/status_history/ready_for_pickup`).get()).data()!;
@@ -259,7 +259,7 @@ test("HU21-A: PREPARING en efectivo pasa a listo con historial, código y aviso;
   assert.equal(notice.exists,true);assert.equal(notice.get("buyerUid"),"PRIVATE_BUYER");
   const again=await send(f.manager.token,readyPath(f.store,id),{},"POST");
   assert.equal(again.status,200);assert.equal(again.body.outcome,"UNCHANGED");
-  assert.equal(again.body.pickupCode,first.body.pickupCode);assert.equal(again.body.readyAtEpochMillis,first.body.readyAtEpochMillis);
+  assert.equal("pickupCode" in again.body,false);assert.equal(again.body.readyAtEpochMillis,first.body.readyAtEpochMillis);
   assert.deepEqual((await db.doc(`food_orders/${id}`).get()).data(),order);
   assert.equal((await db.collection("order_events").where("orderId","==",id).get()).size,2);
 });
@@ -268,8 +268,8 @@ test("HU21-A: solicitudes simultáneas producen una sola transición, un histori
   const results=await Promise.all([0,1,2].map(()=>send(f.manager.token,readyPath(f.store,id),{},"POST")));
   for(const r of results)assert.equal(r.status,200,JSON.stringify(r.body));
   assert.deepEqual(results.map(r=>r.body.outcome).sort(),["UNCHANGED","UNCHANGED","UPDATED"]);
-  assert.equal(new Set(results.map(r=>r.body.pickupCode)).size,1);
-  assert.equal((await db.doc(`food_orders/${id}`).get()).get("pickupCode"),results[0].body.pickupCode);
+  assert.ok(results.every(r=>!("pickupCode" in r.body)));
+  assert.match((await db.doc(`food_orders/${id}`).get()).get("pickupCode"),/^[0-9]{4}$/);
   assert.equal((await db.collection(`food_orders/${id}/status_history`).where("toStatus","==","READY_FOR_PICKUP").get()).size,1);
   assert.equal((await db.collection("order_events").where("orderId","==",id).get()).size,2);
 });
@@ -309,7 +309,8 @@ test("HU21-A: datos históricos o de pago incoherentes no se marcan listos",asyn
   const legacy="7e".repeat(32);await seedOrder(f.store,f.owner.uid,legacy);
   await db.doc(`food_orders/${legacy}`).update({status:"PREPARING",paymentStatus:"PAID",paymentSimulation:true,pickupCode:"0042"});
   const r=await send(f.manager.token,readyPath(f.store,legacy),{},"POST");
-  assert.equal(r.status,200);assert.equal(r.body.pickupCode,"0042");
+  assert.equal(r.status,200);assert.equal("pickupCode" in r.body,false);
+  assert.equal((await db.doc(`food_orders/${legacy}`).get()).get("pickupCode"),"0042");
 });
 test("HU21-A: la suspensión del negocio o del local no impide terminar pedidos aceptados",async()=>{
   const f=await fixture(),id="7f".repeat(32),other="70".repeat(32),send=connectedHttp(app);
@@ -519,7 +520,8 @@ async function readyAssigned(f:Awaited<ReturnType<typeof fixture>>,id:string) {
   await db.doc(`food_orders/${id}`).update({storeSnapshot:{name:"Local ficticio",phone:null},
     pickupSnapshot:{addressText:"Local",location},dropoffSnapshot:{addressText:"Destino",location}});
   assert.equal((await rider("rider-events","POST",hu23Event(id,"ASSIGNMENT_ACCEPTED",1))).status,200);
-  return ready.body.pickupCode as string;
+  assert.equal("pickupCode" in ready.body,false); // E5.2: the store never receives it
+  return (await db.doc(`food_orders/${id}`).get()).get("pickupCode") as string; // test stands in for the rider
 }
 const wrong=(code:string)=>code==="0000"?"1111":"0000";
 
@@ -527,6 +529,7 @@ test("E2: the assigned manager verifies the code; replay is idempotent; pickup f
   const f=await fixture(),id="e2".repeat(32),send=connectedHttp(app),code=await readyAssigned(f,id);
   assert.equal((await rider("rider-events","POST",hu23Event(id,"PICKED_UP",2))).body.error.code,"PICKUP_NOT_VERIFIED");
   const inbox=(await page(f.manager,f.store,"?status=READY_FOR_PICKUP")).body.orders.find((o:any)=>o.orderId===id);
+  assert.equal("pickupCode" in inbox,false); // E5.2
   assert.deepEqual(inbox.pickup,{assignment:{assignmentId:"hu23-assignment-1",assignmentVersion:1,riderDisplayName:"Ana (simulación LOCAL)",
     vehicleType:"BICYCLE",vehiclePlate:null},verified:false,locked:false,attemptsRemaining:5});
   const body=attempt(code),first=await send(f.manager.token,verifyPath(f.store,id),body,"POST");
@@ -613,3 +616,54 @@ test("E2: five wrong codes lock the order (also concurrently); the lock survives
   assert.equal((await rider(`orders/${id}`)).body.order.pickupCode,after.pickupCode);
   assert.equal((await send(f.manager.token,verifyPath(f.store,id),attempt(after.pickupCode,2),"POST")).body.outcome,"VERIFIED");
 });
+
+// ---- E5.1: Food simulations never move a Rider-managed order (server-side, inside the transaction)
+const simulate=(send:ReturnType<typeof connectedHttp>,f:Awaited<ReturnType<typeof fixture>>,id:string,step:"pickup"|"arrival")=>
+  send(f.manager.token,`/stores/${f.store}/orders/${id}/simulate-${step}`,{},"POST");
+test("E5.1: assigned, released, verified and locked orders cannot be simulated; untouched orders still can (LOCAL lab)",async()=>{
+  const f=await fixture(),send=connectedHttp(app);
+  const assigned="d1".repeat(32);await readyAssigned(f,assigned);
+  const r1=await simulate(send,f,assigned,"pickup");assert.equal(r1.status,409);assert.equal(r1.body.error,"RIDER_MANAGED");
+  const released="d2".repeat(32);await readyAssigned(f,released);
+  assert.equal((await rider("rider-events","POST",hu23Event(released,"ASSIGNMENT_RELEASED",2))).status,200);
+  assert.equal((await simulate(send,f,released,"pickup")).body.error,"RIDER_MANAGED");
+  const locked="d3".repeat(32);await cashPreparing(f,locked);
+  assert.equal((await send(f.manager.token,readyPath(f.store,locked),{},"POST")).status,200);
+  await db.doc(`food_orders/${locked}`).update({pickupSecurity:{cycle:1,failures:5,lockedAt:Timestamp.now(),verification:null}});
+  assert.equal((await simulate(send,f,locked,"pickup")).body.error,"RIDER_MANAGED");
+  const free="d4".repeat(32);await cashPreparing(f,free);
+  assert.equal((await send(f.manager.token,readyPath(f.store,free),{},"POST")).status,200);
+  assert.equal((await simulate(send,f,free,"pickup")).status,200);
+  for(const id of [assigned,released,locked])assert.equal((await db.doc(`food_orders/${id}`).get()).get("status"),"READY_FOR_PICKUP");
+});
+test("E5.1: a store inside the Rider scope cannot start a simulation even before any Rider event",async()=>{
+  const f=await fixture(),id="d5".repeat(32);await cashPreparing(f,id);
+  const pilot=connectedHttp(app,{mode:"PILOT",storeIds:new Set([f.store])});
+  assert.equal((await pilot(f.manager.token,readyPath(f.store,id),{},"POST")).status,200);
+  const blocked=await simulate(pilot,f,id,"pickup");assert.equal(blocked.status,409);assert.equal(blocked.body.error,"RIDER_MANAGED");
+  assert.equal((await simulate(connectedHttp(app,{mode:"GENERAL"}),f,id,"pickup")).body.error,"RIDER_MANAGED");
+  const other=connectedHttp(app,{mode:"PILOT",storeIds:new Set(["another-store"])});
+  assert.equal((await simulate(other,f,id,"pickup")).status,200);
+});
+test("E5.1: arrival and buyer confirmation refuse an order that Rider touched after a simulated pickup",async()=>{
+  const f=await fixture(),id="d6".repeat(32),send=connectedHttp(app);await cashPreparing(f,id);
+  await db.doc(`food_orders/${id}`).update({buyerUid:f.buyer.uid});
+  assert.equal((await send(f.manager.token,readyPath(f.store,id),{},"POST")).status,200);
+  assert.equal((await simulate(send,f,id,"pickup")).status,200);
+  await db.doc(`food_orders/${id}`).update({riderIntegration:{lastEventSequence:1,lastAssignmentVersion:1,status:"ACCEPTED",
+    assignment:{id:"x",version:1},rider:null,deliveryOutcome:null,reason:null,updatedAt:Timestamp.now()}});
+  assert.equal((await simulate(send,f,id,"arrival")).body.error,"RIDER_MANAGED");
+  await db.doc(`food_orders/${id}`).update({"fulfillmentSimulation.stage":"AT_CUSTOMER","fulfillmentSimulation.arrivedAt":Timestamp.now()});
+  assert.equal((await send(f.buyer.token,`/me/orders/${id}/confirm-received`,{},"POST")).status,409);
+  assert.equal((await db.doc(`food_orders/${id}`).get()).get("paymentStatus"),"PENDING");
+});
+test("E5.1: an invalid activation value makes simulations fail closed",async()=>{
+  const f=await fixture(),id="d7".repeat(32);await cashPreparing(f,id);
+  assert.equal((await connectedHttp(app)(f.manager.token,readyPath(f.store,id),{},"POST")).status,200);
+  const broken=createFoodApiHandlerWithBrokenActivation();
+  const r=await broken(f.manager.token,`/stores/${f.store}/orders/${id}/simulate-pickup`,{},"POST");
+  assert.equal(r.status,503);assert.equal((await db.doc(`food_orders/${id}`).get()).get("status"),"READY_FOR_PICKUP");
+});
+function createFoodApiHandlerWithBrokenActivation(){
+  return connectedHttp(app,new Proxy({} as any,{get(){throw new Error("RIDER_ACTIVATION_INVALID");}}));
+}
