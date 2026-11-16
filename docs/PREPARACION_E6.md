@@ -188,3 +188,44 @@ Desde la raíz, con Node 22 y `functions/node_modules/firebase-tools`. **No ejec
 - Rider sin confirmar `collection` o `PICKUP_*`;
 - pedidos incompatibles en el local;
 - regresiones LOCAL en rojo.
+
+## 11. Procedimiento G5 — Functions con la integración desactivada (preparado 16-11, no ejecutado)
+- **Alcance:** solo `foodApi` y `riderApi` (codebase `food-local`). `newOrderNotifier` **se excluye**: su código no cambió desde la versión publicada.
+- **Integración desactivada:**
+  - no hay `functions/.env.chaski-food-9adba` y Cloud no tiene `CHASKI_RIDER_ACTIVATION` [CLOUD, G1];
+  - `parseRiderActivation(undefined)` → `DISABLED`: el listado viene vacío, el detalle y los eventos responden 404 (no hay pedidos con `riderIntegration`);
+  - las simulaciones de Food siguen disponibles fuera del ámbito de Rider.
+
+  **No crear archivos `.env` de producción.**
+- **Dependencias:**
+  - `package-lock.json` (desde `de669af`) fija `firebase-admin 14.5.0` (motor `>=22`);
+  - `@firebase/database*`, transitiva, declara `>=24.12`;
+  - el código **no** importa `firebase-admin/database`, así que no se carga al ejecutar;
+  - no hay `.npmrc` con `engine-strict`, así que `npm ci` lo trata como aviso (`EBADENGINE`).
+
+  Probado con Node 22 en LOCAL: build, 184/184 y emulador. **Riesgo bajo pero no verificado en Cloud Build** hasta G5.
+- **`predeploy`:** `npm run build` y `npm run verify:package` (el `ignore` excluye las pruebas, `.env*`, `.secret*` y las credenciales).
+
+| # | Paso | Tipo | Comando o verificación |
+|---|---|---|---|
+| 1 | Versiones publicadas | LECTURA | Revisión y estado de foodApi y riderApi (API de Cloud Functions v2 o Cloud Run); hoy son `foodapi-00012-net` y `riderapi-00001-xeg` |
+| 2 | Respaldo | LECTURA | Anotar las revisiones, variables (solo nombres), secretos (solo nombres), IAM de los servicios y `firestore.rules` publicadas |
+| 3 | Entorno | LOCAL | Node 22 en la sesión, árbol limpio, commit publicado (`origin/ramaDante`) |
+| 4 | Despliegue | **MODIFICA CLOUD** | `node functions/node_modules/firebase-tools/lib/bin/firebase.js deploy --only "functions:food-local:foodApi,functions:food-local:riderApi" --project chaski-food-9adba` (sin `--force`; si el CLI propone **eliminar** funciones, detenerse) |
+| 5 | Estado | LECTURA | Las dos funciones ACTIVE, `nodejs22`, revisión nueva con el 100 % del tráfico |
+| 6 | Autenticación | LECTURA/HTTP | foodApi sin token → 401; riderApi sin token o con una cuenta no autorizada → 403 (Cloud Run) |
+| 7 | Integración desactivada | HTTP de solo lectura (cuenta de Rider o propietario autorizado) | `GET /integration/v1/orders` → `{"orders":[],"nextCursor":null}`; detalle de un pedido → 404 |
+| 8 | Android | Manual (responsable) | El APK `1.1.0-e6` abre pedidos, la bandeja y el panel; la verificación de PIN y las revisiones responden |
+| 9 | Registros | LECTURA | Sin 5xx nuevos en ambas funciones |
+
+**Recuperación:**
+- ante un error de despliegue, Cloud Functions conserva la revisión anterior;
+- ante un fallo funcional, **corregir hacia adelante**. Volver a `riderapi-00001-xeg` o `foodapi-00012-net` reintroduce el PIN expuesto, solo con autorización (§3);
+- los datos no cambian en G5.
+
+**Secuencia acordada después de G5:**
+1. verificar seguridad y funcionamiento (G7 IAM);
+2. coordinar con Ángel (G6);
+3. confirmación de compatibilidad;
+4. activar el piloto (G8);
+5. pruebas conjuntas (G9).
