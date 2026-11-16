@@ -36,13 +36,23 @@ private val StoppedText = Color(0xFFB71C1C)
  * sin pago registrado no tiene cobro pendiente. No se infiere ningún reembolso.
  */
 internal fun buyerPaymentText(status: String, paymentStatus: OrderPaymentStatus, source: BuyerPaymentSource? = null,
-    inReview: Boolean = false, deliveryOutcome: String? = null): String = when {
+    inReview: Boolean = false, deliveryOutcome: String? = null, incomplete: Boolean = false): String = when {
     paymentStatus == OrderPaymentStatus.PAID && source == BuyerPaymentSource.RIDER -> "Pago registrado contra entrega"
     paymentStatus == OrderPaymentStatus.PAID -> "Efectivo registrado · simulación"
     status == "COMPLETED" && inReview -> "Pago en revisión"
+    status == "COMPLETED" && incomplete -> "Pago incompleto · saldo pendiente"
     status == "COMPLETED" && deliveryOutcome == "UNSUCCESSFUL" -> "Sin cobro: la entrega no se completó"
     status == "CANCELLED" || status == "REJECTED" -> "Sin cobro: el pedido no se entregó"
     else -> "Efectivo pendiente hasta la entrega"
+}
+
+/** E5.4b (Conc 14): estado del excedente del propio comprador; uno devuelto nunca aparece como pendiente. */
+internal fun buyerExcessText(excess: com.chaskifood.app.feature.orders.domain.BuyerPaymentExcess?): String? = excess?.let {
+    val amount = "S/ ${it.amountMinor / 100}.${(it.amountMinor % 100).toString().padStart(2, '0')}"
+    when (it.status) {
+        com.chaskifood.app.feature.orders.domain.BuyerExcessStatus.PENDING_REFUND -> "Excedente de $amount pendiente de devolución"
+        com.chaskifood.app.feature.orders.domain.BuyerExcessStatus.REFUNDED -> "Excedente de $amount devuelto"
+    }
 }
 
 /** HU19: motivo del rechazo en palabras del comprador; un motivo ausente o desconocido nunca se inventa. */

@@ -134,7 +134,11 @@ Decisiones **aprobadas** por el equipo que siguen aplicando y condicionan las pr
     - `food_orders/{id}/collection_reconciliations/{operationId}`: actor, evidencia, estado anterior y posterior, hash y resultado;
     - `payment_history/reconciliation_{operationId}` con `nature: ADJUSTMENT` o `REFUND_DECLARATION`: **no** es un movimiento de efectivo y no se suma al cobro original.
   - **Panel HU28:** un pedido `PAID` cuenta una vez por su `subtotalMinor` (regla HU28 vigente). Ni `PENDING` + `OPEN` ni `PENDING` + `RESOLVED`/`NOT_FULLY_COLLECTED` son venta, y no dan error; cualquier otro `PENDING` entregado sigue dando 503.
-  - **Pendiente:** la pantalla de administración (E5.4b, Pencil antes de Compose) y la coordinación con Rider (§5b del contrato).
+  - **E5.4b [REPO, sin desplegar]:** pantallas de Android implementadas según los diseños HU22 / Conc aprobados.
+    - El formulario no preselecciona el resultado ni da por válido el importe.
+    - El comprador ve el importe del excedente de su propio pedido, y uno devuelto nunca aparece como pendiente.
+    - **Necesidad registrada (sin decidir):** el listado tiene un máximo de 50 por tipo, sin paginación; ampliarlo exige cambiar el backend.
+  - **Pendiente:** la coordinación con Rider (§5b del contrato) y las pruebas en dispositivo (E6).
 
 - **E5 (15-11-2026), decisiones del responsable de Food:**
   - **sin compatibilidad con APKs anteriores a E3:** el backend deja de enviar el PIN al responsable en **todos** los locales; actualizar el APK de todos los participantes es requisito previo a E6;

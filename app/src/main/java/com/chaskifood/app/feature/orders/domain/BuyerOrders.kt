@@ -59,6 +59,9 @@ data class BuyerOrderRejection(val reason: StoreOrderRejectionReason?, val expla
 }
 
 enum class BuyerPaymentSource { RIDER, SIMULATED }
+enum class BuyerExcessStatus { PENDING_REFUND, REFUNDED }
+/** E5.4a: the buyer's own overpayment, in céntimos, and whether it was refunded. Never actors or evidence. */
+data class BuyerPaymentExcess(val amountMinor: Long, val status: BuyerExcessStatus) { init { require(amountMinor > 0) } }
 
 /** Copia histórica del pedido (snapshots de HU16): no cambia aunque se editen la dirección o el catálogo actuales. */
 class BuyerOrderDetail(
@@ -72,6 +75,9 @@ class BuyerOrderDetail(
     /** E4: quién registró el pago (Rider o la simulación histórica) y si el cobro está en revisión. */
     val paymentSource: BuyerPaymentSource? = null,
     val paymentInReview: Boolean = false,
+    /** E5.4a: review resolved as NOT_FULLY_COLLECTED (payment still PENDING). */
+    val paymentIncomplete: Boolean = false,
+    val paymentExcess: BuyerPaymentExcess? = null,
 ) {
     val items: List<StoreOrderLine> = frozenOrderList(items)
     val statusHistory: List<BuyerOrderStatusEntry> = frozenOrderList(statusHistory)

@@ -61,6 +61,7 @@ fun MainScreen(
     onOpenAdminSupervision: () -> Unit = {},
     onOpenAdminAuditLog: () -> Unit = {},
     onOpenAdminPickupIncidents: () -> Unit = {},
+    onOpenAdminCollectionReviews: () -> Unit = {},
     onOpenManageStores: () -> Unit = {},
     onOpenStoreOrders: (String, String) -> Unit = { _, _ -> },
     onOpenDashboard: (String) -> Unit = {},
@@ -143,6 +144,7 @@ fun MainScreen(
                     onOpenAdminSupervision = onOpenAdminSupervision,
                     onOpenAdminAuditLog = onOpenAdminAuditLog,
                     onOpenAdminPickupIncidents = onOpenAdminPickupIncidents,
+                    onOpenAdminCollectionReviews = onOpenAdminCollectionReviews,
                     onSignOut = onSignOut,
                 )
             }

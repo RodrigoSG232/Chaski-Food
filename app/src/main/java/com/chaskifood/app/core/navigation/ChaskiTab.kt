@@ -52,6 +52,7 @@ object ChaskiDestinations {
     const val ADMIN_AUDIT_LOG = "admin_audit_log"
     /** HU21-B: incidencias de recojo bloqueado (solo claim admin; excepción acotada a HU34-28). */
     const val ADMIN_PICKUP_INCIDENTS = "admin_pickup_incidents"
+    const val ADMIN_COLLECTION_REVIEWS = "admin_collection_reviews"
     const val MANAGE_STORES = "manage_stores"
     const val STORE_ORDERS = "store_orders"
     /** HU17: compras personales; «Mis compras» en Cuenta para experiencias comerciales. */

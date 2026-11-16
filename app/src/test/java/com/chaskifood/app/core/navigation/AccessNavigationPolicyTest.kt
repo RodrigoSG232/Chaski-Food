@@ -173,4 +173,11 @@ class AccessNavigationPolicyTest {
             assertFalse(AccessNavigationPolicy.allows(resolved(), route, businessId = "business"))
             assertFalse(AccessNavigationPolicy.allows(resolved(), route, storeId = "one"))
         }
-    }}
+    }
+    @Test fun `revisiones de cobro solo con permiso de administracion`() {
+        val route = ChaskiDestinations.ADMIN_COLLECTION_REVIEWS
+        assertTrue(AccessNavigationPolicy.allows(resolved(admin = true), route))
+        for (denied in listOf(resolved(), resolved(owner()), resolved(stores = listOf("one"), manager = true), AccessResolution.SignedOut))
+            assertFalse(AccessNavigationPolicy.allows(denied, route))
+    }
+}

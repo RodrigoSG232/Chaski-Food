@@ -18,7 +18,7 @@ object AccessNavigationPolicy {
     private val personalPurchaseRoutes = setOf(ChaskiDestinations.MY_ORDERS, ChaskiDestinations.ORDER_DETAIL)
     private val adminRoutes = setOf(ChaskiDestinations.ADMIN_BUSINESS_REVIEW,
         ChaskiDestinations.ADMIN_BUSINESS_SUPERVISION, ChaskiDestinations.ADMIN_AUDIT_LOG,
-        ChaskiDestinations.ADMIN_PICKUP_INCIDENTS)
+        ChaskiDestinations.ADMIN_PICKUP_INCIDENTS, ChaskiDestinations.ADMIN_COLLECTION_REVIEWS)
     private val personalRoutes = setOf(ChaskiDestinations.MAIN, ChaskiDestinations.PROFILE_INFO,
         ChaskiDestinations.ADDRESS_BOOK, ChaskiDestinations.PROFILE_PAYMENTS,
         ChaskiDestinations.REFER_FRIEND, ChaskiDestinations.SOCIAL_ACCOUNTS,

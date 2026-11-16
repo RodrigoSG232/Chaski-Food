@@ -87,6 +87,7 @@ fun AccountScreen(
     onOpenAdminSupervision: () -> Unit = {},
     onOpenAdminAuditLog: () -> Unit = {},
     onOpenAdminPickupIncidents: () -> Unit = {},
+    onOpenAdminCollectionReviews: () -> Unit = {},
     onSignOut: () -> Unit,
     modifier: Modifier = Modifier,
     viewModel: ProfileViewModel = hiltViewModel(),
@@ -104,7 +105,7 @@ fun AccountScreen(
         onOpenBusiness, onOpenStoreOperations, onOpenManageCatalog, onOpenStoreProductConfiguration,
         onOpenAdminReview, onOpenAdminSupervision, onOpenAdminAuditLog,
         { authorize { viewModel.signOut { protected -> ProfileViewModel.warnIfUnprotected(context, protected); onSignOut() } } },
-        modifier, onRecoverPurchase, onOpenMyPurchases, onOpenAdminPickupIncidents)
+        modifier, onRecoverPurchase, onOpenMyPurchases, onOpenAdminPickupIncidents, onOpenAdminCollectionReviews)
 }
 
 @Composable
@@ -122,6 +123,7 @@ internal fun AccountContent(
     onRecoverPurchase: () -> Unit = {},
     onOpenMyPurchases: () -> Unit = {},
     onOpenAdminPickupIncidents: () -> Unit = {},
+    onOpenAdminCollectionReviews: () -> Unit = {},
 ) {
     Column(
         modifier = modifier
@@ -219,6 +221,15 @@ internal fun AccountContent(
                 subtitle = stringResource(R.string.admin_pickup_incidents_subtitle),
                 titleColor = ChaskiAdminAccent,
                 onClick = onOpenAdminPickupIncidents,
+            )
+
+            // HU22 (E5.4b): reconciliation of Rider collections, same narrow admin exception.
+            AccountMenuItem(
+                icon = Icons.AutoMirrored.Filled.ReceiptLong,
+                title = stringResource(R.string.admin_collection_reviews_title),
+                subtitle = stringResource(R.string.admin_collection_reviews_subtitle),
+                titleColor = ChaskiAdminAccent,
+                onClick = onOpenAdminCollectionReviews,
             )
         }
 

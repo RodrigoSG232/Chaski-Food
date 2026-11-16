@@ -166,7 +166,11 @@ private fun BuyerOrderDetailResponse.toDomain(): BuyerOrderDetail {
         estimatedPreparationMinutes,estimatedReadyAtEpochMillis,OrderPaymentStatus.valueOf(paymentStatus),
         rejection = if (status == "REJECTED") rejectionOf(rejectionReason, rejectionExplanation) else null,
         preparationExtendedMinutes = if (estimatedReadyAtEpochMillis != null) preparationExtendedMinutes else 0,
-        paymentSource = paymentSource?.let { BuyerPaymentSource.valueOf(it) }, paymentInReview = paymentReview == "OPEN")
+        paymentSource = paymentSource?.let { BuyerPaymentSource.valueOf(it) }, paymentInReview = paymentReview == "OPEN",
+        paymentIncomplete = paymentReview == "INCOMPLETE",
+        // Tolerant: an unknown excess status never breaks the order detail; it is simply not shown.
+        paymentExcess = paymentExcess?.let { e -> BuyerExcessStatus.entries.firstOrNull { it.name == e.status }
+            ?.takeIf { e.amountMinor > 0 }?.let { BuyerPaymentExcess(e.amountMinor, it) } })
 }
 
 /** Tolerant on purpose: an unknown or missing reason must never stop the buyer from opening a historical order. */

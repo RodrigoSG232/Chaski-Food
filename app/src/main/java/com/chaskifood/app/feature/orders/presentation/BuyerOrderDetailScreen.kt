@@ -235,8 +235,11 @@ private fun DetailBody(detail: BuyerOrderDetail, message: String?, notice: Strin
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(ChaskiDimens.SpacingSm)) {
                     Icon(Icons.Filled.Payments, contentDescription = null, tint = ChaskiTextPrimary, modifier = Modifier.size(20.dp))
                     Text(buyerPaymentText(summary.status, detail.paymentStatus, detail.paymentSource, detail.paymentInReview,
-                        summary.deliveryOutcome),
+                        summary.deliveryOutcome, detail.paymentIncomplete),
                         style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold, color = ChaskiTextPrimary)
+                }
+                buyerExcessText(detail.paymentExcess)?.let {
+                    Text(it, style = MaterialTheme.typography.bodyMedium, color = ChaskiTextPrimary)
                 }
                 Text("No se realiza ningún cobro real.", style = MaterialTheme.typography.bodySmall, color = ChaskiTextTertiary)
                 if (summary.status == "IN_DELIVERY" && trackingState?.tracking?.stage == "AT_CUSTOMER")
