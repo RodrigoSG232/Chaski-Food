@@ -139,6 +139,16 @@ Decisiones **aprobadas** por el equipo que siguen aplicando y condicionan las pr
     - El comprador ve el importe del excedente de su propio pedido, y uno devuelto nunca aparece como pendiente.
     - **Necesidad registrada (sin decidir):** el listado tiene un máximo de 50 por tipo, sin paginación; ampliarlo exige cambiar el backend.
   - **Pendiente:** la coordinación con Rider (§5b del contrato) y las pruebas en dispositivo (E6).
+- **E5.5–E5.6 (15-11-2026), preparación de E6:** ver [PREPARACION_E6](PREPARACION_E6.md), [PRUEBAS_E6](PRUEBAS_E6.md) y [CAMBIOS_CONTRATO_RIDER_E6](CAMBIOS_CONTRATO_RIDER_E6.md).
+  - **[APROBADO]**
+    - procedimiento **manual** para entregas fallidas con dinero: se mantiene el 422 y no hay registro integrado;
+    - orden de despliegue: índice → APK → foodApi/riderApi con la integración desactivada → Rider → piloto de un local;
+    - `newOrderNotifier` no se redespliega.
+  - **[PENDIENTE de decisión]** la suspensión de emergencia:
+    - B1, retirar el invocador de IAM, como procedimiento;
+    - B2, una bandera de código.
+
+    Reducir el piloto (DISABLED) es solo una pausa operativa.
 
 - **E5 (15-11-2026), decisiones del responsable de Food:**
   - **sin compatibilidad con APKs anteriores a E3:** el backend deja de enviar el PIN al responsable en **todos** los locales; actualizar el APK de todos los participantes es requisito previo a E6;
