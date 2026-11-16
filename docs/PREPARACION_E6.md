@@ -87,7 +87,12 @@ Hay dos acciones distintas y no deben confundirse:
 | Despliegue | Cuenta del responsable | Roles de Firebase y Cloud Functions | Sí | Separados de la invocación |
 | Secretos | `HEIGIT_API_KEY` | Secret Manager | Sin cambios | No se toca en E6 |
 
-**[PENDIENTE]** Leer la política IAM real de riderApi (paso 2) y comparar.
+**[G7-A, código]** `riderApi` declara `invoker: RIDER_INVOKER` (`functions/src/integration/riderActivation.ts`). Cada despliegue deja el enlace `roles/run.invoker` **directo** del servicio exactamente con esa cuenta de servicio. Con `"private"`, firebase-tools 15.31 vaciaba el enlace (causa de la pérdida en G5).
+- **Política directa del servicio:** solo la cuenta de Rider.
+- **Permisos heredados del proyecto (sin cambios; G7-B):** `run.invoker` para la cuenta de cómputo por defecto, de la que **depende** el trigger de Eventarc de `newOrderNotifier`. No se puede retirar sin conceder antes un invocador en ese servicio.
+- **Privilegios de administración:** `roles/owner` (4 usuarios), que también permite invocar.
+
+**Rider no es el único principal con acceso efectivo** mientras existan los permisos heredados.
 
 ## 6. Operaciones Cloud preparadas (no ejecutadas)
 Desde la raíz, con Node 22 y `functions/node_modules/firebase-tools`. **No ejecutar `--dry-run` en E5.6**: puede habilitar o consultar APIs del proyecto.

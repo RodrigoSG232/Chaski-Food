@@ -6,7 +6,7 @@ import { createRiderApiHandler } from "./riderApiHandler";
 import { QuoteError } from "./delivery/deliveryQuoteService";
 import { OpenRouteServiceReader } from "./delivery/openRouteServiceReader";
 import { RouteReader } from "./delivery/routeReader";
-import { parseRiderActivation } from "./integration/riderActivation";
+import { parseRiderActivation, RIDER_INVOKER } from "./integration/riderActivation";
 import { initializeRuntimeApp, resolveRuntimeEnvironment, routeSourceForRuntime, RuntimeConfigurationError } from "./runtimeEnvironment";
 
 const heigitKey = defineSecret("HEIGIT_API_KEY");
@@ -23,9 +23,9 @@ export const foodApi = onRequest({ region: "southamerica-west1", timeoutSeconds:
     riderActivation: () => parseRiderActivation(process.env.CHASKI_RIDER_ACTIVATION),
   }));
 
-/** Server-to-server HU22 API. Cloud Run IAM must grant invoker only to the Rider backend service account. */
+/** Server-to-server HU22 API. The deploy sets the service invoker binding to exactly RIDER_INVOKER (G7-A). */
 export const riderApi = onRequest({region:"southamerica-west1",timeoutSeconds:15,minInstances:0,maxInstances:1,
-  concurrency:10,invoker:"private"},createRiderApiHandler({
+  concurrency:10,invoker:RIDER_INVOKER},createRiderApiHandler({
     runtime:()=>resolveRuntimeEnvironment(process.env,"riderApi"),
     app:runtime=>{
       const app=getApps().find(candidate=>candidate.name==="[DEFAULT]")??initializeRuntimeApp(runtime);

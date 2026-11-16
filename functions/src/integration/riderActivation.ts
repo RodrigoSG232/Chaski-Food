@@ -12,6 +12,13 @@ export type RiderActivation =
   | { readonly mode: "PILOT"; readonly storeIds: ReadonlySet<string> }
   | { readonly mode: "GENERAL" };
 
+/**
+ * E6/G7-A — the ONLY direct invoker of riderApi (Cloud Run `roles/run.invoker` on the service). Declared in code because
+ * firebase-tools rewrites the service invoker binding on every deploy (`"private"` → empty binding). Not a secret.
+ * Project-level inherited permissions (default compute SA, owners) are outside this binding and handled separately (G7-B).
+ */
+export const RIDER_INVOKER = "chaski-food-client@chaski-rider.iam.gserviceaccount.com";
+
 export class RiderActivationConfigError extends Error {
   constructor() { super("RIDER_ACTIVATION_INVALID"); }
 }
