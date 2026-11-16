@@ -94,6 +94,16 @@ Hay dos acciones distintas y no deben confundirse:
 
 **Rider no es el único principal con acceso efectivo** mientras existan los permisos heredados.
 
+**[G7-B, código]** `riderApi` verifica criptográficamente al llamador (`functions/src/integration/riderCaller.ts`, `google-auth-library` 11.3.4 fijada):
+- firma de Google, expiración, emisor `accounts.google.com`;
+- audiencia exacta `RIDER_AUDIENCE`;
+- `email = RIDER_INVOKER` y `email_verified`;
+- rechazo de `X-Serverless-Authorization` (Cloud Run lo usa para IAM y le quita la firma).
+
+En CLOUD se aplica antes de cualquier lógica. Solo se omite cuando `resolveRuntimeEnvironment` determina LOCAL (señales del emulador, nunca cabeceras). Con esto, `roles/editor` y `roles/owner` **pueden pasar IAM pero no la aplicación**.
+
+**Alternativa B (futura, antes de GENERAL):** identidades dedicadas de ejecución y de Eventarc, y reducción de `roles/editor` de la cuenta de cómputo. **Descartado:** retirar solo el `run.invoker` de proyecto (editor ya incluye `run.routes.invoke`).
+
 ## 6. Operaciones Cloud preparadas (no ejecutadas)
 Desde la raíz, con Node 22 y `functions/node_modules/firebase-tools`. **No ejecutar `--dry-run` en E5.6**: puede habilitar o consultar APIs del proyecto.
 

@@ -7,9 +7,11 @@ import { QuoteError } from "./delivery/deliveryQuoteService";
 import { OpenRouteServiceReader } from "./delivery/openRouteServiceReader";
 import { RouteReader } from "./delivery/routeReader";
 import { parseRiderActivation, RIDER_INVOKER } from "./integration/riderActivation";
+import { googleIdTokenVerifier } from "./integration/riderCaller";
 import { initializeRuntimeApp, resolveRuntimeEnvironment, routeSourceForRuntime, RuntimeConfigurationError } from "./runtimeEnvironment";
 
 const heigitKey = defineSecret("HEIGIT_API_KEY");
+const riderCallerVerifier = googleIdTokenVerifier();
 export const foodApi = onRequest({ region: "southamerica-west1", timeoutSeconds: 15, minInstances: 0, maxInstances: 1,
   concurrency: 10, invoker: "public", secrets: [heigitKey] }, createFoodApiHandler({
     runtime: () => resolveRuntimeEnvironment(process.env, "foodApi"),
@@ -33,6 +35,7 @@ export const riderApi = onRequest({region:"southamerica-west1",timeoutSeconds:15
       return app;
     },
     activation:()=>parseRiderActivation(process.env.CHASKI_RIDER_ACTIVATION),
+    callerVerifier:riderCallerVerifier,
   }));
 
 function routeReader(runtime: ReturnType<typeof resolveRuntimeEnvironment>): { reader: RouteReader; source: "HEIGIT" | "SIMULATED" } {

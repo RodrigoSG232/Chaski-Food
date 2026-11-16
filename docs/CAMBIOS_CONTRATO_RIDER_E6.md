@@ -10,7 +10,15 @@
 
 ## 1. Autenticación (sin cambios de mecanismo)
 - Cloud Run privado: Rider llama con un **ID token de Google** de **su cuenta de servicio**, con la audiencia = URL de riderApi.
-- Food concederá `run.invoker` solo a esa cuenta. **Confirmar:** el correo de la cuenta de servicio.
+- Food concede `run.invoker` (directo) solo a `chaski-food-client@chaski-rider.iam.gserviceaccount.com` (G7-A).
+- **[NUEVO, G7-B] Verificación del llamador en riderApi:** además de IAM, cada petición debe llevar:
+  - `Authorization: Bearer <ID token de Google>` **firmado** para esa cuenta;
+  - **audiencia exacta `https://riderapi-u65lcqarqa-tl.a.run.app`**, la URL canónica (otras URLs del servicio **no** se aceptan como audiencia);
+  - el claim `email` con `email_verified: true` (token en formato **full** / `includeEmail`).
+
+  Si no se cumple → `403 {"error":{"code":"CALLER_NOT_ALLOWED","retryable":false}}`.
+- **No usar `X-Serverless-Authorization`:** se rechaza siempre.
+- **Confirmar en G6:** que su token cumple los tres requisitos (la prueba real con su cuenta está pendiente).
 - **Piloto:** con la integración desactivada, el listado viene vacío y el detalle responde 404. Food activará un único local.
 
 ## 2. Diferencias
