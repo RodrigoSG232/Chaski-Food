@@ -41,3 +41,27 @@
 6. Que la cola duradera resiste horas de 503 o 403 (suspensión).
 7. El canal para incidentes de entrega fallida con dinero.
 8. Su fecha de despliegue compatible.
+
+## 4. Resumen operativo para la coordinación (G6, preparado; no enviado)
+
+**Para compartir con Ángel y el equipo Rider. Nada de esto está confirmado por Rider todavía.**
+
+- **Estado de Food [CLOUD, 15-11]:**
+  - índice de descubrimiento desplegado (verificar READY en ESTADO);
+  - `riderApi` publicado sigue siendo la versión anterior (`riderapi-00001-xeg`), y el contrato nuevo entrará en G5 con la integración **desactivada**;
+  - la URL base de riderApi es `https://riderapi-u65lcqarqa-tl.a.run.app` (también responde por la URL `cloudfunctions.net`): la **audiencia del ID token debe coincidir con la URL que Rider invoque**.
+- **Qué debe implementar Rider:** las filas de la §2 (paginación, PIN solo para el asignado, espera de verificación, `collection`, §5b, cola duradera).
+- **Dependencias de despliegue:**
+  1. Food despliega con la integración desactivada (G5);
+  2. Rider despliega su versión compatible (G6);
+  3. Food retira las cuentas sobrantes de IAM (G7);
+  4. Food activa un local (G8).
+
+  **Rider no debe apuntar su versión nueva a Food antes del paso 1:** el contrato publicado hoy es incompatible (422 en `collection`, PIN en el listado).
+- **Pruebas conjuntas:** los casos 1–14 de [PRUEBAS_E6](PRUEBAS_E6.md); Rider aporta un repartidor de prueba y su app.
+- **Riesgos por versiones:**
+  - Rider nuevo contra Food antiguo → `collection` rechazada (422) y PIN expuesto en el listado;
+  - Rider antiguo contra Food nuevo → `COMPLETED_*` sin `collection` (422) y `PICKED_UP` sin verificación (409).
+
+  Por eso los dos despliegues deben coordinarse y el piloto no se activa hasta que ambos estén confirmados.
+- **Criterios de aceptación de la integración:** la §3 confirmada por escrito más los casos 1–14 de PRUEBAS_E6 en OK.
