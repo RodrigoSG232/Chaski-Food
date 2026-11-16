@@ -113,8 +113,9 @@ export function projectBuyerOrderDetail(id: string, data: Record<string, any>, u
       items: core.items, subtotalMinor: core.subtotalMinor, deliveryFeeMinor: core.deliveryFeeMinor,tipMinor:core.tipMinor,
       paymentMethod: core.paymentMethod,paymentStatus:data.paymentStatus,
       // E4 (additive): who registered the payment and whether a collection is under review; never amounts or actors.
-      paymentSource: data.paymentCollection?.source === "RIDER" ? "RIDER" : data.paymentStatus === "PAID" && data.paymentSimulation === true ? "SIMULATED" : null,
-      paymentReview: data.collectionReview?.status === "OPEN" ? "OPEN" : null, statusHistory, estimatedPreparationMinutes, estimatedReadyAtEpochMillis,
+      // E5.4a: a reconciled full collection is still "registered on delivery" for the buyer (RIDER keeps current APKs working).
+      paymentSource: ["RIDER", "RECONCILED"].includes(data.paymentCollection?.source) ? "RIDER" : data.paymentStatus === "PAID" && data.paymentSimulation === true ? "SIMULATED" : null,
+      paymentReview: buyerPaymentReview(data), paymentExcess: buyerPaymentExcess(data), statusHistory, estimatedPreparationMinutes, estimatedReadyAtEpochMillis,
       ...extension, ...(summary.status === "REJECTED" ? buyerRejection(data) : {}) };
   } catch (error) {
     if (error instanceof OrderHttpError) throw error;
@@ -153,4 +154,18 @@ export function parseBuyerOrdersQuery(query: Record<string, unknown>, uid: strin
 /** Order IDs are SHA-256 hex (HU16); anything else is reported as not found, never as a distinct validation error. */
 export function buyerOrderId(value: string): string | null {
   return validId(value) && /^[0-9a-f]{64}$/.test(value) ? value : null;
+}
+
+/** E5.4a: OPEN while under review; INCOMPLETE once resolved as not fully collected (no partial amounts shown). */
+function buyerPaymentReview(data: Record<string, any>): "OPEN" | "INCOMPLETE" | null {
+  const review = data.collectionReview;
+  if (review?.status === "OPEN") return "OPEN";
+  if (review?.status === "RESOLVED" && review.resolution?.outcome === "NOT_FULLY_COLLECTED" && data.paymentStatus === "PENDING") return "INCOMPLETE";
+  return null;
+}
+/** E5.4a: the buyer's own overpayment and whether it is still owed; never actors or evidence. */
+function buyerPaymentExcess(data: Record<string, any>): { amountMinor: number; status: "PENDING_REFUND" | "REFUNDED" } | null {
+  const r = data.collectionReview?.status === "RESOLVED" ? data.collectionReview.resolution : null;
+  if (!r || !Number.isSafeInteger(r.excessMinor) || r.excessMinor < 1 || !["PENDING_REFUND", "REFUNDED"].includes(r.excessStatus)) return null;
+  return { amountMinor: r.excessMinor, status: r.excessStatus };
 }

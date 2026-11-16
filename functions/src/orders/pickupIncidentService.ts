@@ -3,6 +3,7 @@ import { Firestore, Timestamp } from "firebase-admin/firestore";
 import { CommercialIdentity } from "../auth/verifyBuyerToken";
 import { buyerOrderId } from "./buyerOrdersPolicy";
 import { OrderHttpError } from "./orderRequest";
+import { requireFoodAdmin } from "./adminAccess";
 import { pickupCode } from "./orderReadyPolicy";
 import { PickupUnlockRequest, readPickupSecurity, storedPickupSecurity, unlockedSecurity } from "./pickupSecurityPolicy";
 
@@ -16,12 +17,8 @@ export class PickupIncidentService {
   constructor(private readonly db: Firestore, private readonly now: () => number = Date.now,
     private readonly nextCode: () => number = () => randomInt(0, 10_000)) {}
 
-  private static requireAdmin(actor: CommercialIdentity) {
-    if (actor.admin !== true || actor.emailVerified !== true) throw new OrderHttpError("ACCESS_DENIED", 403);
-  }
-
   async list(actor: CommercialIdentity) {
-    PickupIncidentService.requireAdmin(actor);
+    requireFoodAdmin(actor);
     const snapshot = await this.db.collection("food_orders").where("pickupSecurity.lockedAt", ">=", Timestamp.fromMillis(0))
       .orderBy("pickupSecurity.lockedAt").limit(MAX_INCIDENTS + 1).get();
     const incidents = snapshot.docs.slice(0, MAX_INCIDENTS).map(doc => {
@@ -35,7 +32,7 @@ export class PickupIncidentService {
   }
 
   async unlock(actor: CommercialIdentity, rawOrderId: string, request: PickupUnlockRequest) {
-    PickupIncidentService.requireAdmin(actor);
+    requireFoodAdmin(actor);
     const orderId = buyerOrderId(rawOrderId);
     if (!orderId) throw new OrderHttpError("ORDER_NOT_FOUND", 404);
     return this.db.runTransaction(async tx => {

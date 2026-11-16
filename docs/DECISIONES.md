@@ -112,13 +112,29 @@ Decisiones **aprobadas** por el equipo que siguen aplicando y condicionan las pr
   - una entrega fallida que declare dinero se **rechaza** (422) y se trata como incidencia con Rider;
   - el panel HU28 excluye de las ventas un pedido entregado con la revisión abierta, sin fallar;
   - la declaración de Rider es evidencia logística, no una confirmación bancaria de Yape o Plin.
-- **Conciliación pendiente (sin implementar):** E4 solo abre la revisión, y no existe un procedimiento autorizado para cerrarla. **No se permite corregir Firestore a mano.** Antes de operar con cobros reales hay que decidir:
-  - **quién la resuelve:** se propone un administrador de Food, como excepción acotada similar a la del recojo;
-  - **con qué evidencia:** declaración del repartidor, comprobante de Yape o Plin, confirmación del cliente o del local;
-  - **qué auditoría se conserva:** actor, motivo, resultado (cobro confirmado por un importe o incobrable) y fecha, sin reescribir el evento ni el historial;
-  - **qué hace falta implementar:** el endpoint y la pantalla correspondientes (con aprobación visual en Pencil).
-
-  Hasta entonces, el ciclo de conciliación **no está completo**.
+- **Conciliación (E5.4a, 15-11-2026, aprobada; [REPO] sin desplegar; pantalla Android pendiente para E5.4b).** **No se permite corregir Firestore a mano.**
+  - **Quién:** solo un administrador de Food, con el claim `admin` y el correo verificado. Es una excepción acotada que comparte el helper `requireFoodAdmin` con las incidencias de recojo y **no** da acceso general a pedidos. Propietarios y responsables no la tienen.
+  - **Evidencia:** texto obligatorio de 5 a 300 caracteres, recortado y sin caracteres de control.
+    - Es una **declaración administrativa**, no una comprobación bancaria automática.
+    - No debe incluir contraseñas, credenciales bancarias, números de tarjeta ni datos personales innecesarios.
+    - No se almacenan archivos ni imágenes.
+  - **Cobro completo** (`FULLY_COLLECTED`, confirmado ≥ total de Food): `PAID`, `paidAt` y `paymentCollection {source:"RECONCILED", amountMinor: total, confirmedMinor}`.
+  - **Cobro incompleto** (`NOT_FULLY_COLLECTED`, confirmado < total): sigue `PENDING`, sin `PAID` parcial.
+    - Se registran `confirmedMinor` y `shortfallMinor`; la revisión queda `RESOLVED`.
+    - El saldo no se recupera en esta entrega, pero el modelo permite añadirlo después.
+  - **Excedente:**
+    - se registran `excessMinor` y `excessStatus: PENDING_REFUND`;
+    - la revisión `RESOLVED` **no** implica que se haya devuelto;
+    - el excedente nunca suma ventas.
+  - **`RECORD_EXCESS_REFUND`:** registra una devolución hecha **fuera de la app**.
+    - No hace transferencias ni llama a Yape o Plin.
+    - Exige evidencia y el excedente completo (sin devoluciones parciales).
+    - Pasa `PENDING_REFUND` a `REFUNDED`.
+  - **Auditoría:**
+    - `food_orders/{id}/collection_reconciliations/{operationId}`: actor, evidencia, estado anterior y posterior, hash y resultado;
+    - `payment_history/reconciliation_{operationId}` con `nature: ADJUSTMENT` o `REFUND_DECLARATION`: **no** es un movimiento de efectivo y no se suma al cobro original.
+  - **Panel HU28:** un pedido `PAID` cuenta una vez por su `subtotalMinor` (regla HU28 vigente). Ni `PENDING` + `OPEN` ni `PENDING` + `RESOLVED`/`NOT_FULLY_COLLECTED` son venta, y no dan error; cualquier otro `PENDING` entregado sigue dando 503.
+  - **Pendiente:** la pantalla de administración (E5.4b, Pencil antes de Compose) y la coordinación con Rider (§5b del contrato).
 
 - **E5 (15-11-2026), decisiones del responsable de Food:**
   - **sin compatibilidad con APKs anteriores a E3:** el backend deja de enviar el PIN al responsable en **todos** los locales; actualizar el APK de todos los participantes es requisito previo a E6;
@@ -126,6 +142,7 @@ Decisiones **aprobadas** por el equipo que siguen aplicando y condicionan las pr
   - **piloto por locales** con el parámetro `CHASKI_RIDER_ACTIVATION` (desactivado por defecto);
   - **simulaciones bloqueadas en el backend** para los pedidos de Rider y para los locales del ámbito;
   - **LOCAL frente a CLOUD:** en LOCAL la simulación del laboratorio sigue disponible para los pedidos que Rider no tocó y fuera del ámbito; las reglas por pedido valen igual en LOCAL y en CLOUD.
+  - **Reducción del piloto ≠ apagado de emergencia:** reducir normalmente el ámbito permite finalizar las entregas legítimas ya iniciadas. Esto **no** equivale a un apagado de emergencia: todavía **no existe** un mecanismo independiente de detención de emergencia (pendiente de decisión).
 
 ### Secuencias y resiliencia
 - **Secuencia:** `eventSequence` es por pedido, no por repartidor; continúa tras liberaciones y reasignaciones; un evento rechazado sin aplicarse no consume su secuencia.

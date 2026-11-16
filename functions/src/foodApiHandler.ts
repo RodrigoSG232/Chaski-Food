@@ -9,6 +9,9 @@ import { parsePreparationExtension } from "./orders/preparationEstimatePolicy";
 import { OrderReadyService } from "./orders/orderReadyService";
 import { PickupVerificationService } from "./orders/pickupVerificationService";
 import { PickupIncidentService } from "./orders/pickupIncidentService";
+import { CollectionReconciliationService } from "./orders/collectionReconciliationService";
+import { parseReconciliationCommand } from "./orders/collectionReconciliationPolicy";
+import { requireFoodAdmin } from "./orders/adminAccess";
 import { parsePickupUnlockRequest, parsePickupVerificationRequest } from "./orders/pickupSecurityPolicy";
 import { FoodDeliverySimulationService } from "./orders/foodDeliverySimulationService";
 import { RiderActivation } from "./integration/riderActivation";
@@ -121,6 +124,32 @@ export function createFoodApiHandler(dependencies: FoodApiDependencies): FoodHtt
             .json({ error: error.status === 403 ? "ACCESS_DENIED" : "AUTHORIZATION_UNAVAILABLE" });
           else if (error instanceof URIError) response.status(404).json({ error: "ORDER_NOT_FOUND" });
           else response.status(503).json({ error: "PICKUP_SECURITY_UNAVAILABLE" });
+        }
+        return;
+      }
+      // E5.4a: admin-only collection reconciliation (narrow exception, same claim checks as pickup incidents).
+      const reviewsPath = /^\/api\/v1\/admin\/collection-reviews\/?$/.test(request.path);
+      const resolvePath = /^\/api\/v1\/admin\/collection-reviews\/([^/]+)\/resolve\/?$/.exec(request.path);
+      if (reviewsPath || resolvePath) {
+        const expected = reviewsPath ? "GET" : "POST";
+        if (request.method !== expected) { response.status(405).set("Allow", expected).json({ error: "METHOD_NOT_ALLOWED" }); return; }
+        try {
+          if (Object.keys(request.query).length) throw new OrderHttpError("INVALID_REQUEST", 400);
+          const app = dependencies.app(runtime), auth = getAuth(app), db = getFirestore(app);
+          const actor = await verifyCommercialIdentity(auth, request.get("authorization"));
+          const service = new CollectionReconciliationService(db);
+          if (resolvePath) {
+            // Authorization before parsing: a non-admin learns nothing about the expected body.
+            requireFoodAdmin(actor);
+            response.status(200).json(await service.apply(actor, decodeURIComponent(resolvePath[1]), parseReconciliationCommand(request.body)));
+          } else response.status(200).json(await service.list(actor));
+        } catch (error) {
+          if (error instanceof AuthenticationRequired) response.status(401).json({ error: "AUTHENTICATION_REQUIRED" });
+          else if (error instanceof OrderHttpError) response.status(error.status).json({ error: error.code });
+          else if (error instanceof CommercialAccessError) response.status(error.status === 403 ? 403 : 503)
+            .json({ error: error.status === 403 ? "ACCESS_DENIED" : "AUTHORIZATION_UNAVAILABLE" });
+          else if (error instanceof URIError) response.status(404).json({ error: "ORDER_NOT_FOUND" });
+          else response.status(503).json({ error: "COLLECTION_RECONCILIATION_UNAVAILABLE" });
         }
         return;
       }

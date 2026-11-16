@@ -176,7 +176,7 @@ Rider lo usa para:
   - el pedido pasa a `COMPLETED` con `deliveryOutcome=SUCCESS`;
   - el pago **sigue `PENDING`** y se abre una incidencia `OPEN` con los importes esperado y declarado;
   - Food **nunca** registra como `PAID` un importe incorrecto;
-  - la corrección posterior se registra como **ajuste trazable**, sin reescribir el evento original. El flujo de conciliación está pendiente de diseño.
+  - la corrección posterior se registra como **ajuste trazable**, sin reescribir el evento original (ver §5b).
 - **Respuesta perdida:** Rider no vuelve a cobrar. Muestra «Cobro registrado · pendiente de sincronización» y reenvía **el mismo evento**; Food devuelve el resultado original.
 - **Entrega fallida con movimiento de dinero:** es una incidencia que hay que tratar, no se declara falsamente `collection:null`. El tratamiento está pendiente de diseño.
 - La liquidación de lo recaudado por el repartidor pertenece a Rider.
@@ -199,6 +199,33 @@ POST /integration/v1/rider-events
 
 - Con el importe exacto: `collectionStatus` = `"RECORDED"` y `collectionReview` = `null` [PROPUESTA].
 - Una moneda distinta de PEN o un método desconocido es un error de formato: `422` sin aplicar el evento.
+
+## 5b. Conciliación administrativa de un cobro discrepante [REPO, E5.4a, no desplegado]
+La realiza un **administrador de Food** desde foodApi; Rider no la invoca. A Rider solo le llega como cambio **aditivo** en el detalle.
+
+- **La declaración original nunca se modifica:**
+  - `rider_events/{eventId}`;
+  - `payment_history/rider_collection`;
+  - los campos originales de `collectionReview` (`expectedMinor`, `declaredMinor`, `method`, `currency`, `eventId`, `assignmentId`, `assignmentVersion`, `openedAt`).
+- **`collectionStatus` conserva su valor histórico:** `DISCREPANCY` sigue siendo `DISCREPANCY` después de conciliar.
+- **`collectionReview` en el detalle**, una vez resuelta:
+
+```json
+{ "status": "RESOLVED", "expectedMinor": 1300, "declaredMinor": 1600, "method": "CASH", "currency": "PEN",
+  "outcome": "FULLY_COLLECTED", "confirmedMinor": 1600, "shortfallMinor": 0, "excessMinor": 300, "excessStatus": "PENDING_REFUND" }
+```
+
+  - `outcome`:
+    - `FULLY_COLLECTED`: lo confirmado es mayor o igual al total; el pago queda `PAID` y `payment.status` = `PAID`;
+    - `NOT_FULLY_COLLECTED`: lo confirmado es menor; el pago sigue `PENDING` y se registra `shortfallMinor`.
+  - `excessStatus`: `NONE`, `PENDING_REFUND` o `REFUNDED`.
+  - No se exponen ni el actor ni la evidencia.
+- **Rider debe:**
+  - tolerar `status: "RESOLVED"` y los campos nuevos;
+  - usar `confirmedMinor`, `shortfallMinor` y `excessMinor` en su liquidación;
+  - coordinar con Food el procedimiento de devolución de excedentes.
+
+  **[PENDIENTE de coordinar con Rider.]**
 
 ## 6. `POST /integration/v1/rider-events` — eventos de reparto
 
@@ -339,12 +366,15 @@ Cuerpo de error de Food: `{"error":{"code":"…","retryable":<true solo en 5xx>}
   - `pilot:<storeId>,<storeId>` → solo esos locales (ids de Firestore; nunca nombres ni ids fijados en el código);
   - `general` → todos los locales.
   - Cualquier otro valor → `503` (falla en modo cerrado).
+- **Reducción normal del piloto ≠ apagado de emergencia.**
+  - Reducir el ámbito (quitar locales o volver a `DISABLED`) permite **finalizar las entregas legítimas ya iniciadas** y conciliarlas.
+  - **No** existe todavía un mecanismo independiente de detención de emergencia que corte también las entregas en curso. Su diseño queda pendiente de decisión.
 - **Fuera del ámbito:** el pedido no se ofrece; el detalle, los eventos y el tracking responden `404 ORDER_NOT_FOUND`, salvo que el pedido **ya haya iniciado** el flujo de Rider. Así, una entrega en curso puede terminarse y conciliarse aunque el piloto se reduzca. Una **asignación nueva** (`ASSIGNMENT_ACCEPTED`) fuera del ámbito → `409 ORDER_NOT_READY`.
 - **Simulaciones de Food** (E5.1): `409 RIDER_MANAGED` si el pedido tiene eventos de Rider, verificación o bloqueo de PIN, cobro o revisión, o si su local está dentro del ámbito, aunque Rider aún no haya enviado eventos. No afecta al contrato de Rider.
 
 ## 11. Estado de despliegue y diferencias publicadas
 
-| Elemento | [CLOUD] `riderapi-00001-xeg` | [REPO] `8faa72c` (E1–E4) + E5 local sin commit (15-11) | [ACORDADO] |
+| Elemento | [CLOUD] `riderapi-00001-xeg` | [REPO] `452ebb8` (E1–E5.3) + E5.4a local sin commit (15-11) | [ACORDADO] |
 |---|---|---|---|
 | Elegibilidad del efectivo | No | **Sí (E1.2):** `CASH_ON_DELIVERY` + `PENDING` con código, en listado, detalle y eventos `ASSIGNMENT_ACCEPTED`, `ARRIVED_AT_MERCHANT` y `ASSIGNMENT_RELEASED`. `PICKED_UP`, `ARRIVED_AT_CUSTOMER` y `COMPLETED_*` → `409 ORDER_NOT_READY` **temporal** hasta E2/E4 (no apto para la integración real). Prepago antiguo sin cambios | Sí |
 | `pickupCode` en el listado | Sí | **No** (E1.1) | No |
@@ -359,6 +389,7 @@ Cuerpo de error de Food: `{"error":{"code":"…","retryable":<true solo en 5xx>}
 | Eventos de efectivo | No | Recorrido completo habilitado (E4); el bloqueo temporal de `COMPLETED_*` quedó retirado | Sí |
 | `collection` y cobro | 422 | **Sí (E4):** obligatoria en `COMPLETED_*` y prohibida en el resto (422); `COMPLETED_SUCCESSFULLY` en efectivo exige un objeto (`CASH`, `YAPE` o `PLIN`, entero de 1 a 10 000 000, `PEN`); `COMPLETED_UNSUCCESSFULLY` y el prepago antiguo exigen `null`. Importe exacto respecto del total de Food → `PAID` más `paymentCollection` más `payment_history/rider_collection` (`RECORDED`); distinto → `PENDING` más `collectionReview` `OPEN` (`DISCREPANCY`). La respuesta y el detalle incluyen `collectionStatus` y `collectionReview`; repetir el evento devuelve el resultado original | Sí |
 | Paginación y orden | No | **Sí (E1.3):** `status == READY_FOR_PICKUP` + `readyAt >= 0` ordenados por `readyAt` y luego `__name__`; `limit` 1–50 (por defecto 20) y `cursor` opaco; la elegibilidad se aplica antes de llenar la página; como máximo 200 documentos examinados por petición, en bloques de 50; `nextCursor` = último documento **examinado** (puede venir con una página vacía) y `null` al terminar. Índice compuesto `status`, `readyAt`, `__name__` añadido **solo** a `firestore.indexes.json` (no desplegado). Pedidos sin `readyAt`: fuera del listado, accesibles por el detalle | Sí |
+| `collectionReview` `RESOLVED` (conciliación) | No | **Sí (E5.4a):** aditivo, ver §5b; `paymentCollection.source` `RECONCILED` mantiene la elegibilidad `CASH_COLLECTED` | Pendiente de coordinar |
 | `ASSIGNMENT_CONFLICT` | No | Sí | Sí |
 | Avisos al comprador por eventos Rider | No | Sí | Sí |
 | Validaciones de tracking y `estimatedArrivalAt` | No | Sí | Sí |

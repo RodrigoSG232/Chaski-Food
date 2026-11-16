@@ -1,3 +1,4 @@
+import { publicResolution } from "../orders/collectionReconciliationPolicy";
 import { createHash } from "node:crypto";
 import { Timestamp } from "firebase-admin/firestore";
 import { validCoordinates } from "../delivery/routeReader";
@@ -179,7 +180,9 @@ export type RiderPaymentEligibility="LEGACY_PREPAID"|"CASH_PENDING"|"CASH_COLLEC
 export function riderPaymentEligibility(data:Record<string,any>):RiderPaymentEligibility|null{
   if(typeof data.pickupCode!=="string"||!/^[0-9]{4}$/.test(data.pickupCode))return null;
   if(data.paymentStatus==="PAID"&&data.paymentSimulation===true)return "LEGACY_PREPAID";
-  if(data.paymentMethod==="CASH_ON_DELIVERY"&&data.paymentStatus==="PAID"&&data.paymentCollection?.source==="RIDER")return "CASH_COLLECTED";
+  // E5.4a: a discrepancy reconciled as fully collected (source RECONCILED) is still a Rider cash collection.
+  if(data.paymentMethod==="CASH_ON_DELIVERY"&&data.paymentStatus==="PAID"&&["RIDER","RECONCILED"].includes(data.paymentCollection?.source))
+    return "CASH_COLLECTED";
   if(data.paymentMethod==="CASH_ON_DELIVERY"&&data.paymentStatus==="PENDING"&&data.paymentSimulation!==true)return "CASH_PENDING";
   return null;
 }
@@ -205,13 +208,19 @@ export function decideCollection(eligibility:RiderPaymentEligibility,expectedMin
   return event.collection.amountMinor===expectedMinor?"RECORDED":"DISCREPANCY";
 }
 
-/** Public view of an open review: amounts and method only (no actors, no internal ids). */
+/**
+ * Public view of a review: amounts and method only (no actors, evidence or internal ids). E5.4a (additive): a RESOLVED
+ * review also carries the admin outcome, confirmed/shortfall/excess amounts and the excess refund status.
+ */
 export function publicCollectionReview(review:Record<string,any>|undefined){
-  return review?.status==="OPEN"?{status:"OPEN",expectedMinor:review.expectedMinor,declaredMinor:review.declaredMinor,
-    method:review.method,currency:review.currency}:null;
+  if(review?.status!=="OPEN"&&review?.status!=="RESOLVED")return null;
+  const base={status:review.status,expectedMinor:review.expectedMinor,declaredMinor:review.declaredMinor,method:review.method,currency:review.currency};
+  const resolution=publicResolution(review);
+  return resolution?{...base,...resolution}:base;
 }
+/** Historic E4 value: Rider's declaration was exact (RECORDED) or differed (DISCREPANCY), even after reconciliation. */
 export function collectionStatusOf(data:Record<string,any>):"RECORDED"|"DISCREPANCY"|null{
-  return data.paymentCollection?.source==="RIDER"?"RECORDED":data.collectionReview?.status==="OPEN"?"DISCREPANCY":null;
+  return data.paymentCollection?.source==="RIDER"?"RECORDED":["OPEN","RESOLVED"].includes(data.collectionReview?.status)?"DISCREPANCY":null;
 }
 
 export function projectRiderOrder(data:Record<string,any>,view:RiderOrderView){

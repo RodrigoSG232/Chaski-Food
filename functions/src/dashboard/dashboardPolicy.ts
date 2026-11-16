@@ -67,7 +67,11 @@ export function aggregateDashboard(input: {businessId:string;storeIds:string[];d
     if(outcome==="SUCCESS") {
       // HU28: a sale needs a successful delivery AND a confirmed payment. E4: a delivered order whose collection is
       // under review (PENDING + OPEN review) is valid but not a sale yet; anything else without PAID is still corrupt data.
-      if(d.paymentStatus==="PENDING"&&(d.collectionReview as {status?:unknown}|undefined)?.status==="OPEN")continue;
+      // E5.4a: a review resolved as NOT_FULLY_COLLECTED keeps PENDING and is not a sale either. A PAID order counts once,
+      // by its subtotal: reconciliation/refund records are adjustments and any excess never increases sales.
+      const review=d.collectionReview as {status?:unknown;resolution?:{outcome?:unknown}}|undefined;
+      if(d.paymentStatus==="PENDING"&&(review?.status==="OPEN"||
+        (review?.status==="RESOLVED"&&review.resolution?.outcome==="NOT_FULLY_COLLECTED")))continue;
       if(d.paymentStatus!=="PAID")throw new OrderHttpError("DATA_INCONSISTENT",503,true);
       const next=bucket.salesMinor+(d.subtotalMinor as number);
       if(!Number.isSafeInteger(next))throw new OrderHttpError("DATA_INCONSISTENT",503,true);
